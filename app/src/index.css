@@ -239,6 +239,20 @@
   :where(a, button, input, select, textarea, [tabindex]) {
     @apply focus-ring;
   }
+  /* Global baseline safety padding for form controls across the entire system:
+     Guarantees text never sits flush against rounded rectangle borders in any portal or module. */
+  select {
+    padding-left: 0.875rem;
+    padding-right: 2.5rem;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not([type="file"]) {
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+  }
+  textarea {
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+  }
   h1, h2, h3, h4 {
     color: var(--color-ink-900);
     letter-spacing: -0.015em;

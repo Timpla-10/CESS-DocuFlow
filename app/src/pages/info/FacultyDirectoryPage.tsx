@@ -12,7 +12,7 @@ import {
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
-import { Field, Input } from '../../components/form'
+import { Field, Input, Select } from '../../components/form'
 import { useToast } from '../../components/Toast'
 import { Avatar, Button, Card, DepartmentBadge, EmptyState, PageHeader } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
@@ -154,13 +154,13 @@ export function FacultyDirectoryPage() {
       {/* Search Input */}
       <Card className="p-4">
         <div className="relative max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
           <Input
             type="search"
             placeholder="Search faculty name, department, subject code, or title…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-10 pr-4"
           />
         </div>
       </Card>
@@ -276,10 +276,9 @@ export function FacultyDirectoryPage() {
               />
             </Field>
             <Field label="Department" required>
-              <select
+              <Select
                 value={facDept}
                 onChange={(e) => setFacDept(e.target.value)}
-                className="h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm font-medium text-ink-900 focus-ring"
               >
                 <option value="Department of Secondary and Elementary Education (DSEE)">
                   Department of Secondary and Elementary Education (DSEE)
@@ -290,7 +289,7 @@ export function FacultyDirectoryPage() {
                 <option value="Integrated Developmental School (IDS)">
                   Integrated Developmental School (IDS)
                 </option>
-              </select>
+              </Select>
             </Field>
           </div>
 

@@ -154,14 +154,14 @@ export function FilterBar({
             Search
           </label>
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400" aria-hidden />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" aria-hidden />
             <Input
               id="doc-search"
               type="search"
               value={filters.q}
               onChange={(e) => setFilters({ ...filters, q: e.target.value })}
               placeholder={searchLabel}
-              className="pl-9"
+              className="pl-10 pr-4"
             />
           </div>
         </div>
@@ -267,7 +267,7 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
   return (
     <label className="block">
       <span className="mb-1 block text-xs font-semibold text-ink-600">{label}</span>
-      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 min-w-[145px]">
+      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 min-w-[150px]">
         {children}
       </Select>
     </label>

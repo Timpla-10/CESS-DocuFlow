@@ -70,13 +70,13 @@ export function EmailLogPage() {
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 border-b border-ink-100 p-4">
           <div className="relative min-w-[220px] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
             <Input
               type="search"
               placeholder="Search by recipient or subject…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              className="pl-10 pr-4"
             />
           </div>
           <Select

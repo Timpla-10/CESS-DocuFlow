@@ -59,11 +59,11 @@ const controlBase =
   'aria-[invalid=true]:ring-danger-500 aria-[invalid=true]:bg-danger-50/40 disabled:bg-ink-50 disabled:text-ink-500'
 
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn(controlBase, 'h-10 px-3', className)} {...rest} />
+  return <input className={cn(controlBase, 'h-10 px-3.5', className)} {...rest} />
 }
 
 export function Textarea({ className, rows = 4, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea rows={rows} className={cn(controlBase, 'px-3 py-2.5 leading-relaxed', className)} {...rest} />
+  return <textarea rows={rows} className={cn(controlBase, 'px-3.5 py-2.5 leading-relaxed', className)} {...rest} />
 }
 
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
@@ -71,7 +71,7 @@ export function Select({ className, children, ...rest }: SelectHTMLAttributes<HT
     <select
       className={cn(
         controlBase,
-        'h-10 appearance-none bg-[length:16px] bg-[right_0.65rem_center] bg-no-repeat pr-9',
+        'h-10 appearance-none bg-[length:16px] bg-[right_0.75rem_center] bg-no-repeat pl-3.5 pr-10 text-sm font-medium',
         "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f6979' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")]",
         className,
       )}

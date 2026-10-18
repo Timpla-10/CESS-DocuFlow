@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { useUser } from '../../app/session'
 import { Field, Input } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Avatar, Badge, Button, Card, CardHeader, DefinitionList, PageHeader } from '../../components/ui'
+import { Avatar, Badge, Button, Card, CardHeader, DefinitionList, DepartmentBadge, PageHeader } from '../../components/ui'
 import { NOTIFICATION_PREF_LABEL, ROLE_LABEL } from '../../content/language'
 import { api } from '../../data/store'
 import type { NotificationPreference } from '../../data/types'
@@ -103,7 +103,7 @@ export function AccountPage() {
             <p className="text-sm text-ink-600">{user.email}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge tone="brand">{ROLE_LABEL[user.role]}</Badge>
-              {user.origin && <Badge tone="neutral">Origin: {user.origin}</Badge>}
+              <DepartmentBadge department={user.department} origin={user.origin} />
             </div>
           </div>
         </div>
