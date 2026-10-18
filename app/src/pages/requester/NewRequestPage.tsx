@@ -18,7 +18,7 @@ import { useUser } from '../../app/session'
 import { sessionFiles } from '../../components/documents'
 import { Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Badge, Button, ButtonLink, Card, CardHeader, DepartmentBadge, PageHeader } from '../../components/ui'
+import { Badge, Button, ButtonLink, Card, CardHeader, PageHeader } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
 import { api, useDb } from '../../data/store'
@@ -296,9 +296,9 @@ export function NewRequestPage() {
                 <span className="font-semibold text-ink-500">Department:</span>{' '}
                 <span className="font-medium text-ink-800">{user.department}</span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div>
                 <span className="font-semibold text-ink-500">Origin Route:</span>{' '}
-                <DepartmentBadge department={user.department} origin={user.origin} />
+                <span className="font-medium text-ink-800">{user.origin === 'IDS' ? 'IDS Route' : 'CESS Route'}</span>
               </div>
             </div>
 

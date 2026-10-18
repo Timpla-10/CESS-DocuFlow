@@ -770,7 +770,7 @@ export function SignInPage() {
                         facultyOrigin === 'CESS' ? 'text-purple-200' : 'text-purple-600',
                       )}
                     >
-                      College Departments (DSEE / DSSH)
+                      College Departments
                     </span>
                   </button>
 

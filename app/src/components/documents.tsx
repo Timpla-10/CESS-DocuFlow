@@ -32,7 +32,7 @@ import { byNewest, byOldest, daysWaiting, isDelayed, typeOf, userById } from '..
 import type { Attachment, Database, DocRecord, HistoryEntry, OfficeId, RouteStep, Status } from '../data/types'
 import { formatDate, formatDateTime, plural, timeAgo } from '../lib/time'
 import { Input, Select } from './form'
-import { Avatar, Badge, DepartmentBadge, EmptyState, cn } from './ui'
+import { Avatar, Badge, EmptyState, cn } from './ui'
 
 /* ------------------------------------------------------------------------ */
 /* Status                                                                    */
@@ -185,10 +185,10 @@ export function FilterBar({
           ))}
         </FilterSelect>
         {showOrigin && (
-          <FilterSelect label="Origin / Department" value={filters.origin} onChange={(v) => setFilters({ ...filters, origin: v as Filters['origin'] })}>
-            <option value="">All Units (CESS &amp; IDS)</option>
-            <option value="CESS">CESS (DSEE &amp; DSSH)</option>
-            <option value="IDS">IDS (Integrated Developmental School)</option>
+          <FilterSelect label="Origin / Unit" value={filters.origin} onChange={(v) => setFilters({ ...filters, origin: v as Filters['origin'] })}>
+            <option value="">All Units</option>
+            <option value="CESS">CESS</option>
+            <option value="IDS">IDS</option>
           </FilterSelect>
         )}
         {showOffice && (
@@ -421,10 +421,8 @@ export function DocumentList({
                         <Avatar name={req?.name ?? '?'} size="sm" className="shrink-0" />
                         <div className="min-w-0">
                           <div className="truncate font-semibold text-ink-800">{req?.name}</div>
-                          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-500">
-                            <DepartmentBadge department={req?.department} origin={d.origin} />
-                            <span>·</span>
-                            <span>{req?.role === 'student' ? 'Student' : 'Faculty'}</span>
+                          <div className="mt-0.5 text-xs text-ink-500">
+                            {req?.role === 'student' ? 'Student' : 'Faculty'}
                           </div>
                         </div>
                       </div>

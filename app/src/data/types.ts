@@ -215,8 +215,16 @@ export interface Subject {
   syllabusFile?: string
 }
 
+export interface SyllabusTemplate {
+  fileName: string
+  updatedAt: string
+  uploadedBy: string
+  fileSize?: string
+}
+
 export interface FacultyEntry {
   id: string
+  userId?: string
   name: string
   department: string
   subjects: Subject[]
@@ -235,6 +243,7 @@ export interface Database {
   notifications: NotificationLog[]
   notices: Notice[]
   faculty: FacultyEntry[]
+  syllabusTemplate?: SyllabusTemplate
   settings: Settings
   counter: number
 }

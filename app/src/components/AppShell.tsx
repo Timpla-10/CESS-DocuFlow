@@ -157,44 +157,19 @@ function Sidebar({
           )}
         </div>
 
-        {/* User identification badge */}
+        {/* User identification card */}
         {isExpanded ? (
           <div className="mx-4 mb-2 mt-2 rounded-xl bg-white/[0.09] p-3 ring-1 ring-inset ring-white/15">
-            <div className="flex items-center justify-between gap-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-200/90">Signed in as</p>
-              {user.origin === 'IDS' || user.department?.includes('IDS') || user.department?.includes('Integrated Development') ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-ids-400/25 px-2 py-0.5 text-[10px] font-bold text-ids-200 ring-1 ring-ids-400/40">
-                  <span className="size-1.5 rounded-full bg-ids-400" />
-                  IDS
-                </span>
-              ) : user.department?.includes('DSEE') || user.department?.includes('Education') ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-dsee-300/25 px-2 py-0.5 text-[10px] font-bold text-dsee-200 ring-1 ring-dsee-300/40">
-                  <span className="size-1.5 rounded-full bg-dsee-300" />
-                  DSEE
-                </span>
-              ) : user.department?.includes('DSSH') || user.department?.includes('Social Sciences') ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand-400/25 px-2 py-0.5 text-[10px] font-bold text-brand-200 ring-1 ring-brand-300/40">
-                  <span className="size-1.5 rounded-full bg-brand-300" />
-                  DSSH
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-200/90">
-                  CESS
-                </span>
-              )}
-            </div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-200/90">Signed in as</p>
             <p className="mt-0.5 truncate text-sm font-bold">{ROLE_LABEL[user.role]}</p>
             <p className="truncate text-xs text-brand-200/80">{user.department}</p>
           </div>
         ) : (
           <div
-            className="mx-2 mb-2 mt-2 flex flex-col items-center justify-center rounded-xl bg-white/[0.09] py-2 px-1 ring-1 ring-inset ring-white/15"
+            className="mx-2 mb-2 mt-2 flex items-center justify-center rounded-xl bg-white/[0.09] py-2 px-1 ring-1 ring-inset ring-white/15"
             title={`Signed in as ${user.name} (${ROLE_LABEL[user.role]})`}
           >
-            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-200">
-              {user.origin || (user.department?.includes('IDS') ? 'IDS' : 'CESS')}
-            </span>
-            <span className="mt-1 size-1.5 rounded-full bg-ids-400" />
+            <Avatar name={user.name} size="sm" />
           </div>
         )}
 

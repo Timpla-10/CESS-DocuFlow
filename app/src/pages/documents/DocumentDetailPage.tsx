@@ -37,7 +37,6 @@ import {
   Callout,
   Card,
   DefinitionList,
-  DepartmentBadge,
   Segmented,
   cn,
 } from '../../components/ui'
@@ -403,7 +402,6 @@ export function DocumentDetailPage() {
                 <Badge tone="brand" dot={false}>
                   {docType?.name}
                 </Badge>
-                <DepartmentBadge origin={doc.origin} full />
                 <Badge tone="neutral" dot={false}>
                   {revisionLabel(doc.revision)}
                 </Badge>

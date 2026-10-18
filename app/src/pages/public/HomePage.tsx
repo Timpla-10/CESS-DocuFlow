@@ -19,7 +19,7 @@ import heroImg from '../../assets/hero-documents.jpg'
 import { useSession } from '../../app/session'
 import { homeFor } from '../../app/nav'
 import { Logo } from '../../components/Logo'
-import { ButtonLink, DepartmentBadge, buttonClass, cn } from '../../components/ui'
+import { ButtonLink, buttonClass, cn } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { useDb } from '../../data/store'
 
@@ -224,8 +224,8 @@ export function HomePage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-bold text-ink-900">{fac.name}</h3>
+                  <p className="mt-0.5 text-xs text-ink-500">{fac.department}</p>
                 </div>
-                <DepartmentBadge department={fac.department} />
               </div>
               <ul className="mt-4 divide-y divide-ink-100">
                 {fac.subjects.map((sub) => (

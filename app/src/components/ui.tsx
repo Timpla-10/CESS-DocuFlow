@@ -149,50 +149,14 @@ export function Badge({ tone = 'neutral', children, dot = true, className }: { t
   )
 }
 
-/** Reusable badge rendering official department identity (Pink for IDS, Light Purple for DSEE, Dark Purple for DSSH) */
-export function DepartmentBadge({
-  department,
-  origin,
-  full = false,
-  className,
-}: {
+/** DepartmentBadge deprecated: department acronym labels removed by request */
+export function DepartmentBadge(_props?: {
   department?: string
   origin?: string
   full?: boolean
   className?: string
 }) {
-  const text = (department || origin || '').toLowerCase()
-  let tone: Tone = 'dssh'
-  let label = origin || department || 'CESS'
-
-  if (text.includes('ids') || text.includes('integrated development')) {
-    tone = 'ids'
-    label = full ? 'Integrated Developmental School (IDS)' : 'IDS'
-  } else if (
-    text.includes('dsee') ||
-    text.includes('elementary') ||
-    text.includes('secondary') ||
-    text.includes('professional education') ||
-    text.includes('bsed') ||
-    text.includes('beed')
-  ) {
-    tone = 'dsee'
-    label = full ? 'Dept. of Secondary & Elementary Education (DSEE)' : 'DSEE'
-  } else if (
-    text.includes('dssh') ||
-    text.includes('social science') ||
-    text.includes('humanities') ||
-    text.includes('ba social')
-  ) {
-    tone = 'dssh'
-    label = full ? 'Dept. of Social Sciences & Humanities (DSSH)' : 'DSSH'
-  }
-
-  return (
-    <Badge tone={tone} className={className}>
-      {label}
-    </Badge>
-  )
+  return null
 }
 
 /* ------------------------------------------------------------------------ */

@@ -20,6 +20,7 @@ import type {
   NotificationPreference,
   Origin,
   Role,
+  SyllabusTemplate,
   User,
 } from './types'
 
@@ -302,24 +303,32 @@ export const api = {
       d.externalOffices = d.externalOffices.filter((o) => o.id !== id)
     }),
 
-  /** REQ-INFO-3: Add, edit, or remove faculty, subjects, and syllabus files. */
+  /** REQ-INFO-3: Add, edit, or remove faculty and subjects in the directory roster (Secretary only). Preserves existing faculty syllabi. */
   saveFacultyEntry: (actor: User, entry: FacultyEntry) =>
     mutate((d) => {
       if (actor.role !== 'secretary')
-        throw new FriendlyError('Only the College Secretary can add or edit faculty and syllabus records.')
+        throw new FriendlyError('Only the College Secretary can add or edit faculty records.')
       if (!entry.name.trim() || !entry.department.trim())
         throw new FriendlyError('Please enter the faculty member’s name and department.')
+      const existing = d.faculty.find((f) => f.id === entry.id)
       const cleaned: FacultyEntry = {
         id: entry.id || engine.nextId(d, 'fac-'),
+        userId: entry.userId || existing?.userId,
         name: entry.name.trim(),
         department: entry.department.trim(),
         subjects: entry.subjects
           .filter((s) => s.code.trim() || s.title.trim())
-          .map((s) => ({
-            code: s.code.trim(),
-            title: s.title.trim(),
-            syllabusFile: s.syllabusFile?.trim() || undefined,
-          })),
+          .map((s) => {
+            // Preserve existing syllabus if already uploaded by faculty
+            const priorSub = existing?.subjects.find(
+              (p) => p.code.trim().toLowerCase() === s.code.trim().toLowerCase(),
+            )
+            return {
+              code: s.code.trim(),
+              title: s.title.trim(),
+              syllabusFile: priorSub?.syllabusFile || s.syllabusFile?.trim() || undefined,
+            }
+          }),
       }
       const idx = d.faculty.findIndex((f) => f.id === cleaned.id)
       if (idx >= 0) {
@@ -335,6 +344,53 @@ export const api = {
       if (actor.role !== 'secretary')
         throw new FriendlyError('Only the College Secretary can remove faculty records.')
       d.faculty = d.faculty.filter((f) => f.id !== id)
+    }),
+
+  /** College Secretary: Upload or replace official institutional course syllabus template. */
+  updateSyllabusTemplate: (actor: User, template: SyllabusTemplate) =>
+    mutate((d) => {
+      if (actor.role !== 'secretary')
+        throw new FriendlyError('Only the College Secretary can upload or update the official syllabus template.')
+      if (!template.fileName.trim())
+        throw new FriendlyError('Please provide a valid template file name.')
+      d.syllabusTemplate = {
+        fileName: template.fileName.trim(),
+        updatedAt: new Date().toISOString(),
+        uploadedBy: actor.name,
+        fileSize: template.fileSize || 'Official Template',
+      }
+    }),
+
+  /** Faculty self-service: Upload or update syllabus for own subject. */
+  uploadFacultySyllabus: (actor: User, facultyId: string, subjectCode: string, fileName: string) =>
+    mutate((d) => {
+      const fac = d.faculty.find((f) => f.id === facultyId)
+      if (!fac) throw new FriendlyError('Faculty record not found.')
+      const isOwner =
+        (fac.userId && fac.userId === actor.id) ||
+        fac.name.trim().toLowerCase() === actor.name.trim().toLowerCase()
+      if (!isOwner) {
+        throw new FriendlyError('Only the assigned faculty member can upload or edit this course syllabus.')
+      }
+      const subject = fac.subjects.find((s) => s.code.trim().toLowerCase() === subjectCode.trim().toLowerCase())
+      if (!subject) throw new FriendlyError(`Subject ${subjectCode} not found for this instructor.`)
+      subject.syllabusFile = fileName.trim()
+    }),
+
+  /** Faculty self-service: Remove syllabus from own subject. */
+  removeFacultySyllabus: (actor: User, facultyId: string, subjectCode: string) =>
+    mutate((d) => {
+      const fac = d.faculty.find((f) => f.id === facultyId)
+      if (!fac) throw new FriendlyError('Faculty record not found.')
+      const isOwner =
+        (fac.userId && fac.userId === actor.id) ||
+        fac.name.trim().toLowerCase() === actor.name.trim().toLowerCase()
+      if (!isOwner) {
+        throw new FriendlyError('Only the assigned faculty member can remove this course syllabus.')
+      }
+      const subject = fac.subjects.find((s) => s.code.trim().toLowerCase() === subjectCode.trim().toLowerCase())
+      if (!subject) throw new FriendlyError(`Subject ${subjectCode} not found for this instructor.`)
+      delete subject.syllabusFile
     }),
 
   updateReminderDays: (actor: User, days: number) =>
