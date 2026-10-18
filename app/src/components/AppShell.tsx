@@ -52,8 +52,14 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   const sections = navFor(user.role)
 
   return (
-    <nav aria-label="Main navigation" className="surface-brand-gradient flex h-full flex-col text-white">
-      <div className="flex h-16 items-center justify-between px-5">
+    <nav aria-label="Main navigation" className="surface-brand-gradient relative flex h-full flex-col overflow-hidden text-white">
+      {/* Living Aurora ambient moving glow orbs (Pink IDS + Lavender DSEE) */}
+      <div className="pointer-events-none absolute -bottom-24 -right-20 size-72 rounded-full bg-ids-400/35 blur-3xl animate-aurora-pink" aria-hidden />
+      <div className="pointer-events-none absolute -top-20 -left-20 size-64 rounded-full bg-dsee-300/30 blur-3xl animate-aurora-lavender" aria-hidden />
+      <div className="pointer-events-none absolute top-1/2 -right-16 size-56 -translate-y-1/2 rounded-full bg-brand-400/25 blur-3xl animate-aurora-violet" aria-hidden />
+
+      <div className="relative z-10 flex h-full min-h-0 flex-col">
+        <div className="flex h-16 items-center justify-between px-5">
         <Link to="/app" aria-label="CESS DocuFlow — go to your home page">
           <Logo tone="light" />
         </Link>
@@ -144,7 +150,8 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         <br />
         Mindanao State University at Naawan
       </div>
-    </nav>
+    </div>
+  </nav>
   )
 }
 
