@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Download,
+  Eye,
   FileText,
   Search,
   Sparkles,
@@ -10,6 +11,7 @@ import {
 import { useState, type ChangeEvent } from 'react'
 import { useUser } from '../../app/session'
 import { Input } from '../../components/form'
+import { SyllabusPreviewModal } from '../../components/SyllabusPreviewModal'
 import { useToast } from '../../components/Toast'
 import { Avatar, Card, EmptyState, PageHeader } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
@@ -34,6 +36,8 @@ export function FacultyDirectoryPage() {
 
   const syllabusTemplate: SyllabusTemplate = db.syllabusTemplate || DEFAULT_SYLLABUS_TEMPLATE
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
+  const [previewSyllabus, setPreviewSyllabus] = useState<{ faculty: FacultyEntry; subject: Subject } | null>(null)
+  const [previewTemplate, setPreviewTemplate] = useState(false)
 
   const facultyList = db.faculty.filter((f) => {
     if (!search.trim()) return true
@@ -176,14 +180,26 @@ export function FacultyDirectoryPage() {
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:flex-col sm:items-end">
-            <button
-              type="button"
-              onClick={handleDownloadTemplate}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-brand-900 shadow-md transition hover:bg-brand-50 active:scale-95"
-            >
-              <Download className="size-4 text-brand-700" />
-              Download Template
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
+                title="Preview official template on screen"
+              >
+                <Eye className="size-4 text-brand-200" />
+                <span>Preview Template</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadTemplate}
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-brand-900 shadow-md transition hover:bg-brand-50 active:scale-95"
+              >
+                <Download className="size-4 text-brand-700" />
+                <span>Download Template</span>
+              </button>
+            </div>
 
             {isSecretary && (
               <label
@@ -298,15 +314,28 @@ export function FacultyDirectoryPage() {
                           </div>
 
                           <div className="flex shrink-0 items-center gap-2">
-                            {/* Download Button (Available to all when file exists) */}
+                            {/* Preview and Download Buttons (Available to all when file exists) */}
                             {sub.syllabusFile ? (
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadSyllabus(fac, sub)}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-xs ring-1 ring-ink-200 hover:bg-brand-50 active:scale-95 transition"
-                              >
-                                <Download className="size-3" /> Syllabus
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewSyllabus({ faculty: fac, subject: sub })}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 active:scale-95 transition"
+                                  title={`Preview syllabus for ${sub.code} on screen`}
+                                >
+                                  <Eye className="size-3 text-brand-700" />
+                                  <span>Preview</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadSyllabus(fac, sub)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-xs ring-1 ring-ink-200 hover:bg-brand-50 active:scale-95 transition"
+                                  title={`Download ${sub.syllabusFile}`}
+                                >
+                                  <Download className="size-3" />
+                                  <span>Syllabus</span>
+                                </button>
+                              </div>
                             ) : !isMyProfile ? (
                               <span className="text-[11px] italic text-ink-400">No syllabus uploaded</span>
                             ) : null}
@@ -359,6 +388,26 @@ export function FacultyDirectoryPage() {
             )
           })}
         </div>
+      )}
+
+      {/* Syllabus In-App Preview Modal */}
+      {previewSyllabus && (
+        <SyllabusPreviewModal
+          open={!!previewSyllabus}
+          onClose={() => setPreviewSyllabus(null)}
+          faculty={previewSyllabus.faculty}
+          subject={previewSyllabus.subject}
+        />
+      )}
+
+      {/* Official Template In-App Preview Modal */}
+      {previewTemplate && (
+        <SyllabusPreviewModal
+          open={previewTemplate}
+          onClose={() => setPreviewTemplate(false)}
+          isTemplate
+          template={syllabusTemplate}
+        />
       )}
     </div>
   )
