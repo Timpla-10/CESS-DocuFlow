@@ -1,24 +1,17 @@
 import {
   BookOpen,
-  CheckCircle2,
   Download,
-  Edit3,
   FileText,
-  Info,
-  Plus,
-  Save,
   Search,
   Sparkles,
   Trash2,
   UploadCloud,
-  X,
 } from 'lucide-react'
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import { useUser } from '../../app/session'
-import { Dialog } from '../../components/Dialog'
-import { Field, Input, Select } from '../../components/form'
+import { Input } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Avatar, Button, Card, EmptyState, PageHeader } from '../../components/ui'
+import { Avatar, Card, EmptyState, PageHeader } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { api, useDb } from '../../data/store'
 import type { FacultyEntry, Subject, SyllabusTemplate } from '../../data/types'
@@ -40,14 +33,6 @@ export function FacultyDirectoryPage() {
   const isFacultyUser = user.role === 'faculty' || user.role === 'chairperson'
 
   const syllabusTemplate: SyllabusTemplate = db.syllabusTemplate || DEFAULT_SYLLABUS_TEMPLATE
-
-  // Add / Edit Faculty & Subjects Dialog State (Secretary Roster Management)
-  const [editingFaculty, setEditingFaculty] = useState<FacultyEntry | null>(null)
-  const [facName, setFacName] = useState('')
-  const [facDept, setFacDept] = useState('')
-  const [facSubjects, setFacSubjects] = useState<Subject[]>([])
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
 
   const facultyList = db.faculty.filter((f) => {
@@ -133,78 +118,6 @@ export function FacultyDirectoryPage() {
     }
   }
 
-  // Secretary Roster Management Handlers
-  const openAddFaculty = () => {
-    setEditingFaculty(null)
-    setFacName('')
-    setFacDept('Department of Secondary and Elementary Education')
-    setFacSubjects([{ code: '', title: '' }])
-    setIsDialogOpen(true)
-  }
-
-  const openEditFaculty = (fac: FacultyEntry) => {
-    setEditingFaculty(fac)
-    setFacName(fac.name)
-    setFacDept(fac.department)
-    setFacSubjects(
-      fac.subjects.length > 0
-        ? fac.subjects.map((s) => ({ ...s }))
-        : [{ code: '', title: '' }],
-    )
-    setIsDialogOpen(true)
-  }
-
-  const handleSubjectChange = (index: number, field: keyof Subject, value: string) => {
-    setFacSubjects((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)))
-  }
-
-  const addSubjectRow = () => {
-    setFacSubjects((prev) => [...prev, { code: '', title: '' }])
-  }
-
-  const removeSubjectRow = (index: number) => {
-    setFacSubjects((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const handleSaveFaculty = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!facName.trim() || !facDept.trim()) {
-      toast.error('Validation Error', 'Please enter both the faculty member’s name and department.')
-      return
-    }
-    setIsSaving(true)
-    try {
-      await api.saveFacultyEntry(user, {
-        id: editingFaculty?.id ?? '',
-        userId: editingFaculty?.userId,
-        name: facName,
-        department: facDept,
-        subjects: facSubjects,
-      })
-      toast.success(
-        editingFaculty ? 'Faculty Roster Updated' : 'Faculty Added to Roster',
-        `Saved ${facName.trim()} in the directory roster.`,
-      )
-      setIsDialogOpen(false)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unable to save faculty entry.'
-      toast.error('Save Failed', msg)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleDeleteFaculty = async (fac: FacultyEntry) => {
-    if (!window.confirm(`Remove ${fac.name} and their subject list from the directory?`)) return
-    try {
-      await api.deleteFacultyEntry(user, fac.id)
-      toast.info('Faculty Removed', `${fac.name} was removed from the directory.`)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unable to remove faculty entry.'
-      toast.error('Remove Failed', msg)
-    }
-  }
-
   const handleDownloadSyllabus = (fac: FacultyEntry, sub: Subject) => {
     const fileName = sub.syllabusFile || `${sub.code.replace(/\s+/g, '_')}_Syllabus.pdf`
     downloadGeneratedPdf(fileName, `COURSE SYLLABUS: ${sub.code} - ${sub.title}`, [
@@ -229,21 +142,10 @@ export function FacultyDirectoryPage() {
         eyebrow="Academic Directory"
         title="Faculty Members, Subjects & Course Syllabi"
         description="Browse College of Education and Social Sciences faculty members, their assigned teaching subjects, and official course syllabi (REQ-INFO-2, REQ-INFO-3, REQ-INFO-4)."
-        actions={
-          isSecretary ? (
-            <Button onClick={openAddFaculty} icon={Plus}>
-              Add Faculty & Subjects
-            </Button>
-          ) : undefined
-        }
       />
 
       {/* Official Syllabus Template Card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-midnight-950 via-brand-900 to-midnight-900 p-6 text-white shadow-xl ring-1 ring-white/10">
-        <div
-          className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full bg-brand-400/20 blur-3xl"
-          aria-hidden
-        />
+      <div className="surface-brand-gradient relative overflow-hidden rounded-2xl p-6 text-white shadow-xl ring-1 ring-white/15">
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur-md">
@@ -277,7 +179,7 @@ export function FacultyDirectoryPage() {
             <button
               type="button"
               onClick={handleDownloadTemplate}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-midnight-950 shadow-md transition hover:bg-brand-50 active:scale-95"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-brand-900 shadow-md transition hover:bg-brand-50 active:scale-95"
             >
               <Download className="size-4 text-brand-700" />
               Download Template
@@ -357,29 +259,6 @@ export function FacultyDirectoryPage() {
                       <p className="mt-0.5 text-xs text-ink-500 truncate">{fac.department}</p>
                     </div>
                   </div>
-
-                  {isSecretary && (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={Edit3}
-                        onClick={() => openEditFaculty(fac)}
-                        title="Edit faculty details and teaching subjects"
-                      >
-                        Edit Roster
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger-soft"
-                        icon={Trash2}
-                        onClick={() => handleDeleteFaculty(fac)}
-                        aria-label={`Remove ${fac.name}`}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  )}
                 </div>
 
                 <div className="p-5">
@@ -481,121 +360,6 @@ export function FacultyDirectoryPage() {
           })}
         </div>
       )}
-
-      {/* Secretary Dialog: Add / Edit Faculty & Assigned Subjects (No syllabus editing) */}
-      <Dialog
-        open={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
-        size="lg"
-        title={editingFaculty ? `Edit Faculty Roster — ${editingFaculty.name}` : 'Add Faculty Member to Directory'}
-        description="Maintain instructor details and teaching subject assignments. Syllabi are uploaded directly by each assigned faculty member."
-        busy={isSaving}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveFaculty} loading={isSaving} icon={Save}>
-              Save Faculty & Subjects
-            </Button>
-          </>
-        }
-      >
-        <form className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Faculty Full Name" required>
-              <Input
-                type="text"
-                value={facName}
-                onChange={(e) => setFacName(e.target.value)}
-                placeholder="e.g. Prof. Ana Lim"
-              />
-            </Field>
-            <Field label="Department" required>
-              <Select
-                value={facDept}
-                onChange={(e) => setFacDept(e.target.value)}
-              >
-                <option value="Department of Secondary and Elementary Education">
-                  Department of Secondary and Elementary Education
-                </option>
-                <option value="Department of Social Sciences and Humanities">
-                  Department of Social Sciences and Humanities
-                </option>
-                <option value="Integrated Developmental School">
-                  Integrated Developmental School
-                </option>
-              </Select>
-            </Field>
-          </div>
-
-          {/* Governance Notice */}
-          <div className="flex items-start gap-2.5 rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
-            <Info className="size-4 shrink-0 text-brand-700 mt-0.5" />
-            <div>
-              <p className="font-semibold text-brand-950">Course Syllabi Governance</p>
-              <p className="mt-0.5 text-brand-800">
-                Official course syllabus files can only be uploaded and managed by the assigned faculty member. The College Secretary manages teaching load assignments and uploads the institutional syllabus template.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-wider text-ink-500">
-                Assigned Teaching Subjects
-              </p>
-              <Button type="button" size="sm" variant="secondary" icon={Plus} onClick={addSubjectRow}>
-                Add Subject
-              </Button>
-            </div>
-
-            {facSubjects.map((sub, idx) => (
-              <div key={idx} className="rounded-xl border border-ink-200 bg-ink-50/40 p-3.5 space-y-2">
-                <div className="flex items-start gap-2">
-                  <div className="w-32 shrink-0">
-                    <label className="mb-1 block text-[11px] font-semibold text-ink-600">Subject Code</label>
-                    <Input
-                      type="text"
-                      value={sub.code}
-                      onChange={(e) => handleSubjectChange(idx, 'code', e.target.value)}
-                      placeholder="EDUC 101"
-                      className="h-9 text-xs uppercase"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="mb-1 block text-[11px] font-semibold text-ink-600">Subject Title</label>
-                    <Input
-                      type="text"
-                      value={sub.title}
-                      onChange={(e) => handleSubjectChange(idx, 'title', e.target.value)}
-                      placeholder="The Child and Adolescent Learner"
-                      className="h-9 text-xs"
-                    />
-                  </div>
-                  {facSubjects.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeSubjectRow(idx)}
-                      className="mt-6 rounded p-1.5 text-ink-400 hover:bg-danger-50 hover:text-danger-600"
-                      aria-label="Remove subject"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  )}
-                </div>
-
-                {sub.syllabusFile && (
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md">
-                    <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
-                    <span className="truncate">Uploaded Syllabus File: {sub.syllabusFile}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </form>
-      </Dialog>
     </div>
   )
 }
