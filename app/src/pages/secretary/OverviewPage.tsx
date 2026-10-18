@@ -16,7 +16,7 @@ import {
   Callout,
   Card,
   CardHeader,
-  DonutChart,
+  PieChart,
   PageHeader,
   StatCard,
 } from '../../components/ui'
@@ -250,7 +250,7 @@ export function OverviewPage() {
               description="Current distribution across reviewing bodies"
             />
             <div className="p-6">
-              <DonutChart
+              <PieChart
                 items={officeCounts}
                 emptyLabel="No documents currently under review."
                 centerLabel="In Review"

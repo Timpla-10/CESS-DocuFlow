@@ -408,22 +408,22 @@ export function BarList({ items, emptyLabel }: { items: { label: string; value: 
 }
 
 /* ------------------------------------------------------------------------ */
-/* Donut chart (part-of-a-whole distribution with central KPI & legend)     */
+/* Pie chart (solid circular sector distribution with pop-out & legend)    */
 /* ------------------------------------------------------------------------ */
 
-export interface DonutChartItem {
+export interface PieChartItem {
   label: string
   value: number
   color?: string
   tone?: Tone
 }
 
-export function DonutChart({
+export function PieChart({
   items,
   emptyLabel = 'No documents currently under review.',
   centerLabel = 'In Review',
 }: {
-  items: DonutChartItem[]
+  items: PieChartItem[]
   emptyLabel?: string
   centerLabel?: string
 }) {
@@ -452,10 +452,10 @@ export function DonutChart({
             <circle
               cx="50"
               cy="50"
-              r="38"
-              fill="none"
+              r="44"
+              fill="#F8FAFC"
               stroke="#E2E8F0"
-              strokeWidth="10"
+              strokeWidth="2"
               strokeDasharray="4 4"
             />
           </svg>
@@ -469,96 +469,136 @@ export function DonutChart({
     )
   }
 
-  // Ring calculations: SVG circle with stroke-dasharray
-  const radius = 38
-  const strokeWidth = 11
-  const circumference = 2 * Math.PI * radius // ~238.76
+  const radius = 44
 
   const segments = items.map((item, idx) => {
-    const percent = total > 0 ? item.value / total : 0
-    const priorPercent = items
+    const fraction = total > 0 ? item.value / total : 0
+    const priorFraction = items
       .slice(0, idx)
       .reduce((sum, prev) => sum + (total > 0 ? prev.value / total : 0), 0)
-    const strokeDash = percent * circumference
-    const strokeOffset = -priorPercent * circumference
+
+    const startAngle = 2 * Math.PI * priorFraction - Math.PI / 2
+    const endAngle = 2 * Math.PI * (priorFraction + fraction) - Math.PI / 2
+    const midAngle = (startAngle + endAngle) / 2
+
+    const x1 = 50 + radius * Math.cos(startAngle)
+    const y1 = 50 + radius * Math.sin(startAngle)
+    const x2 = 50 + radius * Math.cos(endAngle)
+    const y2 = 50 + radius * Math.sin(endAngle)
+
+    const largeArcFlag = fraction > 0.5 ? 1 : 0
+
+    // Pop-out displacement when hovered
+    const popDistance = 4.5
+    const dx = popDistance * Math.cos(midAngle)
+    const dy = popDistance * Math.sin(midAngle)
+
     const color = item.color || defaultColors[idx % defaultColors.length]
+    const percent = fraction * 100
+    const percentageFormatted = percent.toFixed(percent % 1 === 0 ? 0 : 1)
 
     return {
       ...item,
       originalIndex: idx,
-      percent,
-      percentageFormatted: (percent * 100).toFixed((percent * 100) % 1 === 0 ? 0 : 1),
-      strokeDash,
-      strokeOffset,
+      fraction,
+      percentageFormatted,
       color,
+      x1,
+      y1,
+      x2,
+      y2,
+      largeArcFlag,
+      dx,
+      dy,
     }
   })
 
   const currentHovered = hoveredIdx !== null ? segments.find((s) => s.originalIndex === hoveredIdx) : null
 
   return (
-    <div className="flex flex-col items-center gap-5">
-      {/* Donut Graphic */}
+    <div className="flex flex-col items-center gap-4">
+      {/* Solid Pie Graphic */}
       <div className="relative size-44 sm:size-48">
         <svg
-          className="size-full -rotate-90 transform"
-          viewBox="0 0 100 100"
+          className="size-full overflow-visible drop-shadow-sm"
+          viewBox="-6 -6 112 112"
           aria-hidden
         >
-          {/* Subtle background track */}
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            fill="none"
-            stroke="#F1F5F9"
-            strokeWidth={strokeWidth}
-          />
-          {segments.map((seg) => {
-            if (seg.value === 0) return null
-            const isHovered = hoveredIdx === seg.originalIndex
-            const isAnyHovered = hoveredIdx !== null
-            const hasGap = activeItems.length > 1
-            const gapSize = hasGap ? 2.5 : 0
-            const dashLength = Math.max(0.5, seg.strokeDash - gapSize)
+          {activeItems.length === 1 ? (
+            // Single 100% item full circle
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              fill={activeItems[0].color || defaultColors[0]}
+              stroke="#FFFFFF"
+              strokeWidth="2"
+              className="cursor-pointer transition-transform duration-200"
+              onMouseEnter={() => setHoveredIdx(0)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            />
+          ) : (
+            segments.map((seg) => {
+              if (seg.value === 0) return null
+              const isHovered = hoveredIdx === seg.originalIndex
+              const isAnyHovered = hoveredIdx !== null
 
-            return (
-              <circle
-                key={seg.label}
-                cx="50"
-                cy="50"
-                r={radius}
-                fill="none"
-                stroke={seg.color}
-                strokeWidth={isHovered ? strokeWidth + 2.5 : strokeWidth}
-                strokeDasharray={`${dashLength} ${circumference - dashLength}`}
-                strokeDashoffset={seg.strokeOffset}
-                strokeLinecap="round"
-                className="cursor-pointer transition-all duration-300 ease-out"
-                style={{
-                  opacity: isAnyHovered ? (isHovered ? 1 : 0.35) : 1,
-                  transformOrigin: '50px 50px',
-                }}
-                onMouseEnter={() => setHoveredIdx(seg.originalIndex)}
-                onMouseLeave={() => setHoveredIdx(null)}
-              />
-            )
-          })}
+              const pathData = `M 50 50 L ${seg.x1.toFixed(3)} ${seg.y1.toFixed(3)} A ${radius} ${radius} 0 ${seg.largeArcFlag} 1 ${seg.x2.toFixed(3)} ${seg.y2.toFixed(3)} Z`
+
+              return (
+                <path
+                  key={seg.label}
+                  d={pathData}
+                  fill={seg.color}
+                  stroke="#FFFFFF"
+                  strokeWidth="2"
+                  strokeLinejoin="round"
+                  className="cursor-pointer transition-all duration-200 ease-out"
+                  style={{
+                    transform: isHovered
+                      ? `translate(${seg.dx.toFixed(2)}px, ${seg.dy.toFixed(2)}px)`
+                      : 'translate(0px, 0px)',
+                    opacity: isAnyHovered ? (isHovered ? 1 : 0.4) : 1,
+                    filter: isHovered ? 'drop-shadow(0 3px 6px rgba(0,0,0,0.18))' : 'none',
+                  }}
+                  onMouseEnter={() => setHoveredIdx(seg.originalIndex)}
+                  onMouseLeave={() => setHoveredIdx(null)}
+                />
+              )
+            })
+          )}
+          {/* Subtle center apex pin */}
+          <circle cx="50" cy="50" r="2.5" fill="#FFFFFF" aria-hidden />
         </svg>
+      </div>
 
-        {/* Center metric overlay */}
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="font-display text-3xl font-bold tracking-tight text-ink-900 transition-all duration-200">
-            {currentHovered ? currentHovered.value : total}
-          </span>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-500 transition-all duration-200">
-            {currentHovered ? `${currentHovered.percentageFormatted}%` : centerLabel}
-          </span>
-        </div>
+      {/* Dynamic Inspector Pill */}
+      <div className="flex min-h-[32px] w-full items-center justify-center rounded-lg bg-ink-50/80 px-3 py-1.5 text-center transition-all">
+        {currentHovered ? (
+          <div className="flex items-center gap-2 text-xs">
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: currentHovered.color }}
+              aria-hidden
+            />
+            <span className="font-semibold text-ink-900">{currentHovered.label}:</span>
+            <span className="font-bold text-brand-700">
+              {currentHovered.value} {currentHovered.value === 1 ? 'doc' : 'docs'}
+            </span>
+            <span className="rounded bg-brand-100/60 px-1 py-0.2 text-[10px] font-bold text-brand-800">
+              {currentHovered.percentageFormatted}%
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-ink-500">
+            <span className="font-bold tabular-nums text-ink-800">{total}</span>
+            <span>total documents {centerLabel.toLowerCase()}</span>
+          </div>
+        )}
       </div>
 
       {/* Interactive Legend List */}
-      <ul className="w-full space-y-1 divide-y divide-ink-50 border-t border-ink-100/70 pt-3">
+      <ul className="w-full space-y-1 divide-y divide-ink-50 border-t border-ink-100/70 pt-2.5">
         {segments.map((seg) => {
           const isHovered = hoveredIdx === seg.originalIndex
           const isAnyHovered = hoveredIdx !== null
@@ -598,6 +638,10 @@ export function DonutChart({
     </div>
   )
 }
+
+// Aliases for backwards compatibility
+export const DonutChart = PieChart
+export type DonutChartItem = PieChartItem
 
 /* ------------------------------------------------------------------------ */
 /* Tabs (segmented)                                                          */
