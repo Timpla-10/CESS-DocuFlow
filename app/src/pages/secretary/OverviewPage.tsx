@@ -33,20 +33,21 @@ export function OverviewPage() {
   const delayedDocs = allDocs.filter((d) => isDelayed(db, d))
   const idsDocs = allDocs.filter((d) => d.origin === 'IDS' && !d.archived)
 
-  // Distribution by holding office with official institutional colors
+  // Distribution by holding office with official institutional gradients
   const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
-  const officeColors: Record<OfficeId, string> = {
-    chairperson: '#6B43B5', // Royal Violet (DSSH)
-    ids_principal: '#E68AB4', // Official IDS Warm Rose / Pink
-    dean: '#8E5CCB', // Dean Amethyst Purple
-    ovcaa: '#3B82F6', // University Azure Blue
-    chancellor: '#F59E0B', // Chancellor Amber Gold
-    secretary: '#48277D',
+  const officeGradients: Record<OfficeId, [string, string]> = {
+    chairperson: ['#8B5CF6', '#581C87'], // Royal Violet (DSSH): Violet-500 -> Violet-900
+    ids_principal: ['#FB7185', '#BE185D'], // Official IDS Warm Rose Pink: Rose-400 -> Pink-700
+    dean: ['#C084FC', '#6B21A8'], // Dean Amethyst Purple: Purple-400 -> Purple-800
+    ovcaa: ['#60A5FA', '#1D4ED8'], // University Azure Blue: Blue-400 -> Blue-700
+    chancellor: ['#FBBF24', '#B45309'], // Chancellor Amber Gold: Amber-400 -> Amber-700
+    secretary: ['#A78BFA', '#4C1D95'],
   }
   const officeCounts = offices.map((off) => ({
     label: OFFICE_LABEL[off],
     value: allDocs.filter((d) => d.status === 'with_office' && d.currentOffice === off).length,
-    color: officeColors[off],
+    color: officeGradients[off][0],
+    gradient: officeGradients[off],
   }))
 
   return (

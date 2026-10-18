@@ -4,6 +4,7 @@
  */
 import { Loader2 } from 'lucide-react'
 import {
+  useId,
   useState,
   type ButtonHTMLAttributes,
   type ComponentType,
@@ -415,6 +416,7 @@ export interface PieChartItem {
   label: string
   value: number
   color?: string
+  gradient?: [string, string]
   tone?: Tone
 }
 
@@ -428,21 +430,22 @@ export function PieChart({
   centerLabel?: string
 }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const rawId = useId()
+  const chartId = rawId.replace(/[^a-zA-Z0-9]/g, '')
 
-  // Institutional and collegiate color palette
-  const defaultColors = [
-    '#6B43B5', // Chairperson: Royal Violet (DSSH)
-    '#E68AB4', // IDS Principal: Warm Rose / Pink (IDS)
-    '#8E5CCB', // College Dean: Amethyst Purple
-    '#3B82F6', // OVCAA: University Azure
-    '#F59E0B', // Chancellor: Executive Amber Gold
-    '#10B981', // Emerald
-    '#EC4899', // Fuchsia
-    '#6366F1', // Indigo
+  // Institutional and collegiate gradient pairs [startColor, endColor]
+  const defaultGradients: [string, string][] = [
+    ['#8B5CF6', '#581C87'], // Chairperson: Royal Violet (DSSH)
+    ['#FB7185', '#BE185D'], // IDS Principal: Warm Rose Pink (IDS)
+    ['#C084FC', '#6B21A8'], // College Dean: Amethyst Purple
+    ['#60A5FA', '#1D4ED8'], // OVCAA: University Azure Blue
+    ['#FBBF24', '#B45309'], // Chancellor: Executive Amber Gold
+    ['#34D399', '#047857'], // Emerald
+    ['#F472B6', '#A21CAF'], // Fuchsia
+    ['#818CF8', '#3730A3'], // Indigo
   ]
 
   const total = items.reduce((sum, it) => sum + it.value, 0)
-  const activeItems = items.filter((it) => it.value > 0)
 
   if (total === 0) {
     return (
@@ -493,7 +496,9 @@ export function PieChart({
     const dx = popDistance * Math.cos(midAngle)
     const dy = popDistance * Math.sin(midAngle)
 
-    const color = item.color || defaultColors[idx % defaultColors.length]
+    const gradient =
+      item.gradient ||
+      (item.color ? [item.color, item.color] : defaultGradients[idx % defaultGradients.length])
     const percent = fraction * 100
     const percentageFormatted = percent.toFixed(percent % 1 === 0 ? 0 : 1)
 
@@ -502,7 +507,8 @@ export function PieChart({
       originalIndex: idx,
       fraction,
       percentageFormatted,
-      color,
+      gradient,
+      gradientId: `pie-grad-${chartId}-${idx}`,
       x1,
       y1,
       x2,
@@ -513,28 +519,47 @@ export function PieChart({
     }
   })
 
+  const activeSegments = segments.filter((s) => s.value > 0)
   const currentHovered = hoveredIdx !== null ? segments.find((s) => s.originalIndex === hoveredIdx) : null
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Solid Pie Graphic */}
+      {/* Solid Gradient Pie Graphic (No White Dividing Lines) */}
       <div className="relative size-44 sm:size-48">
         <svg
           className="size-full overflow-visible drop-shadow-sm"
           viewBox="-6 -6 112 112"
           aria-hidden
         >
-          {activeItems.length === 1 ? (
-            // Single 100% item full circle
+          <defs>
+            {segments.map((seg) => (
+              <linearGradient
+                key={seg.gradientId}
+                id={seg.gradientId}
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="100%"
+              >
+                <stop offset="0%" stopColor={seg.gradient[0]} />
+                <stop offset="100%" stopColor={seg.gradient[1]} />
+              </linearGradient>
+            ))}
+            <filter id={`pie-shadow-${chartId}`} x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="4" stdDeviation="4" floodOpacity="0.22" />
+            </filter>
+          </defs>
+
+          {activeSegments.length === 1 ? (
+            // Single 100% item full circle with gradient
             <circle
               cx="50"
               cy="50"
               r={radius}
-              fill={activeItems[0].color || defaultColors[0]}
-              stroke="#FFFFFF"
-              strokeWidth="2"
+              fill={`url(#${activeSegments[0].gradientId})`}
+              stroke="none"
               className="cursor-pointer transition-transform duration-200"
-              onMouseEnter={() => setHoveredIdx(0)}
+              onMouseEnter={() => setHoveredIdx(activeSegments[0].originalIndex)}
               onMouseLeave={() => setHoveredIdx(null)}
             />
           ) : (
@@ -549,17 +574,15 @@ export function PieChart({
                 <path
                   key={seg.label}
                   d={pathData}
-                  fill={seg.color}
-                  stroke="#FFFFFF"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
+                  fill={`url(#${seg.gradientId})`}
+                  stroke="none"
                   className="cursor-pointer transition-all duration-200 ease-out"
                   style={{
                     transform: isHovered
                       ? `translate(${seg.dx.toFixed(2)}px, ${seg.dy.toFixed(2)}px)`
                       : 'translate(0px, 0px)',
                     opacity: isAnyHovered ? (isHovered ? 1 : 0.4) : 1,
-                    filter: isHovered ? 'drop-shadow(0 3px 6px rgba(0,0,0,0.18))' : 'none',
+                    filter: isHovered ? `url(#pie-shadow-${chartId})` : 'none',
                   }}
                   onMouseEnter={() => setHoveredIdx(seg.originalIndex)}
                   onMouseLeave={() => setHoveredIdx(null)}
@@ -567,8 +590,6 @@ export function PieChart({
               )
             })
           )}
-          {/* Subtle center apex pin */}
-          <circle cx="50" cy="50" r="2.5" fill="#FFFFFF" aria-hidden />
         </svg>
       </div>
 
@@ -577,8 +598,10 @@ export function PieChart({
         {currentHovered ? (
           <div className="flex items-center gap-2 text-xs">
             <span
-              className="size-2 shrink-0 rounded-full"
-              style={{ backgroundColor: currentHovered.color }}
+              className="size-2.5 shrink-0 rounded-full shadow-xs"
+              style={{
+                background: `linear-gradient(135deg, ${currentHovered.gradient[0]}, ${currentHovered.gradient[1]})`,
+              }}
               aria-hidden
             />
             <span className="font-semibold text-ink-900">{currentHovered.label}:</span>
@@ -615,8 +638,10 @@ export function PieChart({
             >
               <div className="flex min-w-0 items-center gap-2">
                 <span
-                  className="size-2.5 shrink-0 rounded-full ring-2 ring-white shadow-xs transition-transform group-hover:scale-125"
-                  style={{ backgroundColor: seg.color }}
+                  className="size-2.5 shrink-0 rounded-full shadow-xs transition-transform group-hover:scale-125"
+                  style={{
+                    background: `linear-gradient(135deg, ${seg.gradient[0]}, ${seg.gradient[1]})`,
+                  }}
                   aria-hidden
                 />
                 <span className="truncate text-ink-700 group-hover:text-ink-900">
