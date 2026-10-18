@@ -152,7 +152,7 @@ function Sidebar({
             </>
           ) : (
             <Link to="/app" aria-label="CESS DocuFlow" title="CESS DocuFlow">
-              <LogoMark className="size-8" />
+              <LogoMark size="sm" />
             </Link>
           )}
         </div>

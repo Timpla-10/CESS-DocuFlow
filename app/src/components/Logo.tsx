@@ -1,28 +1,55 @@
+import msunLogo from '../assets/msun-logo.png'
+import cessLogo from '../assets/cess-logo.png'
 import { cn } from './ui'
 
-/** CESS DocuFlow product mark. This is an app mark, not an official college seal. */
-export function LogoMark({ className }: { className?: string }) {
+/**
+ * Dual institutional seal mark (MSUN official university seal & CESS college seal).
+ */
+export function LogoMark({ className, size = 'md' }: { className?: string; size?: 'sm' | 'md' | 'lg' }) {
+  const imgSize = size === 'sm' ? 'size-6' : size === 'lg' ? 'size-9' : 'size-7'
   return (
-    <svg viewBox="0 0 64 64" className={cn('size-9', className)} aria-hidden>
-      <defs>
-        <linearGradient id="dfmark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--color-dsee-300)" />
-          <stop offset="42%" stopColor="var(--color-dssh-600)" />
-          <stop offset="100%" stopColor="var(--color-brand-600)" />
-        </linearGradient>
-      </defs>
-      <rect width="64" height="64" rx="16" fill="url(#dfmark)" />
-      <path d="M22 14h14l10 10v24a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z" fill="var(--color-brand-50)" />
-      <path d="M36 14v8a2 2 0 0 0 2 2h8" fill="var(--color-ids-400)" />
-      <path d="M25 37l5 5 10-11" fill="none" stroke="var(--color-brand-600)" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <span className={cn('inline-flex items-center justify-center gap-1 shrink-0', className)}>
+      <img
+        src={msunLogo}
+        alt="MSU Naawan Official Seal"
+        className={cn(imgSize, 'object-contain shrink-0 drop-shadow-sm select-none')}
+      />
+      <img
+        src={cessLogo}
+        alt="CESS College Seal"
+        className={cn(imgSize, 'object-contain shrink-0 drop-shadow-sm select-none')}
+      />
+    </span>
   )
 }
 
-export function Logo({ tone = 'dark', subtitle = true }: { tone?: 'dark' | 'light'; subtitle?: boolean }) {
+/**
+ * Full product logo combining MSUN and CESS official seals side-by-side with brand typography.
+ */
+export function Logo({
+  tone = 'dark',
+  subtitle = true,
+  size = 'md',
+}: {
+  tone?: 'dark' | 'light'
+  subtitle?: boolean
+  size?: 'sm' | 'md' | 'lg'
+}) {
+  const imgSize = size === 'sm' ? 'size-7' : size === 'lg' ? 'size-10' : 'size-[34px]'
   return (
     <span className="flex items-center gap-2.5">
-      <LogoMark />
+      <span className="inline-flex items-center gap-1.5 shrink-0">
+        <img
+          src={msunLogo}
+          alt="MSU Naawan Official Seal"
+          className={cn(imgSize, 'object-contain shrink-0 drop-shadow-sm select-none')}
+        />
+        <img
+          src={cessLogo}
+          alt="CESS College Seal"
+          className={cn(imgSize, 'object-contain shrink-0 drop-shadow-sm select-none')}
+        />
+      </span>
       <span className="leading-tight">
         <span className={cn('block text-[15px] font-extrabold tracking-tight', tone === 'light' ? 'text-white' : 'text-brand-900')}>
           CESS <span className={tone === 'light' ? 'text-dsee-200' : 'text-brand-600'}>DocuFlow</span>
