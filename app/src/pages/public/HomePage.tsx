@@ -57,9 +57,9 @@ export function HomePage() {
       <section className="surface-brand-gradient relative overflow-hidden pb-24 pt-32 sm:pb-32 sm:pt-40">
         <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(var(--color-white)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
         {/* Balanced tri-color ambient glow sources with living aurora motion */}
-        <div className="pointer-events-none absolute -right-36 -top-36 size-[560px] rounded-full bg-dsee-300/35 blur-3xl animate-aurora-lavender" aria-hidden />
-        <div className="pointer-events-none absolute -bottom-28 -left-28 size-[520px] rounded-full bg-ids-400/35 blur-3xl animate-aurora-pink" aria-hidden />
-        <div className="pointer-events-none absolute right-1/3 top-1/2 size-[400px] -translate-y-1/2 rounded-full bg-brand-400/25 blur-3xl animate-aurora-violet" aria-hidden />
+        <div className="pointer-events-none absolute -right-36 -top-36 size-[560px] rounded-full bg-dsee-300/45 blur-2xl animate-aurora-lavender" aria-hidden />
+        <div className="pointer-events-none absolute -bottom-28 -left-28 size-[520px] rounded-full bg-ids-400/50 blur-2xl animate-aurora-pink" aria-hidden />
+        <div className="pointer-events-none absolute right-1/3 top-1/2 size-[420px] -translate-y-1/2 rounded-full bg-brand-400/30 blur-2xl animate-aurora-violet" aria-hidden />
 
         <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-5 sm:px-8 lg:grid-cols-[1.05fr_1fr]">
           <div className="animate-fade-up">
@@ -262,8 +262,8 @@ export function HomePage() {
       {/* CTA */}
       <section className="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
         <div className="surface-brand-gradient relative overflow-hidden rounded-3xl px-8 py-12 text-center sm:px-16">
-          <div className="pointer-events-none absolute -left-20 -top-20 size-72 rounded-full bg-brand-500/30 blur-3xl animate-aurora-violet" aria-hidden />
-          <div className="pointer-events-none absolute -bottom-20 -right-20 size-72 rounded-full bg-ids-400/30 blur-3xl animate-aurora-pink" aria-hidden />
+          <div className="pointer-events-none absolute -left-20 -top-20 size-72 rounded-full bg-brand-500/35 blur-2xl animate-aurora-violet" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-20 -right-20 size-72 rounded-full bg-ids-400/45 blur-2xl animate-aurora-pink" aria-hidden />
           <h2 className="relative text-balance font-display text-3xl font-semibold text-white">Ready to submit or check a request?</h2>
           <p className="relative mx-auto mt-3 max-w-xl text-brand-100/90">Sign in with your MSU at Naawan email address.</p>
           <div className="relative mt-7 flex justify-center">

@@ -104,9 +104,9 @@ function IsometricDocumentsPanel() {
         <div
           className="absolute inset-0 opacity-[0.08] [background-image:radial-gradient(var(--color-white)_1px,transparent_1px)] [background-size:22px_22px]"
         />
-        <div className="absolute -bottom-32 -right-32 size-[460px] rounded-full bg-brand-500/25 blur-3xl animate-aurora-violet" />
-        <div className="absolute -top-24 -left-24 size-[400px] rounded-full bg-ids-400/30 blur-3xl animate-aurora-pink" />
-        <div className="absolute top-1/3 right-10 size-[360px] rounded-full bg-dsee-300/25 blur-3xl animate-aurora-lavender" />
+        <div className="absolute -bottom-32 -right-32 size-[460px] rounded-full bg-brand-500/35 blur-2xl animate-aurora-violet" />
+        <div className="absolute -top-24 -left-24 size-[400px] rounded-full bg-ids-400/50 blur-2xl animate-aurora-pink" />
+        <div className="absolute top-1/3 right-10 size-[360px] rounded-full bg-dsee-300/40 blur-2xl animate-aurora-lavender" />
       </div>
 
       {/* 3D Isometric Floating Documents Composition (aspect-preserved overlay) */}
