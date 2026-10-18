@@ -3,7 +3,13 @@
  * All colours come from the tokens in index.css — no raw hex values here.
  */
 import { Loader2 } from 'lucide-react'
-import type { ButtonHTMLAttributes, ComponentType, HTMLAttributes, ReactNode } from 'react'
+import {
+  useState,
+  type ButtonHTMLAttributes,
+  type ComponentType,
+  type HTMLAttributes,
+  type ReactNode,
+} from 'react'
 import { Link } from 'react-router-dom'
 import type { Tone } from '../content/language'
 
@@ -398,6 +404,198 @@ export function BarList({ items, emptyLabel }: { items: { label: string; value: 
         </li>
       ))}
     </ul>
+  )
+}
+
+/* ------------------------------------------------------------------------ */
+/* Donut chart (part-of-a-whole distribution with central KPI & legend)     */
+/* ------------------------------------------------------------------------ */
+
+export interface DonutChartItem {
+  label: string
+  value: number
+  color?: string
+  tone?: Tone
+}
+
+export function DonutChart({
+  items,
+  emptyLabel = 'No documents currently under review.',
+  centerLabel = 'In Review',
+}: {
+  items: DonutChartItem[]
+  emptyLabel?: string
+  centerLabel?: string
+}) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+
+  // Institutional and collegiate color palette
+  const defaultColors = [
+    '#6B43B5', // Chairperson: Royal Violet (DSSH)
+    '#E68AB4', // IDS Principal: Warm Rose / Pink (IDS)
+    '#8E5CCB', // College Dean: Amethyst Purple
+    '#3B82F6', // OVCAA: University Azure
+    '#F59E0B', // Chancellor: Executive Amber Gold
+    '#10B981', // Emerald
+    '#EC4899', // Fuchsia
+    '#6366F1', // Indigo
+  ]
+
+  const total = items.reduce((sum, it) => sum + it.value, 0)
+  const activeItems = items.filter((it) => it.value > 0)
+
+  if (total === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <div className="relative mb-3 size-36">
+          <svg className="size-full" viewBox="0 0 100 100">
+            <circle
+              cx="50"
+              cy="50"
+              r="38"
+              fill="none"
+              stroke="#E2E8F0"
+              strokeWidth="10"
+              strokeDasharray="4 4"
+            />
+          </svg>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-2xl font-bold text-ink-300">0</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-400">{centerLabel}</span>
+          </div>
+        </div>
+        <p className="text-xs text-ink-500">{emptyLabel}</p>
+      </div>
+    )
+  }
+
+  // Ring calculations: SVG circle with stroke-dasharray
+  const radius = 38
+  const strokeWidth = 11
+  const circumference = 2 * Math.PI * radius // ~238.76
+
+  const segments = items.map((item, idx) => {
+    const percent = total > 0 ? item.value / total : 0
+    const priorPercent = items
+      .slice(0, idx)
+      .reduce((sum, prev) => sum + (total > 0 ? prev.value / total : 0), 0)
+    const strokeDash = percent * circumference
+    const strokeOffset = -priorPercent * circumference
+    const color = item.color || defaultColors[idx % defaultColors.length]
+
+    return {
+      ...item,
+      originalIndex: idx,
+      percent,
+      percentageFormatted: (percent * 100).toFixed((percent * 100) % 1 === 0 ? 0 : 1),
+      strokeDash,
+      strokeOffset,
+      color,
+    }
+  })
+
+  const currentHovered = hoveredIdx !== null ? segments.find((s) => s.originalIndex === hoveredIdx) : null
+
+  return (
+    <div className="flex flex-col items-center gap-5">
+      {/* Donut Graphic */}
+      <div className="relative size-44 sm:size-48">
+        <svg
+          className="size-full -rotate-90 transform"
+          viewBox="0 0 100 100"
+          aria-hidden
+        >
+          {/* Subtle background track */}
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            fill="none"
+            stroke="#F1F5F9"
+            strokeWidth={strokeWidth}
+          />
+          {segments.map((seg) => {
+            if (seg.value === 0) return null
+            const isHovered = hoveredIdx === seg.originalIndex
+            const isAnyHovered = hoveredIdx !== null
+            const hasGap = activeItems.length > 1
+            const gapSize = hasGap ? 2.5 : 0
+            const dashLength = Math.max(0.5, seg.strokeDash - gapSize)
+
+            return (
+              <circle
+                key={seg.label}
+                cx="50"
+                cy="50"
+                r={radius}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth={isHovered ? strokeWidth + 2.5 : strokeWidth}
+                strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+                strokeDashoffset={seg.strokeOffset}
+                strokeLinecap="round"
+                className="cursor-pointer transition-all duration-300 ease-out"
+                style={{
+                  opacity: isAnyHovered ? (isHovered ? 1 : 0.35) : 1,
+                  transformOrigin: '50px 50px',
+                }}
+                onMouseEnter={() => setHoveredIdx(seg.originalIndex)}
+                onMouseLeave={() => setHoveredIdx(null)}
+              />
+            )
+          })}
+        </svg>
+
+        {/* Center metric overlay */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="font-display text-3xl font-bold tracking-tight text-ink-900 transition-all duration-200">
+            {currentHovered ? currentHovered.value : total}
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-500 transition-all duration-200">
+            {currentHovered ? `${currentHovered.percentageFormatted}%` : centerLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Interactive Legend List */}
+      <ul className="w-full space-y-1 divide-y divide-ink-50 border-t border-ink-100/70 pt-3">
+        {segments.map((seg) => {
+          const isHovered = hoveredIdx === seg.originalIndex
+          const isAnyHovered = hoveredIdx !== null
+          return (
+            <li
+              key={seg.label}
+              onMouseEnter={() => setHoveredIdx(seg.originalIndex)}
+              onMouseLeave={() => setHoveredIdx(null)}
+              className={cn(
+                'group flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 text-xs transition-colors',
+                isHovered ? 'bg-brand-50/70 font-semibold' : 'hover:bg-ink-50/70',
+                isAnyHovered && !isHovered && 'opacity-55',
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className="size-2.5 shrink-0 rounded-full ring-2 ring-white shadow-xs transition-transform group-hover:scale-125"
+                  style={{ backgroundColor: seg.color }}
+                  aria-hidden
+                />
+                <span className="truncate text-ink-700 group-hover:text-ink-900">
+                  {seg.label}
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="font-bold tabular-nums text-ink-900">
+                  {seg.value}
+                </span>
+                <span className="rounded bg-ink-100/70 px-1.5 py-0.5 text-[10px] font-semibold text-ink-600">
+                  {seg.percentageFormatted}%
+                </span>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 

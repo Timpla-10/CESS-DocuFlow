@@ -12,11 +12,11 @@ import { Link } from 'react-router-dom'
 import { DocumentList } from '../../components/documents'
 import {
   Badge,
-  BarList,
   ButtonLink,
   Callout,
   Card,
   CardHeader,
+  DonutChart,
   PageHeader,
   StatCard,
 } from '../../components/ui'
@@ -33,11 +33,20 @@ export function OverviewPage() {
   const delayedDocs = allDocs.filter((d) => isDelayed(db, d))
   const idsDocs = allDocs.filter((d) => d.origin === 'IDS' && !d.archived)
 
-  // Distribution by holding office
+  // Distribution by holding office with official institutional colors
   const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+  const officeColors: Record<OfficeId, string> = {
+    chairperson: '#6B43B5', // Royal Violet (DSSH)
+    ids_principal: '#E68AB4', // Official IDS Warm Rose / Pink
+    dean: '#8E5CCB', // Dean Amethyst Purple
+    ovcaa: '#3B82F6', // University Azure Blue
+    chancellor: '#F59E0B', // Chancellor Amber Gold
+    secretary: '#48277D',
+  }
   const officeCounts = offices.map((off) => ({
     label: OFFICE_LABEL[off],
     value: allDocs.filter((d) => d.status === 'with_office' && d.currentOffice === off).length,
+    color: officeColors[off],
   }))
 
   return (
@@ -241,9 +250,10 @@ export function OverviewPage() {
               description="Current distribution across reviewing bodies"
             />
             <div className="p-6">
-              <BarList
+              <DonutChart
                 items={officeCounts}
                 emptyLabel="No documents currently under review."
+                centerLabel="In Review"
               />
             </div>
           </Card>
