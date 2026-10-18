@@ -21,7 +21,6 @@ import { Dialog } from '../../components/Dialog'
 import {
   AttachmentList,
   DelayedBadge,
-  ProcessingHistory,
   RouteProgress,
   StatusBadge,
   WaitingTime,
@@ -38,7 +37,6 @@ import {
   Card,
   DefinitionList,
   Segmented,
-  cn,
 } from '../../components/ui'
 import {
   OFFICE_LABEL,
@@ -68,7 +66,6 @@ export function DocumentDetailPage() {
   const doc = db.documents.find((d) => d.id === id)
 
   // Sub-dialog states
-  const [historyViewMode, setHistoryViewMode] = useState<'journey' | 'flat'>('journey')
   const [isResubmitOpen, setIsResubmitOpen] = useState(false)
   const [isCheckOpen, setIsCheckOpen] = useState(false)
   const [isReviewOpen, setIsReviewOpen] = useState(false)
@@ -672,55 +669,21 @@ export function DocumentDetailPage() {
         <AttachmentList db={db} doc={doc} />
       </Card>
 
-      {/* Section 2: Institutional Review Route & Audit History */}
+      {/* Section 2: Institutional Review Route Journey */}
       <Card className="p-6">
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-ink-100">
-            <div>
-              <h2 className="text-base font-bold text-ink-950">
-                Institutional Review Route & History ({doc.origin})
-              </h2>
-              <span className="text-xs text-ink-500">
-                Step-by-step approval journey and recorded audit milestones across offices
-              </span>
-            </div>
-            <div className="inline-flex rounded-lg bg-ink-100 p-0.5 text-xs font-semibold text-ink-600">
-              <button
-                type="button"
-                onClick={() => setHistoryViewMode('journey')}
-                className={cn(
-                  'rounded-md px-2.5 py-1 transition-all',
-                  historyViewMode === 'journey'
-                    ? 'bg-white text-brand-900 shadow-xs'
-                    : 'hover:text-ink-900',
-                )}
-              >
-                Route Journey
-              </button>
-              <button
-                type="button"
-                onClick={() => setHistoryViewMode('flat')}
-                className={cn(
-                  'rounded-md px-2.5 py-1 transition-all',
-                  historyViewMode === 'flat'
-                    ? 'bg-white text-brand-900 shadow-xs'
-                    : 'hover:text-ink-900',
-                )}
-              >
-                Linear Audit Log
-              </button>
-            </div>
+          <div className="pb-3 border-b border-ink-100">
+            <h2 className="text-base font-bold text-ink-950">
+              Institutional Route Journey ({doc.origin})
+            </h2>
+            <p className="text-xs text-ink-500">
+              Step-by-step approval journey and recorded audit milestones across offices
+            </p>
           </div>
 
-          {historyViewMode === 'journey' ? (
-            <div className="max-w-2xl pt-2">
-              <RouteProgress doc={doc} db={db} />
-            </div>
-          ) : (
-            <div className="max-w-2xl pt-2">
-              <ProcessingHistory doc={doc} />
-            </div>
-          )}
+          <div className="max-w-2xl pt-2">
+            <RouteProgress doc={doc} db={db} />
+          </div>
         </div>
       </Card>
 

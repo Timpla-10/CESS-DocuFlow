@@ -419,16 +419,16 @@ export function PieChart({
             <circle
               cx="50"
               cy="50"
-              r="44"
-              fill="#F8FAFC"
+              r={31}
+              fill="none"
               stroke="#E2E8F0"
-              strokeWidth="2"
+              strokeWidth={26}
               strokeDasharray="4 4"
             />
           </svg>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold text-ink-300">0</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-400">{centerLabel}</span>
+            <span className="text-xl font-extrabold text-ink-300">0</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-ink-400">{centerLabel}</span>
           </div>
         </div>
         <p className="text-xs text-ink-500">{emptyLabel}</p>
@@ -437,6 +437,7 @@ export function PieChart({
   }
 
   const radius = 44
+  const innerRadius = 18 // Compact inner hole: creates a chunky "semi pie / semi donut" aesthetic
 
   const segments = items.map((item, idx) => {
     const fraction = total > 0 ? item.value / total : 0
@@ -448,15 +449,22 @@ export function PieChart({
     const endAngle = 2 * Math.PI * (priorFraction + fraction) - Math.PI / 2
     const midAngle = (startAngle + endAngle) / 2
 
-    const x1 = 50 + radius * Math.cos(startAngle)
-    const y1 = 50 + radius * Math.sin(startAngle)
-    const x2 = 50 + radius * Math.cos(endAngle)
-    const y2 = 50 + radius * Math.sin(endAngle)
+    // Outer arc boundary
+    const x1Out = 50 + radius * Math.cos(startAngle)
+    const y1Out = 50 + radius * Math.sin(startAngle)
+    const x2Out = 50 + radius * Math.cos(endAngle)
+    const y2Out = 50 + radius * Math.sin(endAngle)
+
+    // Inner hole boundary
+    const x1In = 50 + innerRadius * Math.cos(startAngle)
+    const y1In = 50 + innerRadius * Math.sin(startAngle)
+    const x2In = 50 + innerRadius * Math.cos(endAngle)
+    const y2In = 50 + innerRadius * Math.sin(endAngle)
 
     const largeArcFlag = fraction > 0.5 ? 1 : 0
 
     // Pop-out displacement when hovered
-    const popDistance = 4.5
+    const popDistance = 3.5
     const dx = popDistance * Math.cos(midAngle)
     const dy = popDistance * Math.sin(midAngle)
 
@@ -473,10 +481,14 @@ export function PieChart({
       percentageFormatted,
       gradient,
       gradientId: `pie-grad-${chartId}-${idx}`,
-      x1,
-      y1,
-      x2,
-      y2,
+      x1Out,
+      y1Out,
+      x2Out,
+      y2Out,
+      x1In,
+      y1In,
+      x2In,
+      y2In,
       largeArcFlag,
       dx,
       dy,
@@ -488,7 +500,7 @@ export function PieChart({
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Solid Gradient Pie Graphic (No White Dividing Lines) */}
+      {/* Semi Pie / Semi Donut Graphic */}
       <div className="relative size-44 sm:size-48">
         <svg
           className="size-full overflow-visible drop-shadow-sm"
@@ -514,14 +526,25 @@ export function PieChart({
             </filter>
           </defs>
 
+          {/* Center Hole Backdrop Circle */}
+          <circle
+            cx="50"
+            cy="50"
+            r={innerRadius - 0.5}
+            fill="#FFFFFF"
+            stroke="#F1F5F9"
+            strokeWidth="1"
+          />
+
           {activeSegments.length === 1 ? (
-            // Single 100% item full circle with gradient
+            // Single 100% item full donut ring with gradient
             <circle
               cx="50"
               cy="50"
-              r={radius}
-              fill={`url(#${activeSegments[0].gradientId})`}
-              stroke="none"
+              r={(radius + innerRadius) / 2}
+              fill="none"
+              stroke={`url(#${activeSegments[0].gradientId})`}
+              strokeWidth={radius - innerRadius}
               className="cursor-pointer transition-transform duration-200"
               onMouseEnter={() => setHoveredIdx(activeSegments[0].originalIndex)}
               onMouseLeave={() => setHoveredIdx(null)}
@@ -532,14 +555,16 @@ export function PieChart({
               const isHovered = hoveredIdx === seg.originalIndex
               const isAnyHovered = hoveredIdx !== null
 
-              const pathData = `M 50 50 L ${seg.x1.toFixed(3)} ${seg.y1.toFixed(3)} A ${radius} ${radius} 0 ${seg.largeArcFlag} 1 ${seg.x2.toFixed(3)} ${seg.y2.toFixed(3)} Z`
+              const pathData = `M ${seg.x1Out.toFixed(3)} ${seg.y1Out.toFixed(3)} A ${radius} ${radius} 0 ${seg.largeArcFlag} 1 ${seg.x2Out.toFixed(3)} ${seg.y2Out.toFixed(3)} L ${seg.x2In.toFixed(3)} ${seg.y2In.toFixed(3)} A ${innerRadius} ${innerRadius} 0 ${seg.largeArcFlag} 0 ${seg.x1In.toFixed(3)} ${seg.y1In.toFixed(3)} Z`
 
               return (
                 <path
                   key={seg.label}
                   d={pathData}
                   fill={`url(#${seg.gradientId})`}
-                  stroke="none"
+                  stroke="#FFFFFF"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
                   className="cursor-pointer transition-all duration-200 ease-out"
                   style={{
                     transform: isHovered
@@ -555,6 +580,29 @@ export function PieChart({
             })
           )}
         </svg>
+
+        {/* Center Hole Metrics (Like reference image with total / hovered value) */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          {currentHovered ? (
+            <div className="flex flex-col items-center justify-center">
+              <span className="text-xl font-black tracking-tight text-ink-900 leading-none">
+                {currentHovered.value}
+              </span>
+              <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-600 leading-tight">
+                {currentHovered.percentageFormatted}%
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center">
+              <span className="text-xl font-black tracking-tight text-ink-900 leading-none">
+                {total}
+              </span>
+              <span className="mt-0.5 text-[8.5px] font-bold uppercase tracking-wider text-ink-400 leading-tight">
+                {centerLabel}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Dynamic Inspector Pill */}
