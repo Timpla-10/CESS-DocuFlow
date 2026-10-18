@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm --prefix app run build",
+  "outputDirectory": "app/dist",
+  "installCommand": "npm --prefix app install",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
