@@ -106,7 +106,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
                       end={it.to === '/app/documents'}
                       className={({ isActive }) =>
                         cn(
-                          'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-all',
+                          'group relative flex items-center gap-3 rounded-[7px] px-3 py-2 text-sm font-semibold transition-all',
                           isActive
                             ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
                             : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
