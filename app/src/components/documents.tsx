@@ -9,6 +9,7 @@ import {
   FileText,
   Hourglass,
   Paperclip,
+  RotateCcw,
   Search,
   SearchX,
 } from 'lucide-react'
@@ -660,53 +661,96 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
               </div>
               <p className="mt-0.5 text-xs leading-snug text-ink-500">{it.help}</p>
 
-              {/* Indented Milestones under this route step */}
-              {it.milestones.length > 0 && (
-                <div className="mt-3 ml-2 sm:ml-3 space-y-3 rounded-xl bg-ink-50/70 p-3.5 ring-1 ring-inset ring-ink-100">
-                  {it.milestones.map((m) => (
-                    <div key={m.id} className="relative">
-                      <div className="flex items-start gap-2.5">
-                        <span
-                          className={cn(
-                            'mt-1 size-2 shrink-0 rounded-full ring-2 ring-white',
-                            dotTone[historyTone(m)] ?? 'bg-brand-600',
+              {/* Indented Milestones sub-timeline under this route step */}
+              {(it.milestones.length > 0 || it.state === 'current') && (
+                <div className="mt-3 ml-2 sm:ml-3 rounded-xl bg-ink-50/70 p-3.5 ring-1 ring-inset ring-ink-100">
+                  <div className="relative">
+                    {it.milestones.map((m, mIdx) => {
+                      const isLast = mIdx === it.milestones.length - 1 && it.state !== 'current'
+                      const isReturned = m.action === 'returned' || m.action === 'checked_incomplete'
+                      const isApprovedOrDone = m.action === 'approved' || m.action === 'released' || m.action === 'marked_ready'
+                      return (
+                        <div key={m.id} className="relative flex gap-3 pb-3.5 last:pb-0">
+                          {/* Sub-timeline connecting line between milestones */}
+                          {!isLast && (
+                            <span
+                              className={cn(
+                                'absolute left-[9px] top-5 bottom-0 w-0.5 rounded-full',
+                                isReturned ? 'bg-danger-200' : 'bg-brand-200',
+                              )}
+                              aria-hidden
+                            />
                           )}
-                          aria-hidden
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                            <p className="text-xs font-bold text-ink-900 leading-tight">{historyTitle(m)}</p>
-                            <time dateTime={m.at} className="text-[11px] font-medium text-ink-500 whitespace-nowrap" title={formatDateTime(m.at)}>
-                              {formatDateTime(m.at)}
-                            </time>
+
+                          {/* Milestone checkmark / status node */}
+                          <span
+                            className={cn(
+                              'relative z-10 grid size-5 shrink-0 place-items-center rounded-full ring-2 ring-white shadow-xs',
+                              isReturned
+                                ? 'bg-danger-600 text-white'
+                                : isApprovedOrDone
+                                  ? 'bg-success-600 text-white'
+                                  : 'bg-brand-600 text-white',
+                            )}
+                            aria-hidden
+                          >
+                            {isReturned ? (
+                              <RotateCcw className="size-2.5" strokeWidth={3} />
+                            ) : (
+                              <Check className="size-2.5" strokeWidth={3} />
+                            )}
+                          </span>
+
+                          <div className="min-w-0 flex-1 pt-0.5">
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                              <p className="text-xs font-bold text-ink-900 leading-tight">{historyTitle(m)}</p>
+                              <time dateTime={m.at} className="text-[11px] font-medium text-ink-500 whitespace-nowrap" title={formatDateTime(m.at)}>
+                                {formatDateTime(m.at)}
+                              </time>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-ink-500">
+                              Recorded by <span className="font-semibold text-ink-700">{m.actorName}</span>
+                              {m.office !== 'Requester' ? ` · ${m.office}` : ''}
+                              {m.revision > 0 ? (
+                                <span className="ml-1.5 inline-block rounded bg-ink-200/80 px-1 py-0.2 text-[10px] font-semibold text-ink-700">
+                                  {revisionLabel(m.revision)}
+                                </span>
+                              ) : null}
+                            </p>
+                            {m.remarks && (
+                              <blockquote className="mt-1.5 rounded-lg bg-white p-2.5 text-xs leading-relaxed text-ink-700 shadow-xs ring-1 ring-inset ring-ink-200/70">
+                                <span className="font-semibold text-ink-600">Remarks: </span>
+                                {m.remarks}
+                              </blockquote>
+                            )}
                           </div>
-                          <p className="mt-0.5 text-[11px] text-ink-500">
-                            Recorded by <span className="font-semibold text-ink-700">{m.actorName}</span>
-                            {m.office !== 'Requester' ? ` · ${m.office}` : ''}
-                            {m.revision > 0 ? (
-                              <span className="ml-1.5 inline-block rounded bg-ink-200/80 px-1 py-0.2 text-[10px] font-semibold text-ink-700">
-                                {revisionLabel(m.revision)}
-                              </span>
-                            ) : null}
+                        </div>
+                      )
+                    })}
+
+                    {/* If step is currently active awaiting action, show pulsing sub-node at end of sub-timeline */}
+                    {it.state === 'current' && (
+                      <div className={cn('relative flex gap-3', it.milestones.length > 0 && 'pt-2')}>
+                        <span
+                          className="relative z-10 grid size-5 shrink-0 place-items-center rounded-full bg-brand-50 ring-2 ring-brand-400 shadow-xs"
+                          aria-hidden
+                        >
+                          <span className="relative flex size-2">
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-500 opacity-60" />
+                            <span className="relative inline-flex size-2 rounded-full bg-brand-600" />
+                          </span>
+                        </span>
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <p className="text-xs font-semibold text-brand-900">
+                            Currently under review at this office
                           </p>
-                          {m.remarks && (
-                            <blockquote className="mt-1.5 rounded-lg bg-white p-2.5 text-xs leading-relaxed text-ink-700 shadow-xs ring-1 ring-inset ring-ink-200/70">
-                              <span className="font-semibold text-ink-600">Remarks: </span>
-                              {m.remarks}
-                            </blockquote>
-                          )}
+                          <p className="text-[11px] text-ink-500">
+                            Awaiting recorded review decision or release action
+                          </p>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Step awaiting review */}
-              {it.milestones.length === 0 && it.state === 'current' && (
-                <div className="mt-2.5 rounded-lg bg-brand-50/80 p-2.5 text-xs text-brand-800 ring-1 ring-inset ring-brand-200/60">
-                  <span className="font-semibold">In Progress: </span>
-                  Document is currently with this office awaiting review and action.
+                    )}
+                  </div>
                 </div>
               )}
             </div>
