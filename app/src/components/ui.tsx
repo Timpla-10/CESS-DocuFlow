@@ -2,7 +2,7 @@
  * Core UI primitives for CESS DocuFlow.
  * All colours come from the tokens in index.css — no raw hex values here.
  */
-import { Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import {
   useId,
   useState,
@@ -775,4 +775,109 @@ export function DefinitionList({ items }: { items: { label: string; value: React
 
 export function VisuallyHidden({ children }: { children: ReactNode }) {
   return <span className="sr-only">{children}</span>
+}
+
+/* ------------------------------------------------------------------------ */
+/* Pagination                                                               */
+/* ------------------------------------------------------------------------ */
+
+export interface PaginationProps {
+  currentPage: number
+  totalItems: number
+  pageSize: number
+  onPageChange: (newPage: number) => void
+  onPageSizeChange: (newPageSize: number) => void
+  pageSizeOptions?: number[]
+  itemLabel?: string
+  className?: string
+}
+
+export function Pagination({
+  currentPage,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = [10, 15, 25, 50],
+  itemLabel = 'logs',
+  className,
+}: PaginationProps) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const end = Math.min(currentPage * pageSize, totalItems)
+
+  const canPrev = currentPage > 1
+  const canNext = currentPage < totalPages
+
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-4 border-t border-ink-100 bg-white px-6 py-3.5 text-xs text-ink-600',
+        className,
+      )}
+    >
+      {/* Left: Range counter and rows selector */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span>
+          Showing{' '}
+          <strong className="font-semibold text-ink-900">
+            {start}–{end}
+          </strong>{' '}
+          of <strong className="font-semibold text-ink-900">{totalItems}</strong> {itemLabel}
+        </span>
+
+        <span className="text-ink-300" aria-hidden="true">
+          |
+        </span>
+
+        <div className="flex items-center gap-1.5">
+          <label htmlFor="rows-select" className="text-ink-600">
+            Rows:
+          </label>
+          <select
+            id="rows-select"
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="h-8 rounded-lg border border-ink-200 bg-white !pl-2.5 !pr-7 py-0 text-xs font-semibold text-ink-800 shadow-2xs hover:border-ink-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer"
+          >
+            {pageSizeOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Right: Prev, Page Status, Next */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={!canPrev}
+          className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 shadow-2xs hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+          title="Previous page"
+        >
+          <ChevronLeft className="size-3.5" aria-hidden="true" />
+          <span>Prev</span>
+        </button>
+
+        <span className="inline-flex items-center rounded-lg border border-ink-200 bg-ink-50/70 px-3 py-1.5 text-xs font-medium text-ink-700 shadow-2xs">
+          Page <strong className="ml-1 mr-1 font-bold text-ink-900">{currentPage}</strong> of{' '}
+          <strong className="ml-1 font-bold text-ink-900">{totalPages}</strong>
+        </span>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={!canNext}
+          className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-medium text-ink-700 shadow-2xs hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+          title="Next page"
+        >
+          <span>Next</span>
+          <ChevronRight className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  )
 }
