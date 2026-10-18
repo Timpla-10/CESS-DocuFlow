@@ -111,19 +111,19 @@ export function SyllabusPreviewModal({
       role="dialog"
       aria-modal="true"
       aria-label="Syllabus Document Preview"
-      className="fixed inset-0 z-[100] flex flex-col bg-slate-950/95 backdrop-blur-md text-white select-none animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex flex-col bg-brand-950/95 backdrop-blur-md text-white select-none animate-in fade-in duration-200"
     >
       {/* Top Header Control Bar */}
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-slate-900/90 px-4 sm:px-6">
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/15 bg-brand-900 px-4 sm:px-6 shadow-lg">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-md bg-white/10 text-brand-200 ring-1 ring-white/15 shrink-0">
+          <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-md bg-white/15 text-brand-200 ring-1 ring-white/20 shrink-0">
             {isTemplate ? 'TEMPLATE' : (subject?.code || 'SYLLABUS')}
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-bold text-white max-w-[280px] sm:max-w-md">
+            <h2 className="truncate text-sm font-bold text-white max-w-[260px] sm:max-w-md">
               {title}
             </h2>
-            <p className="truncate text-[11px] text-white/60">
+            <p className="truncate text-[11px] text-white/80">
               {isTemplate
                 ? `Uploaded by ${template?.uploadedBy || 'College Secretary'}`
                 : `${faculty?.name ?? ''} · ${faculty?.department ?? ''}`}
@@ -132,23 +132,23 @@ export function SyllabusPreviewModal({
         </div>
 
         {/* Center: Zoom Controls */}
-        <div className="hidden items-center gap-1 rounded-xl bg-white/10 px-2 py-1 ring-1 ring-white/10 sm:flex">
+        <div className="hidden items-center gap-1 rounded-xl bg-white/15 px-2.5 py-1 ring-1 ring-white/20 sm:flex">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.65, Number((z - 0.15).toFixed(2))))}
-            className="rounded p-1 text-white/80 hover:bg-white/15 hover:text-white"
+            className="rounded p-1 text-white hover:bg-white/20 transition-colors"
             title="Zoom Out (Ctrl -)"
             aria-label="Zoom Out"
           >
             <ZoomOut className="size-4" />
           </button>
-          <span className="min-w-[48px] text-center text-xs font-mono font-medium text-white/90">
+          <span className="min-w-[48px] text-center text-xs font-mono font-bold text-white">
             {Math.round(zoom * 100)}%
           </span>
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(1.6, Number((z + 0.15).toFixed(2))))}
-            className="rounded p-1 text-white/80 hover:bg-white/15 hover:text-white"
+            className="rounded p-1 text-white hover:bg-white/20 transition-colors"
             title="Zoom In (Ctrl +)"
             aria-label="Zoom In"
           >
@@ -157,10 +157,11 @@ export function SyllabusPreviewModal({
           <button
             type="button"
             onClick={() => setZoom(1.0)}
-            className="ml-1 rounded px-2 py-0.5 text-[11px] font-semibold text-white/70 hover:bg-white/15 hover:text-white"
+            className="ml-1 rounded px-2 py-0.5 text-[11px] font-semibold text-white/90 hover:bg-white/20 hover:text-white transition-colors"
             title="Reset Zoom (Ctrl 0)"
           >
-            <RotateCcw className="size-3" />
+            <RotateCcw className="size-3 inline mr-1" />
+            Fit
           </button>
         </div>
 
@@ -169,7 +170,7 @@ export function SyllabusPreviewModal({
           <button
             type="button"
             onClick={handlePrint}
-            className="hidden items-center gap-1.5 rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20 sm:inline-flex"
+            className="hidden items-center gap-1.5 rounded-lg border border-white/20 bg-white/15 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/25 sm:inline-flex"
             title="Print Syllabus"
           >
             <Printer className="size-3.5" />
@@ -179,26 +180,31 @@ export function SyllabusPreviewModal({
           <button
             type="button"
             onClick={handleDownload}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-500 active:scale-95"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm ring-1 ring-white/20 transition hover:bg-brand-500 active:scale-95"
             title="Download Document Copy"
           >
             <Download className="size-3.5" />
             <span className="hidden sm:inline">Download Copy</span>
           </button>
 
+          <div className="h-5 w-px bg-white/20 mx-1 hidden sm:block" aria-hidden="true" />
+
+          {/* Prominent High-Contrast Close Button */}
           <button
             type="button"
             onClick={onClose}
-            className="grid size-9 place-items-center rounded-lg text-white/70 hover:bg-white/15 hover:text-white transition"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-bold text-white shadow-xs ring-1 ring-white/30 hover:bg-danger-600 hover:ring-danger-500 hover:text-white transition-all active:scale-95"
+            title="Close Preview (Esc)"
             aria-label="Close Preview"
           >
-            <X className="size-5" />
+            <X className="size-4" />
+            <span className="hidden sm:inline">Close</span>
           </button>
         </div>
       </div>
 
       {/* Main Canvas Area */}
-      <div className="flex-1 overflow-auto bg-slate-900/60 p-4 sm:p-8 flex justify-center items-start">
+      <div className="flex-1 overflow-auto bg-brand-950/80 p-4 sm:p-8 flex justify-center items-start">
         <div
           style={{
             transform: `scale(${zoom})`,
