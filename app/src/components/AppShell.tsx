@@ -38,7 +38,7 @@ export function AppShell() {
 
       <div className="lg:pl-[264px]">
         <TopBar onMenu={() => setDrawer(true)} />
-        <main id="main" className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+        <main id="main" className="mx-auto w-full max-w-[1440px] 2xl:max-w-[1560px] px-4 pb-20 pt-6 sm:px-6 lg:px-8 lg:pt-8">
           <Outlet />
         </main>
       </div>

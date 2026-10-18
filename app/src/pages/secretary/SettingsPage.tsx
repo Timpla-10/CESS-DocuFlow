@@ -275,7 +275,7 @@ export function SettingsPage() {
       />
 
       {/* 1. Document Types, Checklists, Templates, Routes & Turnaround Times (REQ-REQT-1, REQ-REQT-10, REQ-ROUTE-1, REQ-WFM-7) */}
-      <Card className="p-6">
+      <Card>
         <CardHeader
           icon={Clock}
           title="Document Types, Checklists, Templates, Routes & Turnaround Times"
@@ -286,15 +286,15 @@ export function SettingsPage() {
             </Button>
           }
         />
-        <div className="mt-6 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-ink-100 text-xs font-semibold uppercase tracking-wide text-ink-500">
-                <th className="pb-3">Document Type & Template</th>
-                <th className="pb-3">Audience</th>
-                <th className="pb-3">Checklist & Route</th>
-                <th className="pb-3">Min / Max Days</th>
-                <th className="pb-3 text-right">Actions</th>
+              <tr className="border-b border-ink-100 text-xs font-semibold uppercase tracking-wider text-ink-500">
+                <th className="px-5 py-3.5 min-w-[220px]">Document Type & Template</th>
+                <th className="px-5 py-3.5 min-w-[120px]">Audience</th>
+                <th className="px-5 py-3.5 min-w-[280px]">Checklist & Route</th>
+                <th className="px-5 py-3.5 min-w-[180px]">Min / Max Days</th>
+                <th className="px-5 py-3.5 min-w-[260px] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
@@ -303,28 +303,28 @@ export function SettingsPage() {
                 const cessSteps = (t.cessRoute ?? ['chairperson', 'dean']).map((o) => OFFICE_LABEL[o]).join(' → ')
                 const idsSteps = (t.idsRoute ?? ['chairperson', 'ids_principal', 'dean']).map((o) => OFFICE_LABEL[o]).join(' → ')
                 return (
-                  <tr key={t.id}>
-                    <td className="py-3.5 pr-3">
+                  <tr key={t.id} className="hover:bg-brand-50/50">
+                    <td className="px-5 py-4">
                       <p className="font-semibold text-ink-900">{t.name}</p>
-                      <p className="mt-0.5 flex items-center gap-1 text-xs text-ink-500">
-                        <FileText className="size-3 text-brand-600" />
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-500">
+                        <FileText className="size-3.5 text-brand-600" />
                         {t.templateName || 'Default template'}
                       </p>
                     </td>
-                    <td className="py-3.5 capitalize text-ink-600">{t.audience}</td>
-                    <td className="max-w-[280px] py-3.5 pr-3 text-xs text-ink-600">
+                    <td className="px-5 py-4 capitalize text-ink-600 font-medium">{t.audience}</td>
+                    <td className="max-w-[320px] px-5 py-4 text-xs text-ink-600">
                       <div className="font-semibold text-ink-800">
                         {t.requirements.filter((r) => r.required).length} required · {t.requirements.filter((r) => !r.required).length} optional
                       </div>
-                      <div className="mt-0.5 truncate" title={`CESS: ${cessSteps}`}>
+                      <div className="mt-1 truncate" title={`CESS: ${cessSteps}`}>
                         <span className="font-semibold text-brand-700">CESS:</span> {cessSteps}
                       </div>
-                      <div className="truncate" title={`IDS: ${idsSteps}`}>
+                      <div className="mt-0.5 truncate" title={`IDS: ${idsSteps}`}>
                         <span className="font-semibold text-brand-700">IDS:</span> {idsSteps}
                       </div>
                     </td>
-                    <td className="py-3.5">
-                      <div className="flex items-center gap-1.5">
+                    <td className="px-5 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
                         <Input
                           type="number"
                           min={1}
@@ -335,10 +335,10 @@ export function SettingsPage() {
                               [t.id]: [parseInt(e.target.value) || 1, days[1]],
                             }))
                           }
-                          className="h-8 w-16 px-2 text-xs"
+                          className="h-8.5 w-16 px-2.5 text-xs text-center"
                           aria-label={`Minimum days for ${t.name}`}
                         />
-                        <span className="text-xs text-ink-400">to</span>
+                        <span className="text-xs font-medium text-ink-400">to</span>
                         <Input
                           type="number"
                           min={days[0]}
@@ -349,13 +349,13 @@ export function SettingsPage() {
                               [t.id]: [days[0], parseInt(e.target.value) || days[0]],
                             }))
                           }
-                          className="h-8 w-16 px-2 text-xs"
+                          className="h-8.5 w-16 px-2.5 text-xs text-center"
                           aria-label={`Maximum days for ${t.name}`}
                         />
                       </div>
                     </td>
-                    <td className="py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                    <td className="px-5 py-4 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2">
                         <Button
                           size="sm"
                           variant="ghost"
@@ -382,115 +382,119 @@ export function SettingsPage() {
       </Card>
 
       {/* 2. Automated Reminders Configuration (REQ-NOT-3) */}
-      <Card className="p-6">
+      <Card>
         <CardHeader
           icon={Bell}
           title="Automated Follow-up Reminders (REQ-NOT-3)"
           description="Interval for sending automated reminders to reviewing offices holding pending documents, and progress updates to requesters."
         />
-        <div className="mt-5 flex max-w-lg flex-wrap items-end gap-4">
-          <Field
-            label="Send reminder & requester update every"
-            hint="The College Secretary requested 3 days on October 16, 2026."
-            className="flex-1"
-          >
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min={1}
-                max={14}
-                value={reminderDays}
-                onChange={(e) => setReminderDays(parseInt(e.target.value) || 3)}
-                className="w-24"
-              />
-              <span className="text-sm font-semibold text-ink-700">days</span>
-            </div>
-          </Field>
-          <Button onClick={handleSaveReminder} icon={Save}>
-            Save Reminder Interval
-          </Button>
+        <div className="p-6">
+          <div className="flex max-w-lg flex-wrap items-end gap-4">
+            <Field
+              label="Send reminder & requester update every"
+              hint="The College Secretary requested 3 days on October 16, 2026."
+              className="flex-1"
+            >
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  max={14}
+                  value={reminderDays}
+                  onChange={(e) => setReminderDays(parseInt(e.target.value) || 3)}
+                  className="w-24"
+                />
+                <span className="text-sm font-semibold text-ink-700">days</span>
+              </div>
+            </Field>
+            <Button onClick={handleSaveReminder} icon={Save}>
+              Save Reminder Interval
+            </Button>
+          </div>
         </div>
       </Card>
 
       {/* 3. External University Offices Management (REQ-EXT-1) */}
-      <Card className="p-6">
+      <Card>
         <CardHeader
           icon={Building2}
           title="External University Offices (REQ-EXT-1)"
           description="Manage the list of external university offices (such as HRMO, Registrar, and Budget & Accounting) to which the College Secretary records transfers."
         />
-        <div className="mt-5 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-          <ul className="divide-y divide-ink-100 rounded-xl ring-1 ring-ink-100">
-            {db.externalOffices.map((ext) => (
-              <li key={ext.id} className="flex items-center justify-between gap-3 bg-white px-4 py-3 text-sm">
-                <div>
-                  <p className="font-semibold text-ink-900">{ext.label}</p>
-                  <p className="text-xs text-ink-500">Short badge label: {ext.shortLabel}</p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button size="sm" variant="ghost" icon={Edit3} onClick={() => handleEditExternal(ext)}>
-                    Edit
-                  </Button>
-                  {db.externalOffices.length > 1 && (
-                    <Button
-                      size="sm"
-                      variant="danger-soft"
-                      icon={Trash2}
-                      onClick={() => handleDeleteExternal(ext)}
-                    >
-                      Remove
+        <div className="p-6">
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+            <ul className="divide-y divide-ink-100 rounded-xl ring-1 ring-ink-100">
+              {db.externalOffices.map((ext) => (
+                <li key={ext.id} className="flex items-center justify-between gap-3 bg-white px-4 py-3 text-sm">
+                  <div>
+                    <p className="font-semibold text-ink-900">{ext.label}</p>
+                    <p className="text-xs text-ink-500">Short badge label: {ext.shortLabel}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button size="sm" variant="ghost" icon={Edit3} onClick={() => handleEditExternal(ext)}>
+                      Edit
                     </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                    {db.externalOffices.length > 1 && (
+                      <Button
+                        size="sm"
+                        variant="danger-soft"
+                        icon={Trash2}
+                        onClick={() => handleDeleteExternal(ext)}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
 
-          <form onSubmit={handleSaveExternalOffice} className="space-y-3 rounded-xl bg-ink-50/50 p-4 ring-1 ring-inset ring-ink-100">
-            <p className="text-xs font-bold uppercase tracking-wider text-ink-600">
-              {editingExtId ? 'Edit External Office' : 'Add External Office'}
-            </p>
-            <Field label="Full Office Name" required>
-              <Input
-                type="text"
-                value={extLabel}
-                onChange={(e) => setExtLabel(e.target.value)}
-                placeholder="e.g. Cashier's Office"
-              />
-            </Field>
-            <Field label="Short Label" required>
-              <Input
-                type="text"
-                value={extShort}
-                onChange={(e) => setExtShort(e.target.value)}
-                placeholder="e.g. Cashier"
-              />
-            </Field>
-            <div className="flex items-center gap-2 pt-1">
-              <Button type="submit" size="sm" loading={extBusy} icon={Save}>
-                {editingExtId ? 'Update Office' : 'Add Office'}
-              </Button>
-              {editingExtId && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setEditingExtId(null)
-                    setExtLabel('')
-                    setExtShort('')
-                  }}
-                >
-                  Cancel
+            <form onSubmit={handleSaveExternalOffice} className="space-y-3 rounded-xl bg-ink-50/50 p-4 ring-1 ring-inset ring-ink-100">
+              <p className="text-xs font-bold uppercase tracking-wider text-ink-600">
+                {editingExtId ? 'Edit External Office' : 'Add External Office'}
+              </p>
+              <Field label="Full Office Name" required>
+                <Input
+                  type="text"
+                  value={extLabel}
+                  onChange={(e) => setExtLabel(e.target.value)}
+                  placeholder="e.g. Cashier's Office"
+                />
+              </Field>
+              <Field label="Short Label" required>
+                <Input
+                  type="text"
+                  value={extShort}
+                  onChange={(e) => setExtShort(e.target.value)}
+                  placeholder="e.g. Cashier"
+                />
+              </Field>
+              <div className="flex items-center gap-2 pt-1">
+                <Button type="submit" size="sm" loading={extBusy} icon={Save}>
+                  {editingExtId ? 'Update Office' : 'Add Office'}
                 </Button>
-              )}
-            </div>
-          </form>
+                {editingExtId && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      setEditingExtId(null)
+                      setExtLabel('')
+                      setExtShort('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </form>
+          </div>
         </div>
       </Card>
 
       {/* 4. User Accounts Management (REQ-AUTH-2, REQ-AUTH-3, REQ-AUTH-9) */}
-      <Card className="p-6">
+      <Card>
         <CardHeader
           icon={Users}
           title="Authorized User Accounts & Roles (REQ-AUTH-2, REQ-AUTH-3)"
@@ -501,41 +505,41 @@ export function SettingsPage() {
             </Button>
           }
         />
-        <div className="mt-6 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-ink-100 text-xs font-semibold uppercase tracking-wide text-ink-500">
-                <th className="pb-3">Name & Department</th>
-                <th className="pb-3">Role & Origin</th>
-                <th className="pb-3">University Email</th>
-                <th className="pb-3">Status</th>
-                <th className="pb-3 text-right">Actions</th>
+              <tr className="border-b border-ink-100 text-xs font-semibold uppercase tracking-wider text-ink-500">
+                <th className="px-5 py-3.5 min-w-[200px]">Name & Department</th>
+                <th className="px-5 py-3.5 min-w-[180px]">Role & Origin</th>
+                <th className="px-5 py-3.5 min-w-[200px]">University Email</th>
+                <th className="px-5 py-3.5 min-w-[120px]">Status</th>
+                <th className="px-5 py-3.5 min-w-[200px] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
               {db.users.map((u) => (
-                <tr key={u.id}>
-                  <td className="py-3.5">
+                <tr key={u.id} className="hover:bg-brand-50/50">
+                  <td className="px-5 py-4">
                     <div className="font-semibold text-ink-900">{u.name}</div>
-                    <div className="text-xs text-ink-500">{u.department}</div>
+                    <div className="mt-0.5 text-xs text-ink-500">{u.department}</div>
                   </td>
-                  <td className="py-3.5 text-ink-700">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium">{ROLE_LABEL[u.role]}</span>
+                  <td className="px-5 py-4 text-ink-700">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-ink-800">{ROLE_LABEL[u.role]}</span>
                       {u.origin && <Badge tone="neutral" dot={false}>{u.origin}</Badge>}
                     </div>
-                    <div className="text-xs text-ink-500">{u.position}</div>
+                    <div className="mt-0.5 text-xs text-ink-500">{u.position}</div>
                   </td>
-                  <td className="py-3.5 font-mono text-xs text-ink-600">{u.email}</td>
-                  <td className="py-3.5">
+                  <td className="px-5 py-4 font-mono text-xs text-ink-600">{u.email}</td>
+                  <td className="px-5 py-4 whitespace-nowrap">
                     {u.active ? (
                       <Badge tone="success">Active</Badge>
                     ) : (
                       <Badge tone="danger">Deactivated</Badge>
                     )}
                   </td>
-                  <td className="py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
+                  <td className="px-5 py-4 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-2">
                       <Button size="sm" variant="ghost" icon={Edit3} onClick={() => openEditUser(u)}>
                         Edit / Role
                       </Button>
@@ -559,19 +563,21 @@ export function SettingsPage() {
       </Card>
 
       {/* 5. Prototype Demo Reset */}
-      <Card className="border-danger-200 bg-danger-50/20 p-6">
+      <Card className="border-danger-200 bg-danger-50/20">
         <CardHeader
           icon={ShieldAlert}
           title="Prototype Reset"
           description="Reset database back to the initial sample seed."
         />
-        <div className="mt-4 flex items-center justify-between">
-          <p className="max-w-md text-xs text-ink-600">
-            This will reload all fictional users, documents, notification logs, and test workflows.
-          </p>
-          <Button variant="danger-soft" onClick={handleResetDemo} icon={RotateCcw}>
-            Reset Sample Data
-          </Button>
+        <div className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <p className="max-w-md text-xs text-ink-600">
+              This will reload all fictional users, documents, notification logs, and test workflows.
+            </p>
+            <Button variant="danger-soft" onClick={handleResetDemo} icon={RotateCcw}>
+              Reset Sample Data
+            </Button>
+          </div>
         </div>
       </Card>
 

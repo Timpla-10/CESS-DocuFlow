@@ -46,9 +46,9 @@ export function StatusBadge({ doc, audience, db }: { doc: DocRecord; audience: '
 
 export function DelayedBadge({ audience }: { audience: 'requester' | 'staff' }) {
   return (
-    <Badge tone="warning" dot={false} className="gap-1">
-      <Hourglass className="size-3" aria-hidden />
-      {audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}
+    <Badge tone="warning" dot={false} className="shrink-0 gap-1.5 whitespace-nowrap">
+      <Hourglass className="size-3 shrink-0" aria-hidden />
+      <span>{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
     </Badge>
   )
 }
@@ -149,8 +149,8 @@ export function FilterBar({
   const types = db.documentTypes.filter((t) => audience === 'all' || t.audience === audience)
   const statusList = statuses ?? (Object.keys(STATUS_FILTER_LABEL) as Status[])
   return (
-    <div className="space-y-3 border-b border-ink-100 p-4">
-      <div className="flex flex-wrap items-end gap-3">
+    <div className="space-y-3.5 border-b border-ink-100 px-6 py-5">
+      <div className="flex flex-wrap items-end gap-3.5">
         <div className="relative min-w-[220px] flex-1">
           <label htmlFor="doc-search" className="mb-1 block text-xs font-semibold text-ink-600">
             Search
@@ -379,12 +379,12 @@ export function DocumentList({
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-ink-100 text-xs font-semibold uppercase tracking-wide text-ink-500">
-              <th className="px-5 py-3">Document</th>
-              {showRequester && <th className="px-3 py-3">Requester</th>}
-              <th className="px-3 py-3">Submitted</th>
-              <th className="px-3 py-3">{audience === 'requester' ? 'Where it is now' : 'Currently with'}</th>
-              <th className="px-5 py-3">Status</th>
+            <tr className="border-b border-ink-100 text-xs font-semibold uppercase tracking-wider text-ink-500">
+              <th className="px-6 py-4 min-w-[280px]">Document</th>
+              {showRequester && <th className="px-6 py-4 min-w-[220px]">Requester</th>}
+              <th className="px-6 py-4 min-w-[150px] whitespace-nowrap">Submitted</th>
+              <th className="px-6 py-4 min-w-[190px]">{audience === 'requester' ? 'Where it is now' : 'Currently with'}</th>
+              <th className="px-6 py-4 min-w-[170px] whitespace-nowrap">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-100">
@@ -403,26 +403,26 @@ export function DocumentList({
                     highlight && d.status === 'ready' && 'bg-success-50/50',
                   )}
                 >
-                  <td className="max-w-[340px] px-5 py-3.5">
+                  <td className="min-w-[280px] max-w-md lg:max-w-xl px-6 py-4.5">
                     <Link
                       to={`/app/documents/${d.id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="block truncate font-semibold text-ink-900 group-hover:text-brand-700"
+                      className="block truncate font-semibold text-ink-900 group-hover:text-brand-700 leading-snug"
                     >
                       {d.title}
                     </Link>
-                    <span className="mt-0.5 block truncate text-xs text-ink-500">
+                    <span className="mt-1 block truncate text-xs text-ink-500">
                       {type?.name} · <span className="font-mono">{controlNumber(d)}</span>
                       {d.encodedBySecretary && ' · Walk-in'}
                     </span>
                   </td>
                   {showRequester && (
-                    <td className="px-3 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <Avatar name={req?.name ?? '?'} size="sm" />
+                    <td className="min-w-[220px] px-6 py-4.5">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={req?.name ?? '?'} size="sm" className="shrink-0" />
                         <div className="min-w-0">
-                          <div className="truncate font-medium text-ink-800">{req?.name}</div>
-                          <div className="flex items-center gap-1.5 text-xs text-ink-500">
+                          <div className="truncate font-semibold text-ink-800">{req?.name}</div>
+                          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-500">
                             <DepartmentBadge department={req?.department} origin={d.origin} />
                             <span>·</span>
                             <span>{req?.role === 'student' ? 'Student' : 'Faculty'}</span>
@@ -431,18 +431,18 @@ export function DocumentList({
                       </div>
                     </td>
                   )}
-                  <td className="whitespace-nowrap px-3 py-3.5 text-ink-600">
-                    <div>{formatDate(lastSubmittedAt(d))}</div>
-                    <div className="text-[11px] text-ink-400">Updated {timeAgo(d.updatedAt)}</div>
+                  <td className="whitespace-nowrap min-w-[150px] px-6 py-4.5 text-ink-600">
+                    <div className="font-medium text-ink-800">{formatDate(lastSubmittedAt(d))}</div>
+                    <div className="mt-0.5 text-[11px] text-ink-400">Updated {timeAgo(d.updatedAt)}</div>
                   </td>
-                  <td className="px-3 py-3.5">
-                    <div className="text-ink-800">{audience === 'requester' && d.status === 'returned' ? 'With you' : locationLabelForStaff(d, db)}</div>
+                  <td className="min-w-[190px] px-6 py-4.5">
+                    <div className="font-medium text-ink-800">{audience === 'requester' && d.status === 'returned' ? 'With you' : locationLabelForStaff(d, db)}</div>
                     {showWaiting && (d.status === 'with_office' || d.status === 'with_external' || d.status === 'submitted') && (
                       <div className="mt-0.5 text-xs text-ink-500">Waiting {plural(daysWaiting(d), 'day')}</div>
                     )}
                   </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex flex-col items-start gap-1">
+                  <td className="whitespace-nowrap min-w-[170px] px-6 py-4.5">
+                    <div className="flex flex-col items-start gap-1.5">
                       <StatusBadge doc={d} audience={audience} db={db} />
                       {delayed && <DelayedBadge audience={audience} />}
                     </div>

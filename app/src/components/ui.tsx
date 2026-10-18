@@ -131,13 +131,13 @@ export function Badge({ tone = 'neutral', children, dot = true, className }: { t
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset',
+        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset',
         badgeTones[tone],
         className,
       )}
     >
       {dot && <span className={cn('size-1.5 shrink-0 rounded-full', dotTones[tone])} aria-hidden />}
-      <span className="truncate">{children}</span>
+      <span className="inline-flex items-center gap-1">{children}</span>
     </span>
   )
 }
@@ -202,7 +202,7 @@ export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivEle
 
 export function CardHeader({ title, description, action, icon: Icon }: { title: ReactNode; description?: ReactNode; action?: ReactNode; icon?: IconType }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 px-5 py-4">
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 px-6 py-4.5">
       <div className="flex min-w-0 items-start gap-3">
         {Icon && (
           <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">

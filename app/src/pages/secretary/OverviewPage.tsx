@@ -235,12 +235,12 @@ export function OverviewPage() {
 
         {/* Right Col: Office Distribution & Follow-ups */}
         <div className="space-y-6">
-          <Card className="p-5">
+          <Card>
             <CardHeader
               title="Documents by Office"
               description="Current distribution across reviewing bodies"
             />
-            <div className="mt-4">
+            <div className="p-6">
               <BarList
                 items={officeCounts}
                 emptyLabel="No documents currently under review."
@@ -248,36 +248,37 @@ export function OverviewPage() {
             </div>
           </Card>
 
-          <Card className="p-5">
+          <Card>
             <CardHeader
               title="Quick Shortcuts"
               description="Fast navigation for regular tasks"
             />
-            <ul className="mt-4 space-y-2">
-              <li>
-                <Link
-                  to="/app/documents"
-                  className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
-                >
-                  <span>Encode Walk-In / Export Records</span>
-                  <ExternalLink className="size-4 text-ink-400" />
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/app/notices"
-                  className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
-                >
-                  <span>Post Notice or Minutes</span>
-                  <ExternalLink className="size-4 text-ink-400" />
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/app/faculty-directory"
-                  className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
-                >
-                  <span>Manage Faculty, Subjects & Syllabi</span>
+            <div className="p-6">
+              <ul className="space-y-2">
+                <li>
+                  <Link
+                    to="/app/documents"
+                    className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
+                  >
+                    <span>Encode Walk-In / Export Records</span>
+                    <ExternalLink className="size-4 text-ink-400" />
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/app/notices"
+                    className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
+                  >
+                    <span>Post Notice or Minutes</span>
+                    <ExternalLink className="size-4 text-ink-400" />
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/app/faculty-directory"
+                    className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
+                  >
+                    <span>Manage Faculty, Subjects & Syllabi</span>
                   <ExternalLink className="size-4 text-ink-400" />
                 </Link>
               </li>
@@ -300,7 +301,8 @@ export function OverviewPage() {
                 </Link>
               </li>
             </ul>
-          </Card>
+          </div>
+        </Card>
         </div>
       </div>
     </div>

@@ -22,7 +22,7 @@ export function ReleasePage() {
       />
 
       <Card>
-        <div className="border-b border-ink-100 p-4">
+        <div className="border-b border-ink-100 px-6 py-4.5">
           <Segmented
             label="Release Queues"
             value={tab}
