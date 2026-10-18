@@ -19,7 +19,7 @@ import heroImg from '../../assets/hero-documents.jpg'
 import { useSession } from '../../app/session'
 import { homeFor } from '../../app/nav'
 import { Logo } from '../../components/Logo'
-import { Badge, ButtonLink, buttonClass, cn } from '../../components/ui'
+import { ButtonLink, DepartmentBadge, buttonClass, cn } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { useDb } from '../../data/store'
 
@@ -56,17 +56,24 @@ export function HomePage() {
       {/* Hero */}
       <section className="surface-brand-gradient relative overflow-hidden pb-24 pt-32 sm:pb-32 sm:pt-40">
         <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(var(--color-white)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
-        <div className="pointer-events-none absolute -right-40 -top-40 size-[520px] rounded-full bg-brand-500/30 blur-3xl" aria-hidden />
+        {/* Balanced tri-color ambient glow sources */}
+        <div className="pointer-events-none absolute -right-36 -top-36 size-[560px] rounded-full bg-dsee-300/30 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute -bottom-28 -left-28 size-[520px] rounded-full bg-ids-400/25 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute right-1/3 top-1/2 size-[400px] -translate-y-1/2 rounded-full bg-brand-400/20 blur-3xl" aria-hidden />
+
         <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-5 sm:px-8 lg:grid-cols-[1.05fr_1fr]">
           <div className="animate-fade-up">
-            <p className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-brand-100 ring-1 ring-inset ring-white/15 backdrop-blur">
-              <GraduationCap className="size-3.5" aria-hidden />
+            <p className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/12 px-3.5 py-1.5 text-xs font-semibold text-brand-100 ring-1 ring-inset ring-white/20 backdrop-blur">
+              <GraduationCap className="size-3.5 text-dsee-200" aria-hidden />
               College of Education and Social Sciences · MSU at Naawan
             </p>
             <h1 className="text-balance font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-[54px]">
-              Know where your document is — <span className="text-brand-200">without visiting the office.</span>
+              Know where your document is —{' '}
+              <span className="bg-gradient-to-r from-brand-100 via-dsee-200 to-ids-200 bg-clip-text text-transparent">
+                without visiting the office.
+              </span>
             </h1>
-            <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-brand-100/90">
+            <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-brand-100/95">
               Submit your document requests online, see which office is handling them right now, and get an email when your document is
               returned for correction or ready to collect.
             </p>
@@ -81,7 +88,7 @@ export function HomePage() {
             <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-brand-100/90">
               {['Students', 'CESS and IDS faculty', 'College offices'].map((t) => (
                 <li key={t} className="flex items-center gap-2">
-                  <UserRoundCheck className="size-4 text-brand-300" aria-hidden />
+                  <UserRoundCheck className="size-4 text-dsee-200" aria-hidden />
                   {t}
                 </li>
               ))}
@@ -89,18 +96,18 @@ export function HomePage() {
           </div>
 
           <div className="relative animate-fade-up [animation-delay:120ms]">
-            <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-white/20 to-white/0 blur-2xl" aria-hidden />
-            <div className="relative overflow-hidden rounded-[1.75rem] bg-white/10 p-2 ring-1 ring-white/20 backdrop-blur-md">
+            <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-dsee-300/30 via-brand-500/15 to-ids-400/25 blur-2xl" aria-hidden />
+            <div className="relative overflow-hidden rounded-[1.75rem] bg-white/15 p-2.5 shadow-[0_24px_60px_-15px_rgba(40,14,78,0.4)] ring-1 ring-white/30 backdrop-blur-md">
               <img
                 src={heroImg}
                 alt="Illustration of documents travelling along a path between college offices, with an email notification along the way"
-                className="w-full rounded-[1.4rem]"
+                className="w-full rounded-[1.35rem] shadow-sm"
                 width={1200}
                 height={900}
               />
             </div>
             {/* Floating status cards */}
-            <div className="absolute -left-6 bottom-10 hidden w-64 animate-float rounded-2xl bg-white p-4 shadow-raised ring-1 ring-ink-100 sm:block">
+            <div className="absolute -left-6 bottom-10 hidden w-64 animate-float rounded-2xl bg-white/95 p-4 shadow-raised ring-1 ring-ink-100/80 backdrop-blur-md sm:block">
               <p className="text-[11px] font-bold uppercase tracking-wide text-ink-500">Travel Order</p>
               <p className="mt-1 text-sm font-bold text-ink-900">Now with the College Dean</p>
               <div className="mt-3 flex gap-1" aria-hidden>
@@ -109,7 +116,7 @@ export function HomePage() {
                 ))}
               </div>
             </div>
-            <div className="absolute -right-4 top-8 hidden animate-float rounded-2xl bg-white px-4 py-3 shadow-raised ring-1 ring-ink-100 [animation-delay:1.5s] sm:block">
+            <div className="absolute -right-4 top-8 hidden animate-float rounded-2xl bg-white/95 px-4 py-3 shadow-raised ring-1 ring-ink-100/80 backdrop-blur-md [animation-delay:1.5s] sm:block">
               <p className="flex items-center gap-2 text-sm font-bold text-success-700">
                 <FileCheck2 className="size-4" aria-hidden /> Ready to collect
               </p>
@@ -218,9 +225,7 @@ export function HomePage() {
                 <div>
                   <h3 className="text-base font-bold text-ink-900">{fac.name}</h3>
                 </div>
-                <Badge tone="brand" dot={false}>
-                  {fac.department}
-                </Badge>
+                <DepartmentBadge department={fac.department} />
               </div>
               <ul className="mt-4 divide-y divide-ink-100">
                 {fac.subjects.map((sub) => (

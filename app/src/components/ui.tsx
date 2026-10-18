@@ -111,6 +111,9 @@ const badgeTones: Record<Tone, string> = {
   success: 'bg-success-50 text-success-700 ring-success-100',
   warning: 'bg-warning-50 text-warning-700 ring-warning-100',
   danger: 'bg-danger-50 text-danger-700 ring-danger-100',
+  ids: 'bg-ids-50 text-ids-700 ring-ids-200',
+  dsee: 'bg-dsee-50 text-dsee-700 ring-dsee-200',
+  dssh: 'bg-dssh-50 text-dssh-700 ring-dssh-200',
 }
 
 const dotTones: Record<Tone, string> = {
@@ -119,6 +122,9 @@ const dotTones: Record<Tone, string> = {
   success: 'bg-success-500',
   warning: 'bg-warning-500',
   danger: 'bg-danger-500',
+  ids: 'bg-ids-400',
+  dsee: 'bg-dsee-300',
+  dssh: 'bg-dssh-600',
 }
 
 export function Badge({ tone = 'neutral', children, dot = true, className }: { tone?: Tone; children: ReactNode; dot?: boolean; className?: string }) {
@@ -133,6 +139,52 @@ export function Badge({ tone = 'neutral', children, dot = true, className }: { t
       {dot && <span className={cn('size-1.5 shrink-0 rounded-full', dotTones[tone])} aria-hidden />}
       <span className="truncate">{children}</span>
     </span>
+  )
+}
+
+/** Reusable badge rendering official department identity (Pink for IDS, Light Purple for DSEE, Dark Purple for DSSH) */
+export function DepartmentBadge({
+  department,
+  origin,
+  full = false,
+  className,
+}: {
+  department?: string
+  origin?: string
+  full?: boolean
+  className?: string
+}) {
+  const text = (department || origin || '').toLowerCase()
+  let tone: Tone = 'dssh'
+  let label = origin || department || 'CESS'
+
+  if (text.includes('ids') || text.includes('integrated development')) {
+    tone = 'ids'
+    label = full ? 'Integrated Developmental School (IDS)' : 'IDS'
+  } else if (
+    text.includes('dsee') ||
+    text.includes('elementary') ||
+    text.includes('secondary') ||
+    text.includes('professional education') ||
+    text.includes('bsed') ||
+    text.includes('beed')
+  ) {
+    tone = 'dsee'
+    label = full ? 'Dept. of Secondary & Elementary Education (DSEE)' : 'DSEE'
+  } else if (
+    text.includes('dssh') ||
+    text.includes('social science') ||
+    text.includes('humanities') ||
+    text.includes('ba social')
+  ) {
+    tone = 'dssh'
+    label = full ? 'Dept. of Social Sciences & Humanities (DSSH)' : 'DSSH'
+  }
+
+  return (
+    <Badge tone={tone} className={className}>
+      {label}
+    </Badge>
   )
 }
 
@@ -200,6 +252,9 @@ const calloutTones: Record<Tone, string> = {
   success: 'bg-success-50 ring-success-100 [--icon:var(--color-success-600)]',
   warning: 'bg-warning-50 ring-warning-100 [--icon:var(--color-warning-600)]',
   danger: 'bg-danger-50 ring-danger-100 [--icon:var(--color-danger-600)]',
+  ids: 'bg-ids-50 ring-ids-200 [--icon:var(--color-ids-500)]',
+  dsee: 'bg-dsee-50 ring-dsee-200 [--icon:var(--color-dsee-700)]',
+  dssh: 'bg-dssh-50 ring-dssh-200 [--icon:var(--color-dssh-600)]',
 }
 
 export function Callout({
@@ -287,6 +342,9 @@ export function StatCard({
     success: 'bg-success-100 text-success-700',
     warning: 'bg-warning-100 text-warning-700',
     danger: 'bg-danger-100 text-danger-700',
+    ids: 'bg-ids-100 text-ids-700',
+    dsee: 'bg-dsee-100 text-dsee-700',
+    dssh: 'bg-dssh-100 text-dssh-700',
   }
   const body = (
     <>
@@ -318,6 +376,9 @@ export function BarList({ items, emptyLabel }: { items: { label: string; value: 
     success: 'bg-success-500',
     warning: 'bg-warning-500',
     danger: 'bg-danger-500',
+    ids: 'bg-ids-400',
+    dsee: 'bg-dsee-300',
+    dssh: 'bg-dssh-600',
   }
   if (items.every((i) => i.value === 0)) return <p className="py-6 text-center text-sm text-ink-500">{emptyLabel}</p>
   return (

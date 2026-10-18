@@ -24,18 +24,18 @@ import {
 } from './engine'
 import type { Database, DocumentType, ExternalOfficeItem, User } from './types'
 
-export const DB_VERSION = 8
+export const DB_VERSION = 9
 export const DEMO_PASSWORD = 'cess2026'
 
 const users: User[] = [
-  { id: 'u-student-1', name: 'Maria Santos', email: 'maria.santos@msunaawan.edu.ph', role: 'student', origin: 'CESS', department: 'BSEd English, 3rd Year', position: 'Student', active: true, notificationPreference: 'both' },
-  { id: 'u-student-2', name: 'Paolo Reyes', email: 'paolo.reyes@msunaawan.edu.ph', role: 'student', origin: 'CESS', department: 'BA Social Sciences, 4th Year', position: 'Student', active: true, notificationPreference: 'both' },
-  { id: 'u-faculty-1', name: 'Prof. Ana Lim', email: 'ana.lim@msunaawan.edu.ph', role: 'faculty', origin: 'CESS', department: 'Department of Professional Education', position: 'Assistant Professor', active: true, notificationPreference: 'both' },
-  { id: 'u-faculty-2', name: 'Prof. Ben Aquino', email: 'ben.aquino@msunaawan.edu.ph', role: 'faculty', origin: 'CESS', department: 'Department of Social Sciences', position: 'Instructor', active: true, notificationPreference: 'both' },
-  { id: 'u-faculty-3', name: 'Mr. Jose Dela Cruz', email: 'jose.delacruz@msunaawan.edu.ph', role: 'faculty', origin: 'IDS', department: 'Integrated Development School', position: 'Teacher III', active: true, notificationPreference: 'both' },
+  { id: 'u-student-1', name: 'Maria Santos', email: 'maria.santos@msunaawan.edu.ph', role: 'student', origin: 'CESS', department: 'BSEd English, 3rd Year (DSEE)', position: 'Student', active: true, notificationPreference: 'both' },
+  { id: 'u-student-2', name: 'Paolo Reyes', email: 'paolo.reyes@msunaawan.edu.ph', role: 'student', origin: 'CESS', department: 'BA Social Sciences, 4th Year (DSSH)', position: 'Student', active: true, notificationPreference: 'both' },
+  { id: 'u-faculty-1', name: 'Prof. Ana Lim', email: 'ana.lim@msunaawan.edu.ph', role: 'faculty', origin: 'CESS', department: 'Department of Secondary and Elementary Education (DSEE)', position: 'Assistant Professor', active: true, notificationPreference: 'both' },
+  { id: 'u-faculty-2', name: 'Prof. Ben Aquino', email: 'ben.aquino@msunaawan.edu.ph', role: 'faculty', origin: 'CESS', department: 'Department of Social Sciences and Humanities (DSSH)', position: 'Instructor', active: true, notificationPreference: 'both' },
+  { id: 'u-faculty-3', name: 'Mr. Jose Dela Cruz', email: 'jose.delacruz@msunaawan.edu.ph', role: 'faculty', origin: 'IDS', department: 'Integrated Developmental School (IDS)', position: 'Teacher III', active: true, notificationPreference: 'both' },
   { id: 'u-secretary', name: 'Ms. Carmela Ortiz', email: 'cess.secretary@msunaawan.edu.ph', role: 'secretary', department: 'College of Education and Social Sciences', position: 'College Secretary', active: true, notificationPreference: 'both' },
-  { id: 'u-chair', name: 'Dr. Liza Fernandez', email: 'cess.chair@msunaawan.edu.ph', role: 'chairperson', department: 'Department of Professional Education', position: 'Department Chairperson', active: true, notificationPreference: 'both' },
-  { id: 'u-ids', name: 'Dr. Teresa Gomez', email: 'ids.principal@msunaawan.edu.ph', role: 'ids_principal', department: 'Integrated Development School', position: 'IDS Principal', active: true, notificationPreference: 'both' },
+  { id: 'u-chair', name: 'Dr. Liza Fernandez', email: 'cess.chair@msunaawan.edu.ph', role: 'chairperson', department: 'Department of Secondary and Elementary Education (DSEE)', position: 'Department Chairperson', active: true, notificationPreference: 'both' },
+  { id: 'u-ids', name: 'Dr. Teresa Gomez', email: 'ids.principal@msunaawan.edu.ph', role: 'ids_principal', department: 'Integrated Developmental School (IDS)', position: 'IDS Principal', active: true, notificationPreference: 'both' },
   { id: 'u-dean', name: 'Dr. Ramon Villanueva', email: 'cess.dean@msunaawan.edu.ph', role: 'dean', department: 'College of Education and Social Sciences', position: 'College Dean', active: true, notificationPreference: 'both' },
   { id: 'u-ovcaa', name: 'Dr. Victor Salazar', email: 'ovcaa@msunaawan.edu.ph', role: 'ovcaa', department: 'Office of the Vice Chancellor for Academic Affairs', position: 'Vice Chancellor for Academic Affairs', active: true, notificationPreference: 'both' },
   { id: 'u-chancellor', name: 'Dr. Antonio Cabrera', email: 'chancellor@msunaawan.edu.ph', role: 'chancellor', department: 'Office of the Chancellor', position: 'Chancellor', active: true, notificationPreference: 'both' },
@@ -230,18 +230,18 @@ export function createSeed(): Database {
     notifications: [],
     notices: [],
     faculty: [
-      { id: 'fac-1', name: 'Prof. Ana Lim', department: 'Department of Professional Education', subjects: [
+      { id: 'fac-1', name: 'Prof. Ana Lim', department: 'Department of Secondary and Elementary Education (DSEE)', subjects: [
         { code: 'EDUC 101', title: 'The Child and Adolescent Learner', syllabusFile: 'EDUC101_Syllabus_2026.pdf' },
         { code: 'EDUC 205', title: 'Assessment in Learning 1', syllabusFile: 'EDUC205_Syllabus_2026.pdf' },
       ] },
-      { id: 'fac-2', name: 'Prof. Ben Aquino', department: 'Department of Social Sciences', subjects: [
+      { id: 'fac-2', name: 'Prof. Ben Aquino', department: 'Department of Social Sciences and Humanities (DSSH)', subjects: [
         { code: 'SOCSCI 110', title: 'Philippine History', syllabusFile: 'SOCSCI110_Syllabus_2026.pdf' },
         { code: 'SOCSCI 220', title: 'Research Methods in the Social Sciences', syllabusFile: 'SOCSCI220_Syllabus_2026.pdf' },
       ] },
-      { id: 'fac-3', name: 'Dr. Liza Fernandez', department: 'Department of Professional Education', subjects: [
+      { id: 'fac-3', name: 'Dr. Liza Fernandez', department: 'Department of Secondary and Elementary Education (DSEE)', subjects: [
         { code: 'EDUC 310', title: 'Curriculum Development', syllabusFile: 'EDUC310_Syllabus_2026.pdf' },
       ] },
-      { id: 'fac-4', name: 'Prof. Rhea Mendez', department: 'Department of English', subjects: [
+      { id: 'fac-4', name: 'Prof. Rhea Mendez', department: 'Department of Secondary and Elementary Education (DSEE)', subjects: [
         { code: 'ENG 102', title: 'Purposive Communication', syllabusFile: 'ENG102_Syllabus_2026.pdf' },
         { code: 'ENG 215', title: 'Teaching Literature', syllabusFile: 'ENG215_Syllabus_2026.pdf' },
       ] },

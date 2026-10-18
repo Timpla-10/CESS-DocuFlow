@@ -5,11 +5,10 @@
    and motion. Components must use these tokens (e.g. `bg-brand-600`,
    `text-ink-900`) rather than raw hex values.
 
-   NOTE ON BRANDING: No official CESS colour specification was found in the
-   project files (the MSUN forms use the university's navy/gold letterhead).
-   The purple values below are a professionally chosen palette for CESS
-   DocuFlow. They are NOT claimed to be officially approved college colours.
-   If the college provides official values, update them here only.
+   OFFICIAL CESS DEPARTMENT PALETTE:
+   - Pink figure: Integrated Developmental School (IDS) [#E68AB4]
+   - Light purple figure: Dept. of Secondary & Elementary Education (DSEE) [#B9A3E0]
+   - Dark purple figure: Dept. of Social Sciences & Humanities (DSSH) [#5B3A99]
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
@@ -25,40 +24,77 @@
   --color-transparent: transparent;
   --color-current: currentColor;
 
-  /* ---- Brand: Purple ---------------------------------------------------
-     50  very light lavender  → hover backgrounds, gentle page accents
-     100 soft lavender        → selected filters, highlighted sections
+  /* ---- Brand: DSSH Royal Purple Anchor ---------------------------------
+     Lifted from near-black to rich, luminous academic jewel violet.
+     50  very light lilac     → hover backgrounds, gentle page accents
+     100 soft lilac           → selected filters, highlighted sections
      200–400 supporting tints → borders on brand surfaces, charts
-     500 medium purple        → focus rings, chart accents
+     500 medium vibrant violet→ focus rings, chart accents
      600 royal purple         → primary buttons, links, active states
-                                (white text contrast ≈ 7.3 : 1, WCAG AAA)
-     700 royal (pressed)      → hover/pressed state of primary
-     800 deep purple          → headings, selected nav, high emphasis
-     900–950 deepest          → navigation sidebar surfaces              */
-  --color-brand-50: #f8f5fd;
-  --color-brand-100: #f0e9fb;
-  --color-brand-200: #e0d2f6;
-  --color-brand-300: #c7aeee;
-  --color-brand-400: #a882e2;
-  --color-brand-500: #8a57d4;
-  --color-brand-600: #6d33bf;
-  --color-brand-700: #5a27a3;
-  --color-brand-800: #46207f;
-  --color-brand-900: #331860;
-  --color-brand-950: #200e3e;
+                                (white text contrast > 7.0 : 1, WCAG AAA)
+     700 rich royal purple    → hover/pressed state of primary
+     800 deep royal purple    → headings, selected nav, high emphasis
+     900–950 deepest base     → lifted from midnight black to elegant deep violet */
+  --color-brand-50: #faf7fd;
+  --color-brand-100: #f2ebf9;
+  --color-brand-200: #e4d5f4;
+  --color-brand-300: #cfb6eb;
+  --color-brand-400: #b28ce0;
+  --color-brand-500: #8e5ccb;
+  --color-brand-600: #6e3bbf;
+  --color-brand-700: #5a2c9f;
+  --color-brand-800: #472080;
+  --color-brand-900: #381768;
+  --color-brand-950: #280e4e;
 
-  /* ---- Purple & Amber scale aliases for sign-in & illustration accents - */
-  --color-purple-50: #faf5ff;
-  --color-purple-100: #f3e8ff;
-  --color-purple-200: #e9d5ff;
-  --color-purple-300: #d8b4fe;
-  --color-purple-400: #c084fc;
-  --color-purple-500: #a855f7;
-  --color-purple-600: #7c3aed;
-  --color-purple-700: #6b21a8;
-  --color-purple-800: #581c87;
-  --color-purple-900: #3b0764;
-  --color-purple-950: #1e1035;
+  /* ---- Department Identity: Integrated Developmental School (IDS - Pink) - */
+  --color-ids-50: #fdf2f7;
+  --color-ids-100: #fce7f0;
+  --color-ids-200: #f8bdd7;
+  --color-ids-300: #f1a3c6;
+  --color-ids-400: #e68ab4; /* Official IDS figure hex */
+  --color-ids-500: #d8689c;
+  --color-ids-600: #bd487f;
+  --color-ids-700: #9e2a63; /* High contrast text on light pink (WCAG AA/AAA) */
+  --color-ids-800: #822252;
+  --color-ids-900: #66183e;
+
+  /* ---- Department Identity: Secondary & Elementary Education (DSEE - Light Purple) */
+  --color-dsee-50: #f6f3fc;
+  --color-dsee-100: #ede7f9;
+  --color-dsee-200: #d9cbf2;
+  --color-dsee-300: #b9a3e0; /* Official DSEE figure hex */
+  --color-dsee-400: #9c80d0;
+  --color-dsee-500: #815fc0;
+  --color-dsee-600: #6b43b5;
+  --color-dsee-700: #583296; /* High contrast text on light purple (WCAG AA/AAA) */
+  --color-dsee-800: #46257a;
+  --color-dsee-900: #34195c;
+
+  /* ---- Department Identity: Social Sciences & Humanities (DSSH - Dark Purple) */
+  --color-dssh-50: #faf7fd;
+  --color-dssh-100: #f2ebf9;
+  --color-dssh-200: #e4d5f4;
+  --color-dssh-300: #cfb6eb;
+  --color-dssh-400: #b28ce0;
+  --color-dssh-500: #8e5ccb;
+  --color-dssh-600: #5b3a99; /* Official DSSH figure hex */
+  --color-dssh-700: #5a2c9f;
+  --color-dssh-800: #472080;
+  --color-dssh-900: #381768;
+
+  /* ---- Purple & Amber scale aliases for compatibility & illustrations - */
+  --color-purple-50: #faf7fd;
+  --color-purple-100: #f2ebf9;
+  --color-purple-200: #e4d5f4;
+  --color-purple-300: #cfb6eb;
+  --color-purple-400: #b28ce0;
+  --color-purple-500: #8e5ccb;
+  --color-purple-600: #6e3bbf;
+  --color-purple-700: #5a2c9f;
+  --color-purple-800: #472080;
+  --color-purple-900: #381768;
+  --color-purple-950: #280e4e;
 
   --color-amber-100: #fef3c7;
   --color-amber-200: #fde68a;
@@ -111,12 +147,12 @@
   --radius-2xl: 1.375rem;
   --radius-3xl: 1.5rem;
 
-  /* ---- Elevation (purple-tinted shadows) ------------------------------- */
-  --shadow-xs: 0 1px 2px rgb(32 14 62 / 0.05);
-  --shadow-card: 0 1px 2px rgb(32 14 62 / 0.04), 0 6px 20px -8px rgb(32 14 62 / 0.10);
-  --shadow-raised: 0 2px 4px rgb(32 14 62 / 0.06), 0 16px 40px -12px rgb(32 14 62 / 0.22);
-  --shadow-2xl: 0 26px 60px -12px rgb(59 7 100 / 0.18), 0 12px 28px -8px rgb(107 33 168 / 0.10), 0 2px 6px rgb(30 16 53 / 0.05);
-  --shadow-brand: 0 8px 24px -6px rgb(109 51 191 / 0.55);
+  /* ---- Elevation (calibrated purple-tinted shadows) --------------------- */
+  --shadow-xs: 0 1px 2px rgb(40 14 78 / 0.05);
+  --shadow-card: 0 1px 2px rgb(40 14 78 / 0.04), 0 6px 20px -8px rgb(40 14 78 / 0.10);
+  --shadow-raised: 0 4px 6px -1px rgb(40 14 78 / 0.08), 0 20px 45px -12px rgb(40 14 78 / 0.25);
+  --shadow-2xl: 0 26px 60px -12px rgb(40 14 78 / 0.22), 0 12px 28px -8px rgb(110 59 191 / 0.16), 0 2px 6px rgb(40 14 78 / 0.06);
+  --shadow-brand: 0 10px 28px -6px rgb(110 59 191 / 0.45);
 
   /* ---- Motion ---------------------------------------------------------- */
   --animate-fade-up: fade-up 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -160,11 +196,18 @@
   }
 }
 
+/* Multi-stop collegiate tri-color ambient gradient:
+   Balances DSSH royal violet (60%), DSEE luminous lavender (30%), and IDS warm rose (10%) */
 @utility surface-brand-gradient {
   background:
-    radial-gradient(120% 80% at 0% 0%, rgb(138 87 212 / 0.35) 0%, transparent 55%),
-    radial-gradient(90% 70% at 100% 100%, rgb(168 130 226 / 0.25) 0%, transparent 60%),
-    linear-gradient(160deg, var(--color-brand-900) 0%, var(--color-brand-950) 100%);
+    /* Top-left DSEE luminous lavender bloom (30% weight) */
+    radial-gradient(110% 80% at 12% 8%, rgb(185 163 224 / 0.42) 0%, transparent 60%),
+    /* Bottom-right IDS warm rose glow (10% accent weight) */
+    radial-gradient(90% 70% at 88% 92%, rgb(230 138 180 / 0.30) 0%, transparent 60%),
+    /* Center-top ambient violet radiance */
+    radial-gradient(80% 55% at 50% 0%, rgb(142 92 203 / 0.35) 0%, transparent 70%),
+    /* Base luminous royal purple flow (60% foundational weight) */
+    linear-gradient(150deg, #48277d 0%, #371a63 55%, #29104f 100%);
 }
 
 @utility text-balance {

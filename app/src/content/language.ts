@@ -26,7 +26,7 @@ export const OFFICE_LABEL: Record<OfficeId, string> = {
 export const OFFICE_HELP: Record<OfficeId, string> = {
   secretary: 'Receives, records, and releases all CESS documents.',
   chairperson: 'Head of your department; reviews and endorses documents.',
-  ids_principal: 'Head of the Integrated Development School; reviews IDS documents.',
+  ids_principal: 'Head of the Integrated Developmental School; reviews IDS documents.',
   dean: 'Head of the College of Education and Social Sciences.',
   ovcaa: 'Office of the Vice Chancellor for Academic Affairs — handles university-level academic approvals.',
   chancellor: 'The highest approving office of MSU at Naawan.',
@@ -100,7 +100,7 @@ export function revisionLabel(rev: number): string {
  * Status language
  * ------------------------------------------------------------------------- */
 
-export type Tone = 'brand' | 'neutral' | 'success' | 'warning' | 'danger'
+export type Tone = 'brand' | 'neutral' | 'success' | 'warning' | 'danger' | 'ids' | 'dsee' | 'dssh'
 
 export interface StatusView {
   label: string

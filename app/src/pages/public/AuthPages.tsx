@@ -57,18 +57,18 @@ function IsometricDocumentsPanel() {
             <path d="M 0.706 0 C 0.422 0.068, 0.294 0.232, 0.291 0.426 C 0.288 0.618, 0.284 0.750, 0.191 0.868 C 0.131 0.941, 0.056 0.982, 0.0125 1 L 1 1 L 1 0 Z" />
           </clipPath>
 
-          {/* Fallback wave gradient matching surface-brand-gradient (#4E2A84 -> #331860 -> #200E3E) */}
+          {/* Fallback wave gradient matching surface-brand-gradient (#48277D -> #371A63 -> #29104F) */}
           <linearGradient id="cessWaveMain" x1="180" y1="0" x2="640" y2="680" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#4E2A84" />
-            <stop offset="45%" stopColor="#331860" />
-            <stop offset="100%" stopColor="#200E3E" />
+            <stop offset="0%" stopColor="#48277D" />
+            <stop offset="50%" stopColor="#371A63" />
+            <stop offset="100%" stopColor="#29104F" />
           </linearGradient>
 
           {/* Secondary outer wave rim gradient */}
           <linearGradient id="cessWaveRim" x1="140" y1="0" x2="540" y2="680" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#6D33BF" stopOpacity="0.55" />
-            <stop offset="55%" stopColor="#5A27A3" stopOpacity="0.48" />
-            <stop offset="100%" stopColor="#331860" stopOpacity="0.62" />
+            <stop offset="0%" stopColor="#6E3BBF" stopOpacity="0.55" />
+            <stop offset="55%" stopColor="#48277D" stopOpacity="0.48" />
+            <stop offset="100%" stopColor="#371A63" stopOpacity="0.62" />
           </linearGradient>
 
           {/* Soft ambient purple glow on the white surface behind the 3D stack */}
@@ -740,8 +740,8 @@ export function SignInPage() {
               aria-busy={busy}
               className={cn(
                 'inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-8 text-sm font-bold text-white transition-all duration-200',
-                'bg-gradient-to-r from-[#5A27A3] via-[#46207F] to-[#331860] shadow-[0_8px_22px_-6px_rgba(51,24,96,0.68)]',
-                'hover:-translate-y-0.5 hover:from-[#46207F] hover:to-[#200E3E] hover:shadow-[0_12px_28px_-6px_rgba(32,14,62,0.82)]',
+                'bg-gradient-to-r from-[#5B3A99] via-[#4B2E81] to-[#3D246B] shadow-[0_8px_22px_-6px_rgba(91,58,153,0.60)]',
+                'hover:-translate-y-0.5 hover:from-[#4B2E81] hover:to-[#2A174C] hover:shadow-[0_12px_28px_-6px_rgba(42,23,76,0.75)]',
                 'active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60',
               )}
             >

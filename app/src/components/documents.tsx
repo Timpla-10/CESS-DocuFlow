@@ -31,7 +31,7 @@ import { byNewest, byOldest, daysWaiting, isDelayed, typeOf, userById } from '..
 import type { Attachment, Database, DocRecord, OfficeId, Status } from '../data/types'
 import { formatDate, formatDateTime, plural, timeAgo } from '../lib/time'
 import { Input, Select } from './form'
-import { Avatar, Badge, EmptyState, cn } from './ui'
+import { Avatar, Badge, DepartmentBadge, EmptyState, cn } from './ui'
 
 /* ------------------------------------------------------------------------ */
 /* Status                                                                    */
@@ -184,10 +184,10 @@ export function FilterBar({
           ))}
         </FilterSelect>
         {showOrigin && (
-          <FilterSelect label="Origin" value={filters.origin} onChange={(v) => setFilters({ ...filters, origin: v as Filters['origin'] })}>
-            <option value="">CESS and IDS</option>
-            <option value="CESS">CESS only</option>
-            <option value="IDS">IDS only</option>
+          <FilterSelect label="Origin / Department" value={filters.origin} onChange={(v) => setFilters({ ...filters, origin: v as Filters['origin'] })}>
+            <option value="">All Units (CESS &amp; IDS)</option>
+            <option value="CESS">CESS (DSEE &amp; DSSH)</option>
+            <option value="IDS">IDS (Integrated Developmental School)</option>
           </FilterSelect>
         )}
         {showOffice && (
@@ -420,7 +420,11 @@ export function DocumentList({
                         <Avatar name={req?.name ?? '?'} size="sm" />
                         <div className="min-w-0">
                           <div className="truncate font-medium text-ink-800">{req?.name}</div>
-                          <div className="text-xs text-ink-500">{d.origin === 'IDS' ? 'IDS' : 'CESS'} · {req?.role === 'student' ? 'Student' : 'Faculty'}</div>
+                          <div className="flex items-center gap-1.5 text-xs text-ink-500">
+                            <DepartmentBadge department={req?.department} origin={d.origin} />
+                            <span>·</span>
+                            <span>{req?.role === 'student' ? 'Student' : 'Faculty'}</span>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -572,6 +576,9 @@ const dotTone: Record<Tone, string> = {
   success: 'bg-success-500',
   warning: 'bg-warning-500',
   danger: 'bg-danger-500',
+  ids: 'bg-ids-400',
+  dsee: 'bg-dsee-300',
+  dssh: 'bg-dssh-600',
 }
 
 export function ProcessingHistory({ doc }: { doc: DocRecord }) {

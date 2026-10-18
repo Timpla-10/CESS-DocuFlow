@@ -153,7 +153,7 @@ export function OverviewPage() {
             <CardHeader
               icon={Route}
               title="IDS Document Hand-Offs (Secretary ↔ Chairperson ↔ IDS Principal)"
-              description="Unified visibility of Integrated Development School (IDS) documents and their hand-offs between the College Secretary, Department Chairpersons, and the IDS Principal (REQ-WFM-6)."
+              description="Unified visibility of Integrated Developmental School (IDS) documents and their hand-offs between the College Secretary, Department Chairpersons, and the IDS Principal (REQ-WFM-6)."
             />
             {idsDocs.length === 0 ? (
               <div className="py-8 text-center text-sm text-ink-500">
@@ -181,7 +181,7 @@ export function OverviewPage() {
                             {type?.name} · <span className="font-mono">{controlNumber(d)}</span> · {req?.name}
                           </p>
                         </div>
-                        <Badge tone="brand">
+                        <Badge tone="ids">
                           Now at: {locationLabelForStaff(d, db)} ({plural(daysWaiting(d), 'day')})
                         </Badge>
                       </div>

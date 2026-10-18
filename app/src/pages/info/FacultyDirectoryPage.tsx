@@ -14,7 +14,7 @@ import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import { Field, Input } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Avatar, Button, Card, EmptyState, PageHeader } from '../../components/ui'
+import { Avatar, Button, Card, DepartmentBadge, EmptyState, PageHeader } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { api, useDb } from '../../data/store'
 import type { FacultyEntry, Subject } from '../../data/types'
@@ -48,7 +48,7 @@ export function FacultyDirectoryPage() {
   const openAddFaculty = () => {
     setEditingFaculty(null)
     setFacName('')
-    setFacDept('Department of Professional Education')
+    setFacDept('Department of Secondary and Elementary Education (DSEE)')
     setFacSubjects([{ code: '', title: '', syllabusFile: '' }])
     setIsDialogOpen(true)
   }
@@ -181,7 +181,9 @@ export function FacultyDirectoryPage() {
                   <Avatar name={fac.name} size="lg" />
                   <div className="min-w-0">
                     <h3 className="font-bold text-ink-900">{fac.name}</h3>
-                    <p className="text-xs text-ink-600">{fac.department}</p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <DepartmentBadge department={fac.department} />
+                    </div>
                   </div>
                 </div>
                 {isSecretary && (
@@ -274,12 +276,21 @@ export function FacultyDirectoryPage() {
               />
             </Field>
             <Field label="Department" required>
-              <Input
-                type="text"
+              <select
                 value={facDept}
                 onChange={(e) => setFacDept(e.target.value)}
-                placeholder="e.g. Department of Professional Education"
-              />
+                className="h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm font-medium text-ink-900 focus-ring"
+              >
+                <option value="Department of Secondary and Elementary Education (DSEE)">
+                  Department of Secondary and Elementary Education (DSEE)
+                </option>
+                <option value="Department of Social Sciences and Humanities (DSSH)">
+                  Department of Social Sciences and Humanities (DSSH)
+                </option>
+                <option value="Integrated Developmental School (IDS)">
+                  Integrated Developmental School (IDS)
+                </option>
+              </select>
             </Field>
           </div>
 
