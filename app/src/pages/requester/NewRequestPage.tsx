@@ -12,8 +12,8 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react'
-import { useState, type ChangeEvent, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { sessionFiles } from '../../components/documents'
 import { Field, Input, Select, Textarea } from '../../components/form'
@@ -36,12 +36,23 @@ export function NewRequestPage() {
   const db = useDb()
   const toast = useToast()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   // Allowed document types for this user's role (REQ-SUB-1)
   const types = db.documentTypes.filter((t) => t.audience === user.role)
 
-  const [selectedTypeId, setSelectedTypeId] = useState<string>(types[0]?.id ?? '')
+  const initialTypeFromUrl = searchParams.get('type')
+  const defaultTypeId = types.find((t) => t.id === initialTypeFromUrl)?.id ?? types[0]?.id ?? ''
+
+  const [selectedTypeId, setSelectedTypeId] = useState<string>(defaultTypeId)
   const selectedType: DocumentType | undefined = types.find((t) => t.id === selectedTypeId)
+
+  useEffect(() => {
+    const typeFromUrl = searchParams.get('type')
+    if (typeFromUrl && types.some((t) => t.id === typeFromUrl)) {
+      setSelectedTypeId(typeFromUrl)
+    }
+  }, [searchParams, types])
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -194,16 +205,16 @@ export function NewRequestPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <Link
-        to="/app/my-documents"
+        to={selectedTypeId ? `/app/my-documents?folder=${selectedTypeId}` : '/app/my-documents'}
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
       >
-        <ArrowLeft className="size-4" aria-hidden /> Back to My Documents
+        <ArrowLeft className="size-4" aria-hidden /> Back to Document Repository
       </Link>
 
       <PageHeader
         eyebrow="New Submission"
         title="Submit Document Request"
-        description="Select the type of document you need, download the blank form template, attach your completed files, and submit your request."
+        description="Choose your document type, attach your files, and submit your request."
       />
 
       <form onSubmit={handleSubmit} noValidate className="space-y-6">
@@ -211,13 +222,13 @@ export function NewRequestPage() {
         <Card className="p-5 sm:p-6">
           <CardHeader
             title="1. Select Document Type & Download Template"
-            description="Choose the academic or administrative document you are requesting."
+            description="Choose the document you are requesting."
           />
           <div className="mt-4 space-y-4">
             <Field
               label="Document Type"
               required
-              hint="Only document types allowed for your role (Student or Faculty) are displayed."
+              hint="Showing document types available for your role."
             >
               <Select
                 value={selectedTypeId}
@@ -290,6 +301,42 @@ export function NewRequestPage() {
                 <DepartmentBadge department={user.department} origin={user.origin} />
               </div>
             </div>
+
+            {/* Explicit Faculty Affiliation & Routing Path Notice (REQ-PM-FEEDBACK-2) */}
+            {user.role === 'faculty' && (
+              <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-brand-950">
+                      {user.origin === 'IDS' ? 'IDS Faculty Submission' : 'CESS Faculty Submission'}
+                    </span>
+                    <Badge tone={user.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                      {user.origin === 'IDS' ? 'Integrated Developmental School' : 'College of Education and Social Sciences'}
+                    </Badge>
+                  </div>
+                  <span className="font-mono text-2xs text-brand-700">
+                    Routing Unit: {user.origin ?? 'CESS'}
+                  </span>
+                </div>
+                <div className="mt-2.5 rounded-lg bg-white p-2.5 ring-1 ring-brand-100 text-ink-700">
+                  <span className="font-semibold text-ink-900">Official Routing Path: </span>
+                  {user.origin === 'IDS' ? (
+                    <span>
+                      College Secretary Check → Chairperson →{' '}
+                      <strong className="text-warning-800 underline decoration-warning-400">IDS Principal (Review)</strong>{' '}
+                      → College Dean → Release
+                    </span>
+                  ) : (
+                    <span>College Secretary Check → Chairperson → College Dean → Release</span>
+                  )}
+                </div>
+                {user.origin === 'IDS' && (
+                  <p className="mt-2 text-2xs text-ink-500">
+                    ℹ️ As an IDS faculty member, your document will route through the IDS Principal before Dean’s endorsement.
+                  </p>
+                )}
+              </div>
+            )}
 
             <Field
               label="Title or Subject"

@@ -12,15 +12,14 @@ export function RequirementsCheckPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Content & Completeness Verification Queue"
+        eyebrow="Verification Queue"
         title="Verify Submissions & Route"
-        description="Every submission in this queue has already passed the automatic completeness check for required attachments. Verify that the content inside the forms and attachments is accurate before logging and routing (oldest first)."
+        description="Review incoming document requests for accuracy before logging and routing to reviewing offices."
       />
 
-      <Callout tone="brand" icon={Info} title="Content Verification Guidelines (REQ-REQT-3, REQ-REQT-4)">
-        Because the system automatically checks that all required forms are uploaded before a submission reaches you,
-        focus on verifying that the information inside each document is complete and accurate. If content issues are
-        found, return the submission with clear reasons. Otherwise, mark it Complete to log and route it automatically.
+      <Callout tone="brand" icon={Info} title="Content Verification Guide">
+        All required attachments are already checked and present. Verify that details and form contents are accurate.
+        If any information needs correction, return the document with notes. Otherwise, mark Complete to route it.
       </Callout>
 
       <Card>
@@ -31,7 +30,7 @@ export function RequirementsCheckPage() {
           showOrigin
           statuses={['submitted']}
           audience="all"
-          searchLabel="Search submissions awaiting content verification…"
+          searchLabel="Search submissions awaiting verification…"
         />
 
         <DocumentList
@@ -44,10 +43,9 @@ export function RequirementsCheckPage() {
           empty={
             <EmptyState
               icon={CheckSquare}
-              title="All submissions have been verified"
+              title="No pending submissions"
             >
-              There are currently no new document requests waiting for content verification.
-              New submissions will appear here automatically.
+              All submissions have been verified. New requests will appear here automatically.
             </EmptyState>
           }
         />

@@ -175,49 +175,49 @@ export function requesterMessage(doc: DocRecord, delayed: boolean, db?: Pick<Dat
   switch (doc.status) {
     case 'submitted':
       return {
-        title: 'Your request was received',
-        body: 'All required attachments passed the automatic completeness check. The College Secretary will now verify the content of your documents before routing them for review.',
+        title: 'Request received',
+        body: 'Required attachments are complete. The College Secretary will verify document contents before routing for review.',
       }
     case 'returned':
       return {
-        title: 'Your document was returned for correction',
-        body: 'Please review the reason below, make the necessary changes, and submit it again. Your request keeps the same control number.',
+        title: 'Returned for correction',
+        body: 'Please check the feedback below, update your document, and submit again.',
       }
     case 'with_office':
       if (step?.stage === 'final') {
         return {
-          title: 'All required reviews are complete',
-          body: 'The College Secretary is now preparing your document for release. We’ll notify you when it’s ready to collect.',
+          title: 'Reviews complete',
+          body: 'The College Secretary is preparing your document for release. You will be notified once ready for pickup.',
         }
       }
       if (delayed) {
         return {
-          title: 'Your document is taking longer than expected',
-          body: `It’s currently awaiting action from the ${office}. The office receives automatic reminders while your document is waiting.`,
+          title: 'Review delayed',
+          body: `Awaiting action from ${office}. Follow-up reminders have been sent.`,
         }
       }
       return {
-        title: `Your document is with the ${office}`,
-        body: `The ${office} is reviewing your document. You’ll see the next step here as soon as they record their decision.`,
+        title: `Under review at ${office}`,
+        body: `Your document is currently being reviewed by ${office}.`,
       }
     case 'with_external': {
       const ext = doc.externalOffice ? externalOfficeLabel(doc.externalOffice, db) : 'an external office'
       return {
-        title: `Your document is at the ${ext}`,
-        body: 'The College Secretary sent it there for processing and will record when it comes back.',
+        title: `Forwarded to ${ext}`,
+        body: 'Sent for external processing. Updates will post once received back.',
       }
     }
     case 'ready':
       return {
-        title: 'Your document is ready to collect',
-        body: 'Please visit the College Secretary’s office to collect your signed document.',
+        title: 'Ready for pickup',
+        body: 'Please visit the College Secretary’s office to claim your signed document.',
       }
     case 'released':
       return {
-        title: 'Your document has been released',
+        title: 'Document released',
         body: doc.release
-          ? `It was received by ${doc.release.receivedBy} on ${formatDate(doc.release.at)}. This record is now kept in the archive.`
-          : 'This record is now kept in the archive.',
+          ? `Claimed by ${doc.release.receivedBy} on ${formatDate(doc.release.at)}.`
+          : 'Archived and released.',
       }
   }
 }

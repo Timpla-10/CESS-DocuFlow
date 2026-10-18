@@ -25,8 +25,7 @@ import type { Role } from '../../data/types'
 
 const PORTAL_OPTIONS: { id: string; label: string; role: Role; origin?: 'CESS' | 'IDS' }[] = [
   { id: 'student', label: ROLE_LABEL.student, role: 'student', origin: 'CESS' },
-  { id: 'faculty', label: ROLE_LABEL.faculty, role: 'faculty', origin: 'CESS' },
-  { id: 'faculty_ids', label: `${ROLE_LABEL.faculty} (IDS)`, role: 'faculty', origin: 'IDS' },
+  { id: 'faculty', label: ROLE_LABEL.faculty, role: 'faculty' },
   { id: 'secretary', label: ROLE_LABEL.secretary, role: 'secretary' },
   { id: 'chairperson', label: ROLE_LABEL.chairperson, role: 'chairperson' },
   { id: 'ids_principal', label: ROLE_LABEL.ids_principal, role: 'ids_principal' },
@@ -57,24 +56,24 @@ function IsometricDocumentsPanel() {
             <path d="M 0.706 0 C 0.422 0.068, 0.294 0.232, 0.291 0.426 C 0.288 0.618, 0.284 0.750, 0.191 0.868 C 0.131 0.941, 0.056 0.982, 0.0125 1 L 1 1 L 1 0 Z" />
           </clipPath>
 
-          {/* Fallback wave gradient matching surface-brand-gradient (#48277D -> #371A63 -> #29104F) */}
+          {/* Fallback wave gradient matching surface-brand-gradient (Midnight Blue: #191970 -> #111452 -> #0A0B33) */}
           <linearGradient id="cessWaveMain" x1="180" y1="0" x2="640" y2="680" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#48277D" />
-            <stop offset="50%" stopColor="#371A63" />
-            <stop offset="100%" stopColor="#29104F" />
+            <stop offset="0%" stopColor="#191970" />
+            <stop offset="50%" stopColor="#111452" />
+            <stop offset="100%" stopColor="#0A0B33" />
           </linearGradient>
 
-          {/* Secondary outer wave rim gradient */}
+          {/* Secondary outer wave rim gradient with CESS royal purple glow */}
           <linearGradient id="cessWaveRim" x1="140" y1="0" x2="540" y2="680" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#6E3BBF" stopOpacity="0.55" />
-            <stop offset="55%" stopColor="#48277D" stopOpacity="0.48" />
-            <stop offset="100%" stopColor="#371A63" stopOpacity="0.62" />
+            <stop offset="0%" stopColor="#8E5CCB" stopOpacity="0.65" />
+            <stop offset="55%" stopColor="#6E3BBF" stopOpacity="0.52" />
+            <stop offset="100%" stopColor="#191970" stopOpacity="0.65" />
           </linearGradient>
 
           {/* Soft ambient purple glow on the white surface behind the 3D stack */}
           <radialGradient id="ambientWhiteGlow" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor="#5A27A3" stopOpacity="0.18" />
-            <stop offset="50%" stopColor="#6D33BF" stopOpacity="0.06" />
+            <stop offset="0%" stopColor="#6E3BBF" stopOpacity="0.18" />
+            <stop offset="50%" stopColor="#191970" stopOpacity="0.06" />
             <stop offset="88%" stopColor="#FFFFFF" stopOpacity="0" />
             <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
           </radialGradient>
@@ -89,14 +88,14 @@ function IsometricDocumentsPanel() {
           fill="url(#cessWaveRim)"
         />
 
-        {/* Primary deep purple wave base */}
+        {/* Primary deep Midnight Blue wave base */}
         <path
           d="M 452 0 C 270 46, 188 158, 186 290 C 184 420, 182 510, 122 590 C 84 640, 36 668, 8 680 L 640 680 L 640 0 Z"
           fill="url(#cessWaveMain)"
         />
       </svg>
 
-      {/* Clipped surface-brand-gradient + 22px dot grid (identical to HomePage / app brand surface) */}
+      {/* Clipped surface-brand-gradient + 22px dot grid with moving CESS aurora lighting */}
       <div
         className="surface-brand-gradient pointer-events-none absolute inset-0 overflow-hidden"
         style={{ clipPath: 'url(#cessWaveClip)' }}
@@ -104,7 +103,7 @@ function IsometricDocumentsPanel() {
         <div
           className="absolute inset-0 opacity-[0.08] [background-image:radial-gradient(var(--color-white)_1px,transparent_1px)] [background-size:22px_22px]"
         />
-        <div className="absolute -bottom-32 -right-32 size-[460px] rounded-full bg-brand-500/35 blur-2xl animate-aurora-violet" />
+        <div className="absolute -bottom-32 -right-32 size-[460px] rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" />
         <div className="absolute -top-24 -left-24 size-[400px] rounded-full bg-ids-400/50 blur-2xl animate-aurora-pink" />
         <div className="absolute top-1/3 right-10 size-[360px] rounded-full bg-dsee-300/40 blur-2xl animate-aurora-lavender" />
       </div>
@@ -525,6 +524,7 @@ export function SignInPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [portalId, setPortalId] = useState('')
+  const [facultyOrigin, setFacultyOrigin] = useState<'CESS' | 'IDS'>('CESS')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
@@ -536,6 +536,17 @@ export function SignInPage() {
 
   const handleRoleChange = (selectedId: string) => {
     setPortalId(selectedId)
+    if (selectedId === 'faculty') {
+      const account = db.users.find(
+        (u) => u.role === 'faculty' && u.active && u.origin === facultyOrigin,
+      )
+      if (account) {
+        setEmail(account.email)
+        setPassword(DEMO_PASSWORD)
+        setErrors({})
+      }
+      return
+    }
     const option = PORTAL_OPTIONS.find((o) => o.id === selectedId)
     if (option) {
       const account = db.users.find(
@@ -549,10 +560,27 @@ export function SignInPage() {
     }
   }
 
+  const handleFacultyOriginChange = (origin: 'CESS' | 'IDS') => {
+    setFacultyOrigin(origin)
+    const account = db.users.find((u) => u.role === 'faculty' && u.active && u.origin === origin)
+    if (account) {
+      setEmail(account.email)
+      setPassword(DEMO_PASSWORD)
+      setErrors({})
+    }
+  }
+
   const handleEmailChange = (nextEmail: string) => {
     setEmail(nextEmail)
     const matched = db.users.find((u) => u.email.toLowerCase() === nextEmail.trim().toLowerCase())
     if (matched) {
+      if (matched.role === 'faculty') {
+        setPortalId('faculty')
+        if (matched.origin === 'IDS' || matched.origin === 'CESS') {
+          setFacultyOrigin(matched.origin)
+        }
+        return
+      }
       const option = PORTAL_OPTIONS.find(
         (o) => o.role === matched.role && (!o.origin || o.origin === matched.origin),
       )
@@ -712,6 +740,68 @@ export function SignInPage() {
                 ))}
               </select>
             </div>
+
+            {/* Sub-selector: Faculty Unit Affiliation (CESS vs IDS) */}
+            {portalId === 'faculty' && (
+              <div className="mt-3 rounded-2xl border border-purple-200/90 bg-purple-50/70 p-3.5 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-2xs font-bold uppercase tracking-wider text-purple-900">
+                    Faculty Unit & Document Routing:
+                  </span>
+                  <span className="text-2xs font-medium text-purple-700">
+                    {facultyOrigin === 'IDS' ? 'Routes via IDS Principal' : 'Standard College Route'}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleFacultyOriginChange('CESS')}
+                    className={cn(
+                      'flex flex-col items-start rounded-xl p-2.5 text-left text-xs transition-all',
+                      facultyOrigin === 'CESS'
+                        ? 'bg-purple-800 text-white shadow-xs'
+                        : 'bg-white text-purple-900 ring-1 ring-purple-200 hover:bg-purple-100/50',
+                    )}
+                  >
+                    <span className="font-bold">CESS Faculty</span>
+                    <span
+                      className={cn(
+                        'text-2xs mt-0.5',
+                        facultyOrigin === 'CESS' ? 'text-purple-200' : 'text-purple-600',
+                      )}
+                    >
+                      College Departments (DSEE / DSSH)
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleFacultyOriginChange('IDS')}
+                    className={cn(
+                      'flex flex-col items-start rounded-xl p-2.5 text-left text-xs transition-all',
+                      facultyOrigin === 'IDS'
+                        ? 'bg-purple-800 text-white shadow-xs'
+                        : 'bg-white text-purple-900 ring-1 ring-purple-200 hover:bg-purple-100/50',
+                    )}
+                  >
+                    <span className="font-bold">IDS Faculty</span>
+                    <span
+                      className={cn(
+                        'text-2xs mt-0.5',
+                        facultyOrigin === 'IDS' ? 'text-purple-200' : 'text-purple-600',
+                      )}
+                    >
+                      Integrated Developmental School
+                    </span>
+                  </button>
+                </div>
+                <p className="mt-2 text-2xs text-purple-700">
+                  {facultyOrigin === 'IDS'
+                    ? 'ℹ️ IDS route includes review by the IDS Principal before the College Dean.'
+                    : 'ℹ️ CESS route routes directly from Department Chairperson to the College Dean.'}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Controls & Links: Remember me + Forgot Password? */}

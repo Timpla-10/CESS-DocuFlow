@@ -1,7 +1,6 @@
 import {
   Archive,
   BookOpen,
-  Building2,
   ClipboardCheck,
   FilePlus2,
   Files,
@@ -48,7 +47,7 @@ export function navFor(role: Role): NavSection[] {
           items: [
             {
               to: '/app/my-documents',
-              label: 'My Documents',
+              label: 'Document Repository',
               icon: FolderOpen,
               count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'returned').length,
               countTone: 'danger',
@@ -71,7 +70,6 @@ export function navFor(role: Role): NavSection[] {
           items: [
             { to: '/app/requirements-check', label: 'Check Requirements', icon: ClipboardCheck, count: (db) => secretaryQueues(db).toCheck.length, countTone: 'warning' },
             { to: '/app/release', label: 'Approved and Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
-            { to: '/app/external-offices', label: 'At External Offices', icon: Building2, count: (db) => secretaryQueues(db).external.length },
           ],
         },
         {

@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
-  Download,
   FileCheck2,
   FileText,
   PackageCheck,
@@ -13,6 +12,7 @@ import {
   UploadCloud,
   UserCheck,
   X,
+  Lock,
 } from 'lucide-react'
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -69,7 +69,6 @@ export function DocumentDetailPage() {
   const doc = db.documents.find((d) => d.id === id)
 
   // Sub-dialog states
-  const [activeTab, setActiveTab] = useState<'route' | 'files'>('route')
   const [historyViewMode, setHistoryViewMode] = useState<'journey' | 'flat'>('journey')
   const [isResubmitOpen, setIsResubmitOpen] = useState(false)
   const [isCheckOpen, setIsCheckOpen] = useState(false)
@@ -478,9 +477,9 @@ export function DocumentDetailPage() {
             <div className="flex items-start gap-3 rounded-xl bg-success-50/50 p-3.5 ring-1 ring-inset ring-success-100">
               <FileCheck2 className="mt-0.5 size-4 shrink-0 text-success-600" aria-hidden />
               <div className="text-xs">
-                <p className="font-bold text-ink-900">Automatic Completeness Check: Passed</p>
+                <p className="font-bold text-ink-900">Completeness Check: Passed</p>
                 <p className="mt-0.5 text-ink-600">
-                  All required forms for {docType?.name} were verified present upon submission ({currentAttachments.length} file(s) attached).
+                  All required forms are attached ({currentAttachments.length} file{currentAttachments.length === 1 ? '' : 's'}).
                 </p>
               </div>
             </div>
@@ -498,11 +497,11 @@ export function DocumentDetailPage() {
               />
               <div className="text-xs">
                 <p className="font-bold text-ink-900">
-                  Secretary Content Verification:{' '}
+                  Secretary Verification:{' '}
                   {doc.contentVerification
                     ? doc.contentVerification.result === 'complete'
                       ? 'Verified Complete'
-                      : 'Returned for Content Issues'
+                      : 'Returned for Issues'
                     : 'Pending Verification'}
                 </p>
                 <p className="mt-0.5 text-ink-600">
@@ -510,7 +509,7 @@ export function DocumentDetailPage() {
                     ? `${doc.contentVerification.verifiedBy} · ${formatDateTime(doc.contentVerification.at)}${
                         doc.contentVerification.remarks ? ` — “${doc.contentVerification.remarks}”` : ''
                       }`
-                    : 'Awaiting content verification by the College Secretary before routing.'}
+                    : 'Awaiting content check before routing.'}
                 </p>
               </div>
             </div>
@@ -597,6 +596,26 @@ export function DocumentDetailPage() {
             </div>
           )}
 
+          {/* Requester Edit Lock Notice (Student/Faculty cannot edit while in review) */}
+          {isReqUser && doc.requesterId === user.id && doc.status !== 'returned' && (
+            <div className="mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-ink-200 bg-ink-50/70 p-4 text-xs text-ink-700">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-ink-200/70 text-ink-700">
+                  <Lock className="size-4" aria-hidden />
+                </div>
+                <div>
+                  <p className="font-bold text-ink-900">Document Locked (Read-Only)</p>
+                  <p className="mt-0.5 text-ink-600">
+                    This document is in official routing. You can only edit and resubmit if an office returns it for revision.
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1.5 self-start sm:self-center shrink-0 rounded-md bg-ink-200/80 px-2.5 py-1 text-2xs font-semibold uppercase tracking-wider text-ink-800">
+                <Lock className="size-3" /> Read-Only
+              </span>
+            </div>
+          )}
+
           {/* Document Metadata Grid (REQ-REC-1, REQ-TRK-2) */}
           <div className="mt-6 border-t border-ink-100 pt-6">
             <DefinitionList
@@ -639,81 +658,69 @@ export function DocumentDetailPage() {
         </div>
       </Card>
 
-      {/* Tabs: Route Journey / Attached Files */}
-      <Card>
-        <div className="border-b border-ink-100 p-4">
-          <Segmented
-            label="Document Views"
-            value={activeTab}
-            onChange={(v) => setActiveTab(v as typeof activeTab)}
-            options={[
-              { value: 'route', label: 'Routing Path & History', count: doc.history.length },
-              {
-                value: 'files',
-                label: 'Attached Files',
-                count: doc.attachments.filter((a) => a.revision === doc.revision).length,
-              },
-            ]}
-          />
+      {/* Section 1: Submitted Documents & Attachments (Separated from Routing Path) */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between pb-3 border-b border-ink-100 mb-4">
+          <div>
+            <h2 className="text-base font-bold text-ink-950">Submitted Files & Attachments</h2>
+            <p className="text-xs text-ink-500">
+              Official forms and uploaded documents available for verification and review.
+            </p>
+          </div>
+          <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200">
+            {doc.attachments.filter((a) => a.revision === doc.revision).length} file(s) in {revisionLabel(doc.revision)}
+          </span>
         </div>
+        <AttachmentList db={db} doc={doc} />
+      </Card>
 
-        <div className="p-6">
-          {activeTab === 'route' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-2">
-                <div>
-                  <h3 className="text-sm font-bold text-ink-900">Institutional Review Route & History ({doc.origin})</h3>
-                  <span className="text-xs text-ink-500">Step-by-step approval journey and recorded audit milestones</span>
-                </div>
-                <div className="inline-flex rounded-lg bg-ink-100 p-0.5 text-xs font-semibold text-ink-600">
-                  <button
-                    type="button"
-                    onClick={() => setHistoryViewMode('journey')}
-                    className={cn(
-                      'rounded-md px-2.5 py-1 transition-all',
-                      historyViewMode === 'journey'
-                        ? 'bg-white text-brand-900 shadow-xs'
-                        : 'hover:text-ink-900',
-                    )}
-                  >
-                    Route Journey
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryViewMode('flat')}
-                    className={cn(
-                      'rounded-md px-2.5 py-1 transition-all',
-                      historyViewMode === 'flat'
-                        ? 'bg-white text-brand-900 shadow-xs'
-                        : 'hover:text-ink-900',
-                    )}
-                  >
-                    Linear Audit Log
-                  </button>
-                </div>
-              </div>
-
-              {historyViewMode === 'journey' ? (
-                <div className="max-w-2xl">
-                  <RouteProgress doc={doc} db={db} />
-                </div>
-              ) : (
-                <div className="max-w-2xl">
-                  <ProcessingHistory doc={doc} />
-                </div>
-              )}
+      {/* Section 2: Institutional Review Route & Audit History */}
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-ink-100">
+            <div>
+              <h2 className="text-base font-bold text-ink-950">
+                Institutional Review Route & History ({doc.origin})
+              </h2>
+              <span className="text-xs text-ink-500">
+                Step-by-step approval journey and recorded audit milestones across offices
+              </span>
             </div>
-          )}
+            <div className="inline-flex rounded-lg bg-ink-100 p-0.5 text-xs font-semibold text-ink-600">
+              <button
+                type="button"
+                onClick={() => setHistoryViewMode('journey')}
+                className={cn(
+                  'rounded-md px-2.5 py-1 transition-all',
+                  historyViewMode === 'journey'
+                    ? 'bg-white text-brand-900 shadow-xs'
+                    : 'hover:text-ink-900',
+                )}
+              >
+                Route Journey
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryViewMode('flat')}
+                className={cn(
+                  'rounded-md px-2.5 py-1 transition-all',
+                  historyViewMode === 'flat'
+                    ? 'bg-white text-brand-900 shadow-xs'
+                    : 'hover:text-ink-900',
+                )}
+              >
+                Linear Audit Log
+              </button>
+            </div>
+          </div>
 
-          {activeTab === 'files' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2">
-                <h3 className="text-sm font-bold text-ink-900">Submitted Files & Attachments</h3>
-                <span className="text-xs text-ink-500">
-                  {doc.attachments.length} total files across {doc.revision + 1} revision(s)
-                </span>
-              </div>
-              <AttachmentList db={db} doc={doc} />
+          {historyViewMode === 'journey' ? (
+            <div className="max-w-2xl pt-2">
+              <RouteProgress doc={doc} db={db} />
+            </div>
+          ) : (
+            <div className="max-w-2xl pt-2">
+              <ProcessingHistory doc={doc} />
             </div>
           )}
         </div>
@@ -860,10 +867,11 @@ export function DocumentDetailPage() {
                     {url ? (
                       <a
                         href={url}
-                        download={a.name}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold text-brand-700 hover:bg-brand-50"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
                       >
-                        <Download className="size-3.5" /> Open / Download
+                        <FileText className="size-3.5" /> View Details
                       </a>
                     ) : (
                       <button
@@ -876,9 +884,9 @@ export function DocumentDetailPage() {
                             `Requirement: ${req?.label ?? 'Supporting File'}`,
                           ])
                         }
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold text-brand-700 hover:bg-brand-50"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
                       >
-                        <Download className="size-3.5" /> Open / Download
+                        <FileText className="size-3.5" /> View Details
                       </button>
                     )}
                   </li>

@@ -1,13 +1,13 @@
 import {
   AlertTriangle,
   ArrowRight,
-  Building2,
   CheckSquare,
   ExternalLink,
   Inbox,
   PackageCheck,
   Route,
 } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DocumentList } from '../../components/documents'
 import {
@@ -16,8 +16,9 @@ import {
   Callout,
   Card,
   CardHeader,
-  PieChart,
   PageHeader,
+  PieChart,
+  Segmented,
   StatCard,
 } from '../../components/ui'
 import { OFFICE_LABEL, controlNumber, locationLabelForStaff } from '../../content/language'
@@ -32,6 +33,8 @@ export function OverviewPage() {
   const allDocs = db.documents
   const delayedDocs = allDocs.filter((d) => isDelayed(db, d))
   const idsDocs = allDocs.filter((d) => d.origin === 'IDS' && !d.archived)
+
+  const [activeQueueTab, setActiveQueueTab] = useState<'toCheck' | 'ready' | 'ids'>('toCheck')
 
   // Distribution by holding office with official institutional gradients
   const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
@@ -51,11 +54,11 @@ export function OverviewPage() {
   }))
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="College Secretary Dashboard"
         title="Document Processing Overview"
-        description="Monitor active document queues, identify processing bottlenecks, track IDS hand-offs, and route documents efficiently across college and university offices."
+        description="Track active document queues, verify submissions, and release signed documents."
         actions={
           <div className="flex flex-wrap gap-2">
             <ButtonLink to="/app/requirements-check" variant="primary">
@@ -73,11 +76,10 @@ export function OverviewPage() {
         <Callout
           tone="warning"
           icon={AlertTriangle}
-          title={`${delayedDocs.length} ${delayedDocs.length === 1 ? 'document has' : 'documents have'} exceeded standard turnaround time (Delayed)`}
+          title={`${delayedDocs.length} ${delayedDocs.length === 1 ? 'document is delayed' : 'documents are delayed'}`}
         >
           <p>
-            These documents have waited longer than the upper limit of their standard processing times set under the CESS Manual of Operations.
-            Follow-up reminders are automatically dispatched every {db.settings.reminderEveryDays} days.
+            These documents have exceeded standard turnaround times. Automatic reminders are sent every {db.settings.reminderEveryDays} days.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {delayedDocs.map((d) => (
@@ -93,157 +95,220 @@ export function OverviewPage() {
         </Callout>
       )}
 
-      {/* Key Metric StatCards (REQ-WFM-1) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Non-Clickable Key Metric StatCards (REQ-PM-FEEDBACK-3) */}
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
-          label="Needs Content Check"
+          label="Awaiting Content Verification"
           value={queues.toCheck.length}
-          hint="Auto-checked submissions"
+          hint="Passed completeness check"
           icon={CheckSquare}
           tone={queues.toCheck.length > 0 ? 'warning' : 'neutral'}
-          to="/app/requirements-check"
         />
         <StatCard
-          label="Currently Under Review"
+          label="Currently In Review"
           value={allDocs.filter((d) => d.status === 'with_office').length}
-          hint="With chairpersons, IDS, dean"
+          hint="Under review across offices"
           icon={Inbox}
           tone="brand"
-          to="/app/documents"
         />
         <StatCard
-          label="At External Offices"
-          value={queues.external.length}
-          hint="HRMO, Registrar, Budget"
-          icon={Building2}
-          tone={queues.external.length > 0 ? 'brand' : 'neutral'}
-          to="/app/external-offices"
-        />
-        <StatCard
-          label="Ready for Pickup"
+          label="Approved & Ready to Release"
           value={queues.ready.length}
-          hint="Awaiting student / faculty"
+          hint="Ready for requester pickup"
           icon={PackageCheck}
           tone={queues.ready.length > 0 ? 'success' : 'neutral'}
-          to="/app/release"
         />
       </div>
 
-      {/* Two Column Layout: Queues & Office Distribution */}
+      {/* Two Column Layout: Focused Task Center (Left) & Office Distribution (Right) */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left 2 Cols: Items Needing Attention */}
+        {/* Left 2 Cols: Unified Task Workstation */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Queue 1: Needs Content Verification */}
-          <Card>
-            <CardHeader
-              title="Awaiting Content Verification"
-              description="Automatic completeness check passed. Verify content correctness before routing (oldest first)."
-              action={
-                <Link to="/app/requirements-check" className="text-xs font-semibold text-brand-700 hover:underline">
-                  View full queue ({queues.toCheck.length})
-                </Link>
-              }
-            />
-            <DocumentList
-              db={db}
-              docs={queues.toCheck.slice(0, 5)}
-              audience="staff"
-              showRequester
-              showWaiting
-              empty={
-                <div className="py-8 text-center text-sm text-ink-500">
-                  All submitted documents have been checked and routed.
-                </div>
-              }
-            />
-          </Card>
-
-          {/* Queue 2: IDS Hand-Offs Unified View (REQ-WFM-6) */}
-          <Card>
-            <CardHeader
-              icon={Route}
-              title="IDS Document Hand-Offs (Secretary ↔ Chairperson ↔ IDS Principal)"
-              description="Unified visibility of Integrated Developmental School (IDS) documents and their hand-offs between the College Secretary, Department Chairpersons, and the IDS Principal (REQ-WFM-6)."
-            />
-            {idsDocs.length === 0 ? (
-              <div className="py-8 text-center text-sm text-ink-500">
-                No active IDS documents in the workflow.
+          <Card className="overflow-hidden">
+            {/* Tab Header to eliminate vertical clutter */}
+            <div className="border-b border-ink-100 bg-ink-50/50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-ink-500">
+                  Secretary Workstation Queues
+                </span>
+                <Segmented<'toCheck' | 'ready' | 'ids'>
+                  label="Workstation Queue Tabs"
+                  value={activeQueueTab}
+                  onChange={setActiveQueueTab}
+                  options={[
+                    {
+                      value: 'toCheck',
+                      label: 'Verify Content',
+                      count: queues.toCheck.length,
+                    },
+                    {
+                      value: 'ready',
+                      label: 'Ready for Release',
+                      count: queues.ready.length,
+                    },
+                    {
+                      value: 'ids',
+                      label: 'IDS Hand-Offs',
+                      count: idsDocs.length,
+                    },
+                  ]}
+                />
               </div>
-            ) : (
-              <ul className="divide-y divide-ink-100">
-                {idsDocs.map((d) => {
-                  const type = typeOf(db, d)
-                  const req = userById(db, d.requesterId)
-                  const handoffs = d.history.filter((h) =>
-                    ['submitted', 'checked_complete', 'routed', 'endorsed', 'approved', 'sent_external'].includes(h.action),
-                  )
-                  return (
-                    <li key={d.id} className="p-4 hover:bg-brand-50/40">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <Link
-                            to={`/app/documents/${d.id}`}
-                            className="font-semibold text-ink-900 hover:text-brand-700 hover:underline"
-                          >
-                            {d.title}
-                          </Link>
-                          <p className="mt-0.5 text-xs text-ink-500">
-                            {type?.name} · <span className="font-mono">{controlNumber(d)}</span> · {req?.name}
-                          </p>
-                        </div>
-                        <Badge tone="ids">
-                          Now at: {locationLabelForStaff(d, db)} ({plural(daysWaiting(d), 'day')})
-                        </Badge>
-                      </div>
+            </div>
 
-                      {/* Hand-off chain pill trail */}
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
-                        {handoffs.map((h, idx) => (
-                          <span key={h.id} className="inline-flex items-center gap-1.5">
-                            {idx > 0 && <ArrowRight className="size-3 text-ink-400" aria-hidden />}
-                            <span
-                              className="rounded-md bg-ink-50 px-2 py-0.5 font-medium text-ink-700 ring-1 ring-inset ring-ink-200"
-                              title={formatDateTime(h.at)}
-                            >
-                              {h.office} ({h.action.replace('_', ' ')})
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </Card>
-
-          {/* Queue 3: Pending in External Offices */}
-          <Card>
-            <CardHeader
-              title="Documents in External Offices"
-              description="Transfers to HRMO, Registrar's Office, and Budget & Accounting needing follow-up."
-              action={
-                <Link to="/app/external-offices" className="text-xs font-semibold text-brand-700 hover:underline">
-                  View all external ({queues.external.length})
-                </Link>
-              }
-            />
-            <DocumentList
-              db={db}
-              docs={queues.external.slice(0, 5)}
-              audience="staff"
-              showRequester
-              showWaiting
-              empty={
-                <div className="py-8 text-center text-sm text-ink-500">
-                  No documents are currently with external offices.
+            {/* TAB 1: Awaiting Content Verification */}
+            {activeQueueTab === 'toCheck' && (
+              <div>
+                <div className="border-b border-ink-100 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Submissions Awaiting Content Verification
+                      </h3>
+                      <p className="text-xs text-ink-500">
+                        Automatic completeness check passed. Inspect attached document contents before logging and routing (oldest first).
+                      </p>
+                    </div>
+                    <Link
+                      to="/app/requirements-check"
+                      className="text-xs font-semibold text-brand-700 hover:underline"
+                    >
+                      Open Full Queue ({queues.toCheck.length})
+                    </Link>
+                  </div>
                 </div>
-              }
-            />
+
+                <DocumentList
+                  db={db}
+                  docs={queues.toCheck.slice(0, 6)}
+                  audience="staff"
+                  showRequester
+                  showWaiting
+                  empty={
+                    <div className="py-12 text-center text-sm text-ink-500">
+                      ✅ All submitted documents have been checked and routed.
+                    </div>
+                  }
+                />
+              </div>
+            )}
+
+            {/* TAB 2: Ready for Collection & Release */}
+            {activeQueueTab === 'ready' && (
+              <div>
+                <div className="border-b border-ink-100 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Approved Documents Ready for Release
+                      </h3>
+                      <p className="text-xs text-ink-500">
+                        Documents with final Dean approval awaiting requester collection at the counter.
+                      </p>
+                    </div>
+                    <Link
+                      to="/app/release"
+                      className="text-xs font-semibold text-brand-700 hover:underline"
+                    >
+                      Open Release Desk ({queues.ready.length})
+                    </Link>
+                  </div>
+                </div>
+
+                <DocumentList
+                  db={db}
+                  docs={queues.ready.slice(0, 6)}
+                  audience="staff"
+                  showRequester
+                  showWaiting
+                  empty={
+                    <div className="py-12 text-center text-sm text-ink-500">
+                      No documents are currently waiting for release.
+                    </div>
+                  }
+                />
+              </div>
+            )}
+
+            {/* TAB 3: IDS Hand-offs Unified Trail */}
+            {activeQueueTab === 'ids' && (
+              <div>
+                <div className="border-b border-ink-100 p-4">
+                  <div className="flex items-center gap-2">
+                    <Route className="size-4 text-brand-700" />
+                    <div>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        IDS Document Hand-Offs (Secretary ↔ Chairperson ↔ IDS Principal)
+                      </h3>
+                      <p className="text-xs text-ink-500">
+                        Unified tracking of Integrated Developmental School documents and reviewer endorsements.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {idsDocs.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-ink-500">
+                    No active IDS documents in routing.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-ink-100">
+                    {idsDocs.map((d) => {
+                      const type = typeOf(db, d)
+                      const req = userById(db, d.requesterId)
+                      const handoffs = d.history.filter((h) =>
+                        [
+                          'submitted',
+                          'checked_complete',
+                          'routed',
+                          'endorsed',
+                          'approved',
+                        ].includes(h.action),
+                      )
+                      return (
+                        <li key={d.id} className="p-4 hover:bg-brand-50/40">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <Link
+                                to={`/app/documents/${d.id}`}
+                                className="font-semibold text-ink-900 hover:text-brand-700 hover:underline"
+                              >
+                                {d.title}
+                              </Link>
+                              <p className="mt-0.5 text-xs text-ink-500">
+                                {type?.name} · <span className="font-mono">{controlNumber(d)}</span> · {req?.name}
+                              </p>
+                            </div>
+                            <Badge tone="ids">
+                              Now at: {locationLabelForStaff(d, db)} ({plural(daysWaiting(d), 'day')})
+                            </Badge>
+                          </div>
+
+                          {/* Hand-off chain pill trail */}
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
+                            {handoffs.map((h, idx) => (
+                              <span key={h.id} className="inline-flex items-center gap-1.5">
+                                {idx > 0 && <ArrowRight className="size-3 text-ink-400" aria-hidden />}
+                                <span
+                                  className="rounded-md bg-ink-50 px-2 py-0.5 text-2xs font-medium text-ink-700 ring-1 ring-inset ring-ink-200"
+                                  title={formatDateTime(h.at)}
+                                >
+                                  {h.office} ({h.action.replace('_', ' ')})
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
           </Card>
         </div>
 
-        {/* Right Col: Office Distribution & Follow-ups */}
+        {/* Right Col: Office Distribution & Shortcuts */}
         <div className="space-y-6">
           <Card>
             <CardHeader
@@ -261,59 +326,59 @@ export function OverviewPage() {
 
           <Card>
             <CardHeader
-              title="Quick Shortcuts"
-              description="Fast navigation for regular tasks"
+              title="Secretary Shortcuts"
+              description="Quick administrative navigation"
             />
-            <div className="p-6">
-              <ul className="space-y-2">
+            <div className="p-4 sm:p-5">
+              <ul className="space-y-1.5">
                 <li>
                   <Link
                     to="/app/documents"
-                    className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
+                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
                   >
-                    <span>Encode Walk-In / Export Records</span>
-                    <ExternalLink className="size-4 text-ink-400" />
+                    <span>Central Repository (CESS / IDS)</span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
                   </Link>
                 </li>
                 <li>
                   <Link
                     to="/app/notices"
-                    className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
+                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
                   >
-                    <span>Post Notice or Minutes</span>
-                    <ExternalLink className="size-4 text-ink-400" />
+                    <span>Post College Notice or Minutes</span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
                   </Link>
                 </li>
                 <li>
                   <Link
                     to="/app/faculty-directory"
-                    className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
+                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
                   >
-                    <span>Manage Faculty, Subjects & Syllabi</span>
-                  <ExternalLink className="size-4 text-ink-400" />
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/app/email-log"
-                  className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
-                >
-                  <span>View Notification Log</span>
-                  <ExternalLink className="size-4 text-ink-400" />
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/app/settings"
-                  className="flex items-center justify-between rounded-lg p-2.5 text-sm font-semibold text-ink-800 transition-colors hover:bg-brand-50"
-                >
-                  <span>Routes, Templates & System Settings</span>
-                  <ExternalLink className="size-4 text-ink-400" />
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </Card>
+                    <span>Faculty Directory & Syllabi</span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/app/email-log"
+                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
+                  >
+                    <span>Notification & Email Log</span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/app/settings"
+                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
+                  >
+                    <span>System Settings & Routes</span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </Card>
         </div>
       </div>
     </div>

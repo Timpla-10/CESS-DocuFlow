@@ -7,13 +7,36 @@ import { ROLE_LABEL } from '../content/language'
 import { myNotifications, unreadCount } from '../data/selectors'
 import { api, useDb } from '../data/store'
 import { timeAgo } from '../lib/time'
-import { Logo } from './Logo'
+import { Logo, LogoMark } from './Logo'
 import { Avatar, cn } from './ui'
 
 export function AppShell() {
   const [drawer, setDrawer] = useState(false)
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('cess_sidebar_locked')
+      return saved !== null ? saved === 'true' : true
+    } catch {
+      return true
+    }
+  })
+  const [isHovered, setIsHovered] = useState(false)
   const location = useLocation()
   useEffect(() => setDrawer(false), [location.pathname])
+
+  const toggleLock = () => {
+    setIsLocked((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('cess_sidebar_locked', String(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
+
+  const isExpanded = isLocked || isHovered
 
   return (
     <div className="min-h-dvh bg-canvas">
@@ -21,9 +44,25 @@ export function AppShell() {
         Skip to main content
       </a>
 
-      {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[264px] lg:block">
-        <Sidebar />
+      {/* Desktop sidebar: mini-rail (72px) when unlocked, full (264px) when locked or hovered */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 hidden transition-all duration-300 ease-in-out lg:block',
+          isExpanded ? 'w-[264px]' : 'w-[72px]',
+          !isLocked && isHovered ? 'z-40 shadow-2xl ring-1 ring-black/15' : 'z-30'
+        )}
+        onMouseEnter={() => {
+          if (!isLocked) setIsHovered(true)
+        }}
+        onMouseLeave={() => {
+          setIsHovered(false)
+        }}
+      >
+        <Sidebar
+          isExpanded={isExpanded}
+          isLocked={isLocked}
+          onToggleLock={toggleLock}
+        />
       </aside>
 
       {/* Mobile drawer */}
@@ -31,13 +70,26 @@ export function AppShell() {
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 animate-fade-in bg-brand-950/50 backdrop-blur-sm" onClick={() => setDrawer(false)} aria-hidden />
           <div className="relative h-full w-[280px] max-w-[85vw] animate-slide-in">
-            <Sidebar onClose={() => setDrawer(false)} />
+            <Sidebar
+              onClose={() => setDrawer(false)}
+              isExpanded={true}
+              isLocked={true}
+            />
           </div>
         </div>
       )}
 
-      <div className="lg:pl-[264px]">
-        <TopBar onMenu={() => setDrawer(true)} />
+      <div
+        className={cn(
+          'transition-[padding] duration-300 ease-in-out',
+          isLocked ? 'lg:pl-[264px]' : 'lg:pl-[72px]'
+        )}
+      >
+        <TopBar
+          onMenu={() => setDrawer(true)}
+          isLocked={isLocked}
+          onToggleLock={toggleLock}
+        />
         <main id="main" className="mx-auto w-full max-w-[1440px] 2xl:max-w-[1560px] px-4 pb-20 pt-6 sm:px-6 lg:px-8 lg:pt-8">
           <Outlet />
         </main>
@@ -46,121 +98,246 @@ export function AppShell() {
   )
 }
 
-function Sidebar({ onClose }: { onClose?: () => void }) {
+function Sidebar({
+  onClose,
+  isExpanded = true,
+  isLocked = true,
+  onToggleLock,
+}: {
+  onClose?: () => void
+  isExpanded?: boolean
+  isLocked?: boolean
+  onToggleLock?: () => void
+}) {
   const user = useUser()
   const db = useDb()
   const sections = navFor(user.role)
 
   return (
     <nav aria-label="Main navigation" className="surface-brand-gradient relative flex h-full flex-col overflow-hidden text-white">
-      {/* Living Aurora ambient moving glow orbs (Pink IDS + Lavender DSEE) */}
+      {/* Living Aurora ambient moving glow orbs in official CESS department colors (IDS Pink, DSEE Lavender, DSSH Purple) */}
       <div className="pointer-events-none absolute -bottom-16 -right-16 size-80 rounded-full bg-ids-400/50 blur-2xl animate-aurora-pink" aria-hidden />
       <div className="pointer-events-none absolute -top-16 -left-16 size-72 rounded-full bg-dsee-300/45 blur-2xl animate-aurora-lavender" aria-hidden />
-      <div className="pointer-events-none absolute top-1/2 -right-12 size-64 -translate-y-1/2 rounded-full bg-brand-400/30 blur-2xl animate-aurora-violet" aria-hidden />
+      <div className="pointer-events-none absolute top-1/2 -right-12 size-64 -translate-y-1/2 rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" aria-hidden />
 
       <div className="relative z-10 flex h-full min-h-0 flex-col">
-        <div className="flex h-16 items-center justify-between px-5">
-        <Link to="/app" aria-label="CESS DocuFlow — go to your home page">
-          <Logo tone="light" />
-        </Link>
-        {onClose && (
-          <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-lg text-brand-100 hover:bg-white/10" aria-label="Close menu">
-            <X className="size-5" aria-hidden />
-          </button>
-        )}
-      </div>
-
-      <div className="mx-4 mb-2 mt-2 rounded-xl bg-white/[0.09] p-3 ring-1 ring-inset ring-white/15">
-        <div className="flex items-center justify-between gap-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-200/90">Signed in as</p>
-          {user.origin === 'IDS' || user.department?.includes('IDS') || user.department?.includes('Integrated Development') ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-ids-400/25 px-2 py-0.5 text-[10px] font-bold text-ids-200 ring-1 ring-ids-400/40">
-              <span className="size-1.5 rounded-full bg-ids-400" />
-              IDS
-            </span>
-          ) : user.department?.includes('DSEE') || user.department?.includes('Education') ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-dsee-300/25 px-2 py-0.5 text-[10px] font-bold text-dsee-200 ring-1 ring-dsee-300/40">
-              <span className="size-1.5 rounded-full bg-dsee-300" />
-              DSEE
-            </span>
-          ) : user.department?.includes('DSSH') || user.department?.includes('Social Sciences') ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-brand-400/25 px-2 py-0.5 text-[10px] font-bold text-brand-200 ring-1 ring-brand-300/40">
-              <span className="size-1.5 rounded-full bg-brand-300" />
-              DSSH
-            </span>
+        {/* Header */}
+        <div className={cn('flex h-16 items-center', isExpanded ? 'justify-between px-4' : 'justify-center')}>
+          {isExpanded ? (
+            <>
+              <Link to="/app" aria-label="CESS DocuFlow — go to your home page">
+                <Logo tone="light" />
+              </Link>
+              <div className="flex items-center gap-1">
+                {onToggleLock && (
+                  <button
+                    type="button"
+                    onClick={onToggleLock}
+                    className={cn(
+                      'grid size-8 place-items-center rounded-lg transition-colors',
+                      isLocked ? 'text-brand-200 hover:bg-white/10 hover:text-white' : 'bg-white/20 text-white shadow-sm'
+                    )}
+                    title={isLocked ? 'Click to unlock sidebar (auto-collapse to rail)' : 'Click to lock sidebar open'}
+                    aria-label={isLocked ? 'Unlock sidebar' : 'Lock sidebar open'}
+                  >
+                    <Menu className="size-4" aria-hidden />
+                  </button>
+                )}
+                {onClose && (
+                  <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-lg text-brand-100 hover:bg-white/10" aria-label="Close menu">
+                    <X className="size-5" aria-hidden />
+                  </button>
+                )}
+              </div>
+            </>
           ) : (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-200/90">
-              CESS
-            </span>
+            <Link to="/app" aria-label="CESS DocuFlow" title="CESS DocuFlow">
+              <LogoMark className="size-8" />
+            </Link>
           )}
         </div>
-        <p className="mt-0.5 truncate text-sm font-bold">{ROLE_LABEL[user.role]}</p>
-        <p className="truncate text-xs text-brand-200/80">{user.department}</p>
-      </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
-        {sections.map((s, i) => (
-          <div key={i}>
-            {s.heading && <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-300">{s.heading}</p>}
-            <ul className="space-y-0.5">
-              {s.items.map((it) => {
-                const count = it.count?.(db, user) ?? 0
-                return (
-                  <li key={it.to}>
-                    <NavLink
-                      to={it.to}
-                      end={it.to === '/app/documents'}
-                      className={({ isActive }) =>
-                        cn(
-                          'group relative flex items-center gap-3 rounded-[7px] px-3 py-2 text-sm font-semibold transition-all',
-                          isActive
-                            ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
-                            : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
-                        )
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <it.icon className={cn('size-[18px] shrink-0', isActive ? 'text-brand-700' : 'text-brand-300 group-hover:text-white')} />
-                          <span className="flex-1 truncate">{it.label}</span>
-                          {count > 0 && (
-                            <span
-                              className={cn(
-                                'min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums leading-5',
-                                it.countTone === 'danger' ? 'bg-danger-500 text-white' : it.countTone === 'warning' ? 'bg-warning-500 text-brand-950' : isActive ? 'bg-brand-600 text-white' : 'bg-white/15 text-white',
-                              )}
-                              aria-label={`${count} waiting`}
-                            >
-                              {count}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </NavLink>
-                  </li>
-                )
-              })}
-            </ul>
+        {/* User identification badge */}
+        {isExpanded ? (
+          <div className="mx-4 mb-2 mt-2 rounded-xl bg-white/[0.09] p-3 ring-1 ring-inset ring-white/15">
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-200/90">Signed in as</p>
+              {user.origin === 'IDS' || user.department?.includes('IDS') || user.department?.includes('Integrated Development') ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-ids-400/25 px-2 py-0.5 text-[10px] font-bold text-ids-200 ring-1 ring-ids-400/40">
+                  <span className="size-1.5 rounded-full bg-ids-400" />
+                  IDS
+                </span>
+              ) : user.department?.includes('DSEE') || user.department?.includes('Education') ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-dsee-300/25 px-2 py-0.5 text-[10px] font-bold text-dsee-200 ring-1 ring-dsee-300/40">
+                  <span className="size-1.5 rounded-full bg-dsee-300" />
+                  DSEE
+                </span>
+              ) : user.department?.includes('DSSH') || user.department?.includes('Social Sciences') ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-400/25 px-2 py-0.5 text-[10px] font-bold text-brand-200 ring-1 ring-brand-300/40">
+                  <span className="size-1.5 rounded-full bg-brand-300" />
+                  DSSH
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-200/90">
+                  CESS
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 truncate text-sm font-bold">{ROLE_LABEL[user.role]}</p>
+            <p className="truncate text-xs text-brand-200/80">{user.department}</p>
           </div>
-        ))}
-      </div>
+        ) : (
+          <div
+            className="mx-2 mb-2 mt-2 flex flex-col items-center justify-center rounded-xl bg-white/[0.09] py-2 px-1 ring-1 ring-inset ring-white/15"
+            title={`Signed in as ${user.name} (${ROLE_LABEL[user.role]})`}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-200">
+              {user.origin || (user.department?.includes('IDS') ? 'IDS' : 'CESS')}
+            </span>
+            <span className="mt-1 size-1.5 rounded-full bg-ids-400" />
+          </div>
+        )}
 
-      <div className="border-t border-white/10 px-5 py-4 text-[11px] leading-relaxed text-brand-200/80">
-        College of Education and Social Sciences
-        <br />
-        Mindanao State University at Naawan
+        {/* Navigation items */}
+        <div className={cn('flex-1 space-y-4 overflow-y-auto py-3', isExpanded ? 'px-3' : 'px-2')}>
+          {sections.map((s, i) => (
+            <div key={i}>
+              {s.heading && isExpanded && (
+                <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-300">
+                  {s.heading}
+                </p>
+              )}
+              <ul className="space-y-1">
+                {s.items.map((it) => {
+                  const count = it.count?.(db, user) ?? 0
+                  return (
+                    <li key={it.to}>
+                      <NavLink
+                        to={it.to}
+                        end={it.to === '/app/documents'}
+                        title={it.label}
+                        className={({ isActive }) =>
+                          cn(
+                            'group relative flex items-center rounded-xl text-sm font-semibold transition-all',
+                            isExpanded ? 'gap-3 px-3 py-2' : 'justify-center p-2.5',
+                            isActive
+                              ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
+                              : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
+                          )
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <it.icon
+                              className={cn(
+                                'size-[18px] shrink-0',
+                                isActive ? 'text-brand-700' : 'text-brand-300 group-hover:text-white',
+                              )}
+                            />
+                            {isExpanded && <span className="flex-1 truncate">{it.label}</span>}
+                            {count > 0 &&
+                              (isExpanded ? (
+                                <span
+                                  className={cn(
+                                    'min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums leading-5',
+                                    it.countTone === 'danger'
+                                      ? 'bg-danger-500 text-white'
+                                      : it.countTone === 'warning'
+                                      ? 'bg-warning-500 text-brand-950'
+                                      : isActive
+                                      ? 'bg-brand-600 text-white'
+                                      : 'bg-white/15 text-white',
+                                  )}
+                                  aria-label={`${count} waiting`}
+                                >
+                                  {count}
+                                </span>
+                              ) : (
+                                <span
+                                  className={cn(
+                                    'absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full px-1 text-[9px] font-bold ring-2 ring-brand-900',
+                                    it.countTone === 'danger'
+                                      ? 'bg-danger-500 text-white'
+                                      : it.countTone === 'warning'
+                                      ? 'bg-warning-500 text-brand-950'
+                                      : isActive
+                                      ? 'bg-brand-600 text-white'
+                                      : 'bg-ids-400 text-brand-950',
+                                  )}
+                                  aria-label={`${count} waiting`}
+                                >
+                                  {count}
+                                </span>
+                              ))}
+                          </>
+                        )}
+                      </NavLink>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        {isExpanded ? (
+          <div className="border-t border-white/10 px-5 py-4 text-[11px] leading-relaxed text-brand-200/80">
+            College of Education and Social Sciences
+            <br />
+            Mindanao State University at Naawan
+          </div>
+        ) : (
+          <div className="border-t border-white/10 py-3 text-center text-[10px] font-bold text-brand-300">
+            MSU-N
+          </div>
+        )}
       </div>
-    </div>
-  </nav>
+    </nav>
   )
 }
 
-function TopBar({ onMenu }: { onMenu: () => void }) {
+function TopBar({
+  onMenu,
+  isLocked,
+  onToggleLock,
+}: {
+  onMenu: () => void
+  isLocked: boolean
+  onToggleLock: () => void
+}) {
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-ink-100 bg-white/80 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
-      <button type="button" onClick={onMenu} className="grid size-10 place-items-center rounded-lg text-ink-700 hover:bg-brand-50 lg:hidden" aria-label="Open menu">
+      {/* Mobile hamburger */}
+      <button
+        type="button"
+        onClick={onMenu}
+        className="grid size-10 place-items-center rounded-lg text-ink-700 hover:bg-brand-50 lg:hidden"
+        aria-label="Open menu"
+      >
         <Menu className="size-5" aria-hidden />
       </button>
+
+      {/* Desktop hamburger toggle */}
+      <button
+        type="button"
+        onClick={onToggleLock}
+        className={cn(
+          'hidden lg:grid size-10 place-items-center rounded-lg transition-colors',
+          isLocked
+            ? 'text-ink-600 hover:bg-brand-50 hover:text-brand-900'
+            : 'bg-brand-100 text-brand-800 hover:bg-brand-200'
+        )}
+        title={
+          isLocked
+            ? 'Click hamburger to collapse sidebar to icons (hover to peek)'
+            : 'Click hamburger to lock sidebar open'
+        }
+        aria-label={isLocked ? 'Collapse sidebar to icons' : 'Lock sidebar open'}
+      >
+        <Menu className="size-5" aria-hidden />
+      </button>
+
       <div className="lg:hidden">
         <Logo subtitle={false} />
       </div>

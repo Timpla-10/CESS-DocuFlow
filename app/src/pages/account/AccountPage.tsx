@@ -103,6 +103,11 @@ export function AccountPage() {
             <p className="text-sm text-ink-600">{user.email}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge tone="brand">{ROLE_LABEL[user.role]}</Badge>
+              {user.role === 'faculty' && (
+                <Badge tone={user.origin === 'IDS' ? 'warning' : 'brand'}>
+                  {user.origin === 'IDS' ? 'IDS Faculty' : 'CESS Faculty'}
+                </Badge>
+              )}
               <DepartmentBadge department={user.department} origin={user.origin} />
             </div>
           </div>
@@ -113,6 +118,24 @@ export function AccountPage() {
             items={[
               { label: 'Full Name', value: user.name },
               { label: 'Role & Responsibilities', value: ROLE_LABEL[user.role] },
+              ...(user.role === 'faculty'
+                ? [
+                    {
+                      label: 'Faculty Affiliation / College Unit',
+                      value:
+                        user.origin === 'IDS'
+                          ? 'IDS Faculty — Integrated Developmental School'
+                          : 'CESS Faculty — College of Education and Social Sciences',
+                    },
+                    {
+                      label: 'Designated Document Routing Flow',
+                      value:
+                        user.origin === 'IDS'
+                          ? 'Secretary Check → Chairperson → IDS Principal (Review) → Dean → Release'
+                          : 'Secretary Check → Chairperson → Dean → Release',
+                    },
+                  ]
+                : []),
               { label: 'Department / Academic Program', value: user.department },
               { label: 'Official Position', value: user.position },
               { label: 'University Email (REQ-AUTH-9)', value: user.email },

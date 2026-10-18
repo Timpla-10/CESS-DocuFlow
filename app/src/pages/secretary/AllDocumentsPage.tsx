@@ -1,30 +1,42 @@
 import {
-  CheckCircle2,
+  ArrowLeft,
+  ArrowRight,
+  Clock,
   Download,
   FilePlus2,
   Files,
+  Folder,
+  FolderOpen,
   Send,
   UploadCloud,
-  X,
 } from 'lucide-react'
 import { useState, type ChangeEvent, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import {
+  DelayedBadge,
   DocumentList,
   FilterBar,
+  StatusBadge,
+  WaitingTime,
   exportDocumentsCsv,
   sessionFiles,
   useDocumentFilters,
 } from '../../components/documents'
 import { Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Badge, Button, Card, EmptyState, PageHeader } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, PageHeader, Segmented, cn } from '../../components/ui'
+import {
+  OFFICE_LABEL,
+  controlNumber,
+  revisionLabel,
+} from '../../content/language'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
-import { visibleDocuments } from '../../data/selectors'
+import { isDelayed, userById, visibleDocuments } from '../../data/selectors'
 import { api, useDb } from '../../data/store'
-import type { Requirement } from '../../data/types'
+import type { DocumentType, Requirement } from '../../data/types'
+import { formatDate } from '../../lib/time'
 
 export function AllDocumentsPage() {
   const user = useUser()
@@ -32,29 +44,57 @@ export function AllDocumentsPage() {
   const toast = useToast()
   const navigate = useNavigate()
 
-  const docs = visibleDocuments(db, user).filter((d) => !d.archived)
-  // REQ-ORD-1: Oldest request first by default
-  const { filters, setFilters, result, active, clear } = useDocumentFilters(db, docs, 'oldest')
+  // Base list of unarchived documents
+  const allActiveDocs = visibleDocuments(db, user).filter((d) => !d.archived)
+
+  // Unit split: CESS vs IDS (REQ-PM-FEEDBACK-4)
+  const [unitTab, setUnitTab] = useState<'CESS' | 'IDS'>('CESS')
+  const unitDocs = allActiveDocs.filter((d) => (d.origin ?? 'CESS') === unitTab)
+
+  // Secondary view: Folders vs Table
+  const [viewMode, setViewMode] = useState<'folders' | 'table'>('folders')
+  const [selectedFolderTypeId, setSelectedFolderTypeId] = useState<string | null>(null)
+
+  // FilterBar state for Table View
+  const { filters, setFilters, result, active, clear } = useDocumentFilters(db, unitDocs, 'oldest')
+
+  // Available document types for this unit
+  const unitTypes = db.documentTypes.filter((t) => {
+    if (unitTab === 'IDS') {
+      return (t.idsRoute && t.idsRoute.length > 0) || t.audience === 'faculty'
+    }
+    return t.audience === 'student' || t.audience === 'faculty'
+  })
+
+  const selectedFolderType: DocumentType | undefined = unitTypes.find(
+    (t) => t.id === selectedFolderTypeId,
+  )
 
   // Walk-in encoding dialog state (REQ-REC-8)
-  const requesters = db.users.filter((u) => (u.role === 'student' || u.role === 'faculty') && u.active)
+  const requesters = db.users.filter(
+    (u) => (u.role === 'student' || u.role === 'faculty') && u.active,
+  )
   const [isWalkInOpen, setIsWalkInOpen] = useState(false)
   const [requesterId, setRequesterId] = useState(requesters[0]?.id ?? '')
   const selectedRequester = requesters.find((u) => u.id === requesterId)
-  const availableTypes = db.documentTypes.filter((t) => !selectedRequester || t.audience === selectedRequester.role)
+  const availableTypes = db.documentTypes.filter(
+    (t) => !selectedRequester || t.audience === selectedRequester.role,
+  )
   const [typeId, setTypeId] = useState(availableTypes[0]?.id ?? '')
   const selectedType = availableTypes.find((t) => t.id === typeId) ?? availableTypes[0]
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [attachedFiles, setAttachedFiles] = useState<{ requirementId?: string; name: string; sizeKb: number; fileObj?: File }[]>([])
+  const [attachedFiles, setAttachedFiles] = useState<
+    { requirementId?: string; name: string; sizeKb: number; fileObj?: File }[]
+  >([])
   const [walkInBusy, setWalkInBusy] = useState(false)
 
-  const handleOpenWalkIn = () => {
+  const handleOpenWalkIn = (preselectedTypeId?: string) => {
     const firstReq = requesters[0]
     setRequesterId(firstReq?.id ?? '')
     const firstTypes = db.documentTypes.filter((t) => !firstReq || t.audience === firstReq.role)
-    setTypeId(firstTypes[0]?.id ?? '')
+    setTypeId(preselectedTypeId ?? firstTypes[0]?.id ?? '')
     setTitle('')
     setDescription('')
     setAttachedFiles([])
@@ -100,32 +140,25 @@ export function AllDocumentsPage() {
       return
     }
 
-    // For walk-in encoding, if the Secretary didn't upload a physical file for a required item,
-    // allow auto-generating a placeholder scan record or using the uploaded files.
-    const filesPayload: NewFile[] = [...attachedFiles]
-    for (const r of selectedType.requirements) {
-      if (r.required && !filesPayload.some((f) => f.requirementId === r.id)) {
-        filesPayload.push({
-          requirementId: r.id,
-          name: `${r.label.replace(/[^a-zA-Z0-9]+/g, '_')}_WalkIn_Scan.pdf`,
-          sizeKb: 380,
-        })
-      }
-    }
-
     setWalkInBusy(true)
     try {
+      const payloadFiles: NewFile[] = attachedFiles.map((f) => ({
+        requirementId: f.requirementId,
+        name: f.name,
+        sizeKb: f.sizeKb,
+      }))
+
       const doc = await api.encodeWalkInRequest(user, {
         requesterId: selectedRequester.id,
         typeId: selectedType.id,
         title: title.trim(),
         description: description.trim(),
-        files: filesPayload,
+        files: payloadFiles,
       })
-      attachedFiles.forEach((f) => {
-        const match = doc.attachments.find((a) => a.name === f.name)
-        if (f.fileObj && match) {
-          sessionFiles.set(match.id, URL.createObjectURL(f.fileObj))
+
+      attachedFiles.forEach((f, idx) => {
+        if (f.fileObj && doc.attachments[idx]) {
+          sessionFiles.set(doc.attachments[idx].id, URL.createObjectURL(f.fileObj))
         }
       })
       toast.success(
@@ -142,59 +175,395 @@ export function AllDocumentsPage() {
     }
   }
 
+  const cessCount = allActiveDocs.filter((d) => (d.origin ?? 'CESS') === 'CESS').length
+  const idsCount = allActiveDocs.filter((d) => d.origin === 'IDS').length
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Central Repository"
-        title="All Active Documents"
-        description="A complete master registry of all active document requests across the College of Education and Social Sciences and the Integrated Development School, ordered oldest first."
+        title="Central Document Repository"
+        description="Master registry for CESS and IDS documents. Browse folders or search records."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
               icon={Download}
               onClick={() => {
-                exportDocumentsCsv(db, result, 'CESS_DocuFlow_Active_Records')
-                toast.info('Records Exported', `Exported ${result.length} document record(s) to CSV.`)
+                exportDocumentsCsv(db, unitDocs, `${unitTab}_DocuFlow_Records`)
+                toast.info('Records Exported', `Exported ${unitDocs.length} ${unitTab} record(s) to CSV.`)
               }}
             >
-              Export Records ({result.length})
+              Export {unitTab} CSV ({unitDocs.length})
             </Button>
-            <Button onClick={handleOpenWalkIn} icon={FilePlus2}>
+            <Button onClick={() => handleOpenWalkIn()} icon={FilePlus2}>
               Encode Walk-In Document
             </Button>
           </div>
         }
       />
 
-      <Card>
-        <FilterBar
-          db={db}
-          filters={filters}
-          setFilters={setFilters}
-          showOrigin
-          showOffice
-          audience="all"
-          searchLabel="Search by title, control number, or requester…"
+      {/* PRIMARY UNIT TABS: CESS vs. IDS (REQ-PM-FEEDBACK-4) */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-ink-100 pb-4">
+        <Segmented<'CESS' | 'IDS'>
+          label="Select Unit"
+          value={unitTab}
+          onChange={(newUnit) => {
+            setUnitTab(newUnit)
+            setSelectedFolderTypeId(null) // reset folder drill-down when switching unit
+          }}
+          options={[
+            {
+              value: 'CESS',
+              label: '🏛️ CESS Documents (College)',
+              count: cessCount,
+            },
+            {
+              value: 'IDS',
+              label: '🏫 IDS Documents',
+              count: idsCount,
+            },
+          ]}
         />
 
-        <DocumentList
-          db={db}
-          docs={result}
-          audience="staff"
-          showRequester
-          showWaiting
-          filteredEmpty={active ? { onClear: clear } : null}
-          empty={
-            <EmptyState
-              icon={Files}
-              title="No active documents in the repository"
+        {!selectedFolderTypeId && (
+          <Segmented<'folders' | 'table'>
+            label="Repository Layout"
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { value: 'folders', label: 'Folders by Document Type', count: unitTypes.length },
+              { value: 'table', label: 'Full Registry Table', count: unitDocs.length },
+            ]}
+          />
+        )}
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* CASE A: A Specific Document Type Folder is Opened                  */}
+      {/* ------------------------------------------------------------------ */}
+      {selectedFolderType ? (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setSelectedFolderTypeId(null)}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-900 transition-colors"
             >
-              Document requests submitted by students or faculty will appear here.
-            </EmptyState>
-          }
-        />
-      </Card>
+              <ArrowLeft className="size-4" aria-hidden /> Back to all {unitTab} folders
+            </button>
+            <div className="flex items-center gap-2 text-xs font-medium text-ink-500">
+              <span
+                className="cursor-pointer hover:underline"
+                onClick={() => setSelectedFolderTypeId(null)}
+              >
+                {unitTab} Folders
+              </span>
+              <span>/</span>
+              <span className="font-bold text-ink-900">{selectedFolderType.name}</span>
+            </div>
+          </div>
+
+          {/* Folder Details Banner */}
+          <Card className="overflow-hidden border-brand-200 bg-gradient-to-b from-brand-50/60 to-white">
+            <div className="p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-2xl">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-11 items-center justify-center rounded-xl bg-brand-600 text-white shadow-xs">
+                      <Folder className="size-6" />
+                    </div>
+                    <div>
+                      <span className="text-2xs font-bold uppercase tracking-wider text-brand-700">
+                        {unitTab} Records Folder
+                      </span>
+                      <h2 className="text-xl font-extrabold text-brand-950 sm:text-2xl">
+                        {selectedFolderType.name}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-sm leading-relaxed text-ink-700">
+                    {selectedFolderType.summary}
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-ink-600">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 font-semibold text-ink-800 ring-1 ring-ink-200">
+                      <Clock className="size-3.5 text-brand-600" />
+                      Turnaround: {selectedFolderType.processingDays[0]}–{selectedFolderType.processingDays[1]} working days
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-700 ring-1 ring-ink-200">
+                      Routing:{' '}
+                      <strong className="font-semibold text-ink-900">
+                        Secretary →{' '}
+                        {(unitTab === 'IDS'
+                          ? (selectedFolderType.idsRoute && selectedFolderType.idsRoute.length > 0
+                              ? selectedFolderType.idsRoute
+                              : ['chairperson', 'ids_principal', 'dean'])
+                          : (selectedFolderType.cessRoute && selectedFolderType.cessRoute.length > 0
+                              ? selectedFolderType.cessRoute
+                              : ['chairperson', 'dean'])
+                        )
+                          .map((r) => OFFICE_LABEL[r as keyof typeof OFFICE_LABEL] || r)
+                          .join(' → ')}{' '}
+                        → Release
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => handleOpenWalkIn(selectedFolderType.id)}
+                  icon={FilePlus2}
+                >
+                  Encode Walk-In for this Type
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Submissions inside this Folder */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-ink-900">
+                  {unitTab} Submissions in this Folder
+                </h3>
+                <p className="text-xs text-ink-500">
+                  All active requests under {selectedFolderType.name} from {unitTab}
+                </p>
+              </div>
+              <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
+                {unitDocs.filter((d) => d.typeId === selectedFolderType.id).length} record(s)
+              </span>
+            </div>
+
+            {(() => {
+              const typeDocs = unitDocs.filter((d) => d.typeId === selectedFolderType.id)
+              if (typeDocs.length === 0) {
+                return (
+                  <Card className="p-8">
+                    <EmptyState
+                      icon={FolderOpen}
+                      title={`No active ${selectedFolderType.name} records for ${unitTab}`}
+                      action={
+                        <Button
+                          onClick={() => handleOpenWalkIn(selectedFolderType.id)}
+                          icon={FilePlus2}
+                        >
+                          Encode Walk-In Document
+                        </Button>
+                      }
+                    >
+                      There are currently no active document requests under this category in the {unitTab} registry.
+                    </EmptyState>
+                  </Card>
+                )
+              }
+
+              return (
+                <div className="grid gap-3 sm:grid-cols-1">
+                  {typeDocs.map((doc) => {
+                    const delayed = isDelayed(db, doc)
+                    const req = userById(db, doc.requesterId)
+                    return (
+                      <Card
+                        key={doc.id}
+                        className={cn(
+                          'p-5 transition-all hover:border-brand-300 hover:shadow-xs',
+                          doc.status === 'submitted' && 'border-warning-300 bg-warning-50/20',
+                        )}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-ink-600">
+                                {controlNumber(doc)}
+                              </span>
+                              <Badge tone="neutral" dot={false}>
+                                {revisionLabel(doc.revision)}
+                              </Badge>
+                              <span className="text-xs font-semibold text-ink-800">
+                                {req?.name} ({req?.department})
+                              </span>
+                              <span className="text-xs text-ink-500">
+                                · Submitted {formatDate(doc.submittedAt)}
+                              </span>
+                              {doc.encodedBySecretary && (
+                                <Badge tone="brand" dot={false}>
+                                  Walk-in Encoded
+                                </Badge>
+                              )}
+                            </div>
+
+                            <Link
+                              to={`/app/documents/${doc.id}`}
+                              className="mt-2 block text-lg font-bold text-ink-950 hover:text-brand-700 hover:underline"
+                            >
+                              {doc.title}
+                            </Link>
+
+                            {doc.description && (
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+                                {doc.description}
+                              </p>
+                            )}
+
+                            {doc.status === 'submitted' && (
+                              <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-warning-50 px-2.5 py-1 text-xs font-semibold text-warning-800 ring-1 ring-inset ring-warning-200">
+                                ⚠️ Needs content check and routing
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col items-end gap-2">
+                            <StatusBadge doc={doc} audience="staff" db={db} />
+                            {delayed && <DelayedBadge audience="staff" />}
+                            <WaitingTime doc={doc} />
+
+                            <Link
+                              to={`/app/documents/${doc.id}`}
+                              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
+                            >
+                              Inspect & Route <ArrowRight className="size-3" />
+                            </Link>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      ) : (
+        /* ------------------------------------------------------------------ */
+        /* CASE B: Main Unit Repository (Folders vs Table View)               */
+        /* ------------------------------------------------------------------ */
+        <div className="space-y-6">
+          {/* VIEW 1: CATEGORY FOLDERS */}
+          {viewMode === 'folders' && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+              {unitTypes.map((t) => {
+                const typeDocs = unitDocs.filter((d) => d.typeId === t.id)
+                const toCheckCount = typeDocs.filter((d) => d.status === 'submitted').length
+                const inReviewCount = typeDocs.filter((d) => d.status === 'with_office').length
+                const readyCount = typeDocs.filter((d) => d.status === 'ready').length
+
+                return (
+                  <Card
+                    key={t.id}
+                    className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
+                  >
+                    <div className="p-5 sm:p-6">
+                      <div className="flex items-start justify-between gap-3">
+                        <div
+                          onClick={() => setSelectedFolderTypeId(t.id)}
+                          className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
+                        >
+                          <Folder className="size-6" />
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {toCheckCount > 0 && (
+                            <Badge tone="warning" dot={false}>
+                              {toCheckCount} To Check
+                            </Badge>
+                          )}
+                          {inReviewCount > 0 && (
+                            <Badge tone="brand" dot={false}>
+                              {inReviewCount} In Review
+                            </Badge>
+                          )}
+                          {readyCount > 0 && (
+                            <Badge tone="success" dot={false}>
+                              {readyCount} Ready
+                            </Badge>
+                          )}
+                          <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
+                            {typeDocs.length === 1 ? '1 record' : `${typeDocs.length} records`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <h3
+                          onClick={() => setSelectedFolderTypeId(t.id)}
+                          className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
+                        >
+                          {t.name}
+                        </h3>
+                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+                          {t.summary}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-2 text-2xs text-ink-500">
+                        <Clock className="size-3.5 text-brand-600" />
+                        <span>
+                          Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days ·{' '}
+                          {unitTab} Origin
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Folder Card Actions */}
+                    <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFolderTypeId(t.id)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                      >
+                        Open Folder <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenWalkIn(t.id)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50"
+                      >
+                        <FilePlus2 className="size-3 text-brand-600" /> Encode Walk-In
+                      </button>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+
+          {/* VIEW 2: FLAT TABLE SEARCH & EXPORT */}
+          {viewMode === 'table' && (
+            <Card>
+              <FilterBar
+                db={db}
+                filters={filters}
+                setFilters={setFilters}
+                showOffice
+                audience="all"
+                searchLabel={`Search ${unitTab} records by title, control number, or requester…`}
+              />
+
+              <DocumentList
+                db={db}
+                docs={result}
+                audience="staff"
+                showRequester
+                showWaiting
+                filteredEmpty={active ? { onClear: clear } : null}
+                empty={
+                  <EmptyState
+                    icon={Files}
+                    title={`No active ${unitTab} documents in the repository`}
+                  >
+                    Document requests submitted for {unitTab} will appear here.
+                  </EmptyState>
+                }
+              />
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Walk-In Document Encoding Dialog (REQ-REC-8) */}
       <Dialog
@@ -206,7 +575,11 @@ export function AllDocumentsPage() {
         busy={walkInBusy}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsWalkInOpen(false)} disabled={walkInBusy}>
+            <Button
+              variant="secondary"
+              onClick={() => setIsWalkInOpen(false)}
+              disabled={walkInBusy}
+            >
               Cancel
             </Button>
             <Button onClick={handleWalkInSubmit} loading={walkInBusy} icon={Send}>
@@ -218,10 +591,14 @@ export function AllDocumentsPage() {
         <form className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Requester (Student or Faculty)" required>
-              <Select value={requesterId} onChange={(e) => handleRequesterChange(e.target.value)}>
+              <Select
+                value={requesterId}
+                onChange={(e) => handleRequesterChange(e.target.value)}
+                className="w-full"
+              >
                 {requesters.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.name} ({u.role === 'student' ? 'Student' : `Faculty · ${u.origin ?? 'CESS'}`})
+                    {u.name} ({u.role === 'student' ? 'Student' : `Faculty - ${u.origin ?? 'CESS'}`})
                   </option>
                 ))}
               </Select>
@@ -229,11 +606,12 @@ export function AllDocumentsPage() {
 
             <Field label="Document Type" required>
               <Select
-                value={selectedType?.id ?? ''}
+                value={typeId}
                 onChange={(e) => {
                   setTypeId(e.target.value)
                   setAttachedFiles([])
                 }}
+                className="w-full"
               >
                 {availableTypes.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -244,75 +622,72 @@ export function AllDocumentsPage() {
             </Field>
           </div>
 
-          <Field label="Document Title or Subject" required>
+          <Field
+            label="Title or Subject"
+            required
+            hint="A clear title identifying the paper packet (e.g. Leave Application — First Semester)."
+          >
             <Input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Walk-in Application for Leave or INC Completion Form"
+              placeholder="Enter specific subject / title"
             />
           </Field>
 
-          <Field label="Short Description / Counter Remarks" optional>
+          <Field label="Description or Purpose" optional>
             <Textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Notes on the physical packet received in person..."
+              placeholder="Notes on the submitted packet..."
             />
           </Field>
 
-          {selectedType && (
-            <div className="space-y-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-ink-500">
-                Required Forms & Scanned Attachments ({selectedType.name})
-              </p>
-              <p className="text-xs text-ink-500">
-                Attach digital scans of the physical forms, or leave blank to auto-log verified counter scans.
-              </p>
-              <div className="space-y-2">
-                {selectedType.requirements.map((req) => {
-                  const attached = attachedFiles.find((f) => f.requirementId === req.id)
-                  return (
-                    <div
-                      key={req.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-ink-900">{req.label}</span>
-                        <Badge tone={req.required ? 'brand' : 'neutral'} dot={false}>
-                          {req.required ? 'Required' : 'Optional'}
-                        </Badge>
-                      </div>
-                      {attached ? (
-                        <span className="inline-flex items-center gap-1.5 font-semibold text-success-700">
-                          <CheckCircle2 className="size-3.5" />
-                          {attached.name}
-                          <button
-                            type="button"
-                            onClick={() => setAttachedFiles((prev) => prev.filter((f) => f.requirementId !== req.id))}
-                            className="text-ink-400 hover:text-danger-600"
-                          >
-                            <X className="size-3.5" />
-                          </button>
-                        </span>
+          {/* Attachments Section */}
+          <div>
+            <label className="block text-xs font-semibold text-ink-800">
+              Attach Physical Document Scans
+            </label>
+            <div className="mt-2 space-y-2">
+              {selectedType?.requirements.map((req) => {
+                const attached = attachedFiles.find((f) => f.requirementId === req.id)
+                return (
+                  <div
+                    key={req.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-ink-200 bg-ink-50/50 p-2.5 text-xs"
+                  >
+                    <div>
+                      <span className="font-semibold text-ink-900">{req.label}</span>
+                      {req.required ? (
+                        <span className="ml-1 text-danger-600">*</span>
                       ) : (
-                        <label className="inline-flex cursor-pointer items-center gap-1 rounded bg-brand-50 px-2.5 py-1 font-semibold text-brand-700 ring-1 ring-brand-200 hover:bg-brand-100">
-                          <UploadCloud className="size-3.5" /> Attach Scan
-                          <input
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            className="sr-only"
-                            onChange={(e) => handleFileChosen(e, req)}
-                          />
-                        </label>
+                        <span className="ml-1 text-ink-400">(optional)</span>
+                      )}
+                      {attached ? (
+                        <p className="mt-0.5 text-2xs text-success-700">
+                          ✓ {attached.name} ({attached.sizeKb} KB)
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-2xs text-ink-500">Not uploaded</p>
                       )}
                     </div>
-                  )
-                })}
-              </div>
+
+                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50">
+                      <UploadCloud className="size-3.5" />
+                      {attached ? 'Replace' : 'Attach Scan'}
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="sr-only"
+                        onChange={(e) => handleFileChosen(e, req)}
+                      />
+                    </label>
+                  </div>
+                )
+              })}
             </div>
-          )}
+          </div>
         </form>
       </Dialog>
     </div>

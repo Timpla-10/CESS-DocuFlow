@@ -4,7 +4,6 @@ import {
   Check,
   CircleDot,
   Clock,
-  Download,
   FileCheck2,
   FileText,
   Hourglass,
@@ -865,18 +864,19 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
                   {url ? (
                     <a
                       href={url}
-                      download={a.name}
-                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
                     >
-                      <Download className="size-3.5" aria-hidden /> Download
+                      <FileText className="size-3.5" aria-hidden /> View Details
                     </a>
                   ) : (
                     <button
                       type="button"
                       onClick={() => handleSampleDownload(a)}
-                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
                     >
-                      <Download className="size-3.5" aria-hidden /> Download
+                      <FileText className="size-3.5" aria-hidden /> View Details
                     </button>
                   )}
                 </li>
