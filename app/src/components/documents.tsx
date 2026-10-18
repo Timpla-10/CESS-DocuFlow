@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowRight,
   Check,
   CircleDot,
@@ -28,7 +29,7 @@ import {
 } from '../content/language'
 import { buildRoute, lastSubmittedAt } from '../data/engine'
 import { byNewest, byOldest, daysWaiting, isDelayed, typeOf, userById } from '../data/selectors'
-import type { Attachment, Database, DocRecord, OfficeId, Status } from '../data/types'
+import type { Attachment, Database, DocRecord, HistoryEntry, OfficeId, RouteStep, Status } from '../data/types'
 import { formatDate, formatDateTime, plural, timeAgo } from '../lib/time'
 import { Input, Select } from './form'
 import { Avatar, Badge, DepartmentBadge, EmptyState, cn } from './ui'
@@ -485,20 +486,101 @@ export function DocumentList({
 }
 
 /* ------------------------------------------------------------------------ */
-/* Route progress                                                            */
+/* Processing history tones & grouping helpers                               */
+/* ------------------------------------------------------------------------ */
+
+const dotTone: Record<Tone, string> = {
+  brand: 'bg-brand-600',
+  neutral: 'bg-ink-400',
+  success: 'bg-success-500',
+  warning: 'bg-warning-500',
+  danger: 'bg-danger-500',
+  ids: 'bg-ids-400',
+  dsee: 'bg-dsee-300',
+  dssh: 'bg-dssh-600',
+}
+
+/**
+ * Maps chronological history milestones to their corresponding reviewing office step.
+ */
+function groupHistoryByStep(steps: RouteStep[], history: HistoryEntry[]): Map<number, HistoryEntry[]> {
+  const map = new Map<number, HistoryEntry[]>()
+  for (let i = 0; i < steps.length; i++) {
+    map.set(i, [])
+  }
+
+  // Count and index occurrences of reviewing offices (e.g. IDS Principal 1st & 2nd review)
+  const officeStepIndices = new Map<string, number[]>()
+  steps.forEach((s, idx) => {
+    if (s.stage === 'review') {
+      const officeName = OFFICE_LABEL[s.office]
+      const list = officeStepIndices.get(officeName) ?? []
+      list.push(idx)
+      officeStepIndices.set(officeName, list)
+    }
+  })
+
+  const officeUsage = new Map<string, number>()
+
+  for (const entry of history) {
+    let targetIndex = -1
+
+    if (
+      entry.action === 'submitted' ||
+      entry.action === 'resubmitted' ||
+      entry.action === 'checked_complete' ||
+      entry.action === 'checked_incomplete'
+    ) {
+      targetIndex = 0
+    } else if (entry.action === 'marked_ready' || entry.action === 'released') {
+      targetIndex = steps.length - 1
+    } else if (entry.action === 'sent_external' || entry.action === 'returned_external') {
+      targetIndex = steps.length - 1
+    } else if (entry.action === 'routed' && entry.office === OFFICE_LABEL.secretary) {
+      targetIndex = 0
+    } else {
+      const matching = officeStepIndices.get(entry.office)
+      if (matching && matching.length > 0) {
+        if (matching.length === 1) {
+          targetIndex = matching[0]
+        } else {
+          const used = officeUsage.get(entry.office) ?? 0
+          targetIndex = matching[Math.min(used, matching.length - 1)]
+          officeUsage.set(entry.office, used + 1)
+        }
+      } else {
+        const idx = steps.findIndex(
+          (s) => s.stage === 'review' && (OFFICE_LABEL[s.office] === entry.office || s.label?.includes(entry.office)),
+        )
+        targetIndex = idx >= 0 ? idx : steps.length - 1
+      }
+    }
+
+    if (targetIndex >= 0 && targetIndex < steps.length) {
+      map.get(targetIndex)!.push(entry)
+    } else {
+      map.get(0)!.push(entry)
+    }
+  }
+
+  return map
+}
+
+/* ------------------------------------------------------------------------ */
+/* Route progress with indented milestones                                  */
 /* ------------------------------------------------------------------------ */
 
 /**
- * Shows the offices the document passes through.
- * Shows IDS hand-offs between College Secretary, Chairperson, IDS Principal, and Dean
- * in the same view (REQ-WFM-6, REQ-ROUTE-2, REQ-ROUTE-3).
+ * Shows the offices the document passes through with all processing milestones
+ * nested and indented directly beneath their corresponding reviewing stage.
  */
 export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
   const type = db ? typeOf(db, doc) : undefined
-  // Before routing (submitted / first-time returned), preview the full origin-based route.
   const steps = doc.route.length > 1 ? doc.route : buildRoute(doc.origin, type)
   const done = doc.status === 'released' || doc.status === 'ready'
-  const items: { key: string; label: string; help: string; state: 'done' | 'current' | 'next' | 'returned' }[] = steps.map((s, i) => {
+  const historyByStep = useMemo(() => groupHistoryByStep(steps, doc.history), [steps, doc.history])
+
+  const items = steps.map((s, i) => {
     const label =
       s.stage === 'check'
         ? 'Content & Completeness Check (College Secretary)'
@@ -515,24 +597,27 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
     if (done) state = 'done'
     if (doc.status === 'returned' && i === doc.routeIndex) state = 'returned'
     if (doc.status === 'with_external' && i === doc.routeIndex) state = 'current'
-    return { key: `${s.office}-${i}`, label, help, state }
+    return { key: `${s.office}-${i}`, label, help, state, milestones: historyByStep.get(i) ?? [] }
   })
 
   return (
-    <ol className="relative grid gap-0" aria-label="Document route">
+    <ol className="relative grid gap-0" aria-label="Document route and history">
       {items.map((it, i) => {
         const last = i === items.length - 1
         return (
-          <li key={it.key} className="relative flex gap-3 pb-5 last:pb-0">
+          <li key={it.key} className="relative flex gap-3.5 pb-6 last:pb-0">
             {!last && (
               <span
-                className={cn('absolute left-[13px] top-7 h-[calc(100%-20px)] w-0.5 rounded-full', it.state === 'done' ? 'bg-brand-500' : 'bg-ink-200')}
+                className={cn(
+                  'absolute left-[13px] top-7 bottom-0 w-0.5 rounded-full',
+                  it.state === 'done' ? 'bg-brand-500' : 'bg-ink-200',
+                )}
                 aria-hidden
               />
             )}
             <span
               className={cn(
-                'relative z-10 grid size-7 shrink-0 place-items-center rounded-full ring-4 ring-white',
+                'relative z-10 grid size-7 shrink-0 place-items-center rounded-full ring-4 ring-white shadow-xs',
                 it.state === 'done' && 'bg-brand-600 text-white',
                 it.state === 'current' && 'bg-white text-brand-700 ring-brand-100 outline-2 outline-brand-600',
                 it.state === 'next' && 'bg-ink-100 text-ink-400',
@@ -547,17 +632,83 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-500 opacity-60" />
                   <span className="relative inline-flex size-2.5 rounded-full bg-brand-600" />
                 </span>
+              ) : it.state === 'returned' ? (
+                <AlertTriangle className="size-3.5" strokeWidth={2.5} />
               ) : (
                 <CircleDot className="size-3.5" />
               )}
             </span>
-            <div className="min-w-0 pt-0.5">
-              <p className={cn('text-sm font-semibold', it.state === 'next' ? 'text-ink-500' : 'text-ink-900')}>
-                {it.label}
-                {it.state === 'current' && <span className="ml-2 text-xs font-bold text-brand-700">Now</span>}
-                {it.state === 'returned' && <span className="ml-2 text-xs font-bold text-danger-700">Returned here</span>}
-              </p>
+
+            <div className="min-w-0 flex-1 pt-0.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className={cn('text-sm font-semibold', it.state === 'next' ? 'text-ink-500' : 'text-ink-900')}>
+                  {it.label}
+                </p>
+                {it.state === 'current' && (
+                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-800">
+                    Now
+                  </span>
+                )}
+                {it.state === 'returned' && (
+                  <span className="rounded-full bg-danger-100 px-2 py-0.5 text-xs font-bold text-danger-700">
+                    Returned here
+                  </span>
+                )}
+                {it.state === 'done' && (
+                  <span className="text-xs font-medium text-success-600">Completed</span>
+                )}
+              </div>
               <p className="mt-0.5 text-xs leading-snug text-ink-500">{it.help}</p>
+
+              {/* Indented Milestones under this route step */}
+              {it.milestones.length > 0 && (
+                <div className="mt-3 ml-2 sm:ml-3 space-y-3 rounded-xl bg-ink-50/70 p-3.5 ring-1 ring-inset ring-ink-100">
+                  {it.milestones.map((m) => (
+                    <div key={m.id} className="relative">
+                      <div className="flex items-start gap-2.5">
+                        <span
+                          className={cn(
+                            'mt-1 size-2 shrink-0 rounded-full ring-2 ring-white',
+                            dotTone[historyTone(m)] ?? 'bg-brand-600',
+                          )}
+                          aria-hidden
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                            <p className="text-xs font-bold text-ink-900 leading-tight">{historyTitle(m)}</p>
+                            <time dateTime={m.at} className="text-[11px] font-medium text-ink-500 whitespace-nowrap" title={formatDateTime(m.at)}>
+                              {formatDateTime(m.at)}
+                            </time>
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-ink-500">
+                            Recorded by <span className="font-semibold text-ink-700">{m.actorName}</span>
+                            {m.office !== 'Requester' ? ` · ${m.office}` : ''}
+                            {m.revision > 0 ? (
+                              <span className="ml-1.5 inline-block rounded bg-ink-200/80 px-1 py-0.2 text-[10px] font-semibold text-ink-700">
+                                {revisionLabel(m.revision)}
+                              </span>
+                            ) : null}
+                          </p>
+                          {m.remarks && (
+                            <blockquote className="mt-1.5 rounded-lg bg-white p-2.5 text-xs leading-relaxed text-ink-700 shadow-xs ring-1 ring-inset ring-ink-200/70">
+                              <span className="font-semibold text-ink-600">Remarks: </span>
+                              {m.remarks}
+                            </blockquote>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Step awaiting review */}
+              {it.milestones.length === 0 && it.state === 'current' && (
+                <div className="mt-2.5 rounded-lg bg-brand-50/80 p-2.5 text-xs text-brand-800 ring-1 ring-inset ring-brand-200/60">
+                  <span className="font-semibold">In Progress: </span>
+                  Document is currently with this office awaiting review and action.
+                </div>
+              )}
             </div>
           </li>
         )
@@ -567,19 +718,8 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
 }
 
 /* ------------------------------------------------------------------------ */
-/* Processing history                                                        */
+/* Processing history (Flat chronological view)                              */
 /* ------------------------------------------------------------------------ */
-
-const dotTone: Record<Tone, string> = {
-  brand: 'bg-brand-600',
-  neutral: 'bg-ink-400',
-  success: 'bg-success-500',
-  warning: 'bg-warning-500',
-  danger: 'bg-danger-500',
-  ids: 'bg-ids-400',
-  dsee: 'bg-dsee-300',
-  dssh: 'bg-dssh-600',
-}
 
 export function ProcessingHistory({ doc }: { doc: DocRecord }) {
   const entries = [...doc.history].reverse()

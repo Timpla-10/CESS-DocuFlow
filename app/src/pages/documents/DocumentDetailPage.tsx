@@ -39,6 +39,7 @@ import {
   DefinitionList,
   DepartmentBadge,
   Segmented,
+  cn,
 } from '../../components/ui'
 import {
   OFFICE_LABEL,
@@ -68,7 +69,8 @@ export function DocumentDetailPage() {
   const doc = db.documents.find((d) => d.id === id)
 
   // Sub-dialog states
-  const [activeTab, setActiveTab] = useState<'timeline' | 'files' | 'route'>('timeline')
+  const [activeTab, setActiveTab] = useState<'route' | 'files'>('route')
+  const [historyViewMode, setHistoryViewMode] = useState<'journey' | 'flat'>('journey')
   const [isResubmitOpen, setIsResubmitOpen] = useState(false)
   const [isCheckOpen, setIsCheckOpen] = useState(false)
   const [isReviewOpen, setIsReviewOpen] = useState(false)
@@ -637,7 +639,7 @@ export function DocumentDetailPage() {
         </div>
       </Card>
 
-      {/* Tabs: Route / History / Files */}
+      {/* Tabs: Route Journey / Attached Files */}
       <Card>
         <div className="border-b border-ink-100 p-4">
           <Segmented
@@ -645,25 +647,61 @@ export function DocumentDetailPage() {
             value={activeTab}
             onChange={(v) => setActiveTab(v as typeof activeTab)}
             options={[
-              { value: 'timeline', label: 'Processing History', count: doc.history.length },
+              { value: 'route', label: 'Routing Path & History', count: doc.history.length },
               {
                 value: 'files',
                 label: 'Attached Files',
                 count: doc.attachments.filter((a) => a.revision === doc.revision).length,
               },
-              { value: 'route', label: 'Routing Path' },
             ]}
           />
         </div>
 
         <div className="p-6">
-          {activeTab === 'timeline' && (
+          {activeTab === 'route' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2">
-                <h3 className="text-sm font-bold text-ink-900">Document Processing History</h3>
-                <span className="text-xs text-ink-500">Recorded chronological milestones</span>
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-2">
+                <div>
+                  <h3 className="text-sm font-bold text-ink-900">Institutional Review Route & History ({doc.origin})</h3>
+                  <span className="text-xs text-ink-500">Step-by-step approval journey and recorded audit milestones</span>
+                </div>
+                <div className="inline-flex rounded-lg bg-ink-100 p-0.5 text-xs font-semibold text-ink-600">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryViewMode('journey')}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 transition-all',
+                      historyViewMode === 'journey'
+                        ? 'bg-white text-brand-900 shadow-xs'
+                        : 'hover:text-ink-900',
+                    )}
+                  >
+                    Route Journey
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryViewMode('flat')}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 transition-all',
+                      historyViewMode === 'flat'
+                        ? 'bg-white text-brand-900 shadow-xs'
+                        : 'hover:text-ink-900',
+                    )}
+                  >
+                    Linear Audit Log
+                  </button>
+                </div>
               </div>
-              <ProcessingHistory doc={doc} />
+
+              {historyViewMode === 'journey' ? (
+                <div className="max-w-2xl">
+                  <RouteProgress doc={doc} db={db} />
+                </div>
+              ) : (
+                <div className="max-w-2xl">
+                  <ProcessingHistory doc={doc} />
+                </div>
+              )}
             </div>
           )}
 
@@ -676,18 +714,6 @@ export function DocumentDetailPage() {
                 </span>
               </div>
               <AttachmentList db={db} doc={doc} />
-            </div>
-          )}
-
-          {activeTab === 'route' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2">
-                <h3 className="text-sm font-bold text-ink-900">Institutional Review Route ({doc.origin})</h3>
-                <span className="text-xs text-ink-500">Approval journey from submission to release</span>
-              </div>
-              <div className="max-w-xl">
-                <RouteProgress doc={doc} db={db} />
-              </div>
             </div>
           )}
         </div>
