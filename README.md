@@ -31,8 +31,8 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/cuteronenelradv-ui/CESS-DocuFLow.git
-   cd CESS-DocuFLow
+   git clone https://github.com/enelradcuteron/CESS-DocuFlow.git
+   cd CESS-DocuFlow
    ```
 
 2. Install dependencies:
