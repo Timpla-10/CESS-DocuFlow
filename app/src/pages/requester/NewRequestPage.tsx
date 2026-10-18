@@ -331,8 +331,9 @@ export function NewRequestPage() {
                   )}
                 </div>
                 {user.origin === 'IDS' && (
-                  <p className="mt-2 text-2xs text-ink-500">
-                    ℹ️ As an IDS faculty member, your document will route through the IDS Principal before Dean’s endorsement.
+                  <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-500">
+                    <Info className="size-3 shrink-0 text-brand-600 mt-0.5" />
+                    <span>As an IDS faculty member, your document will route through the IDS Principal before Dean’s endorsement.</span>
                   </p>
                 )}
               </div>

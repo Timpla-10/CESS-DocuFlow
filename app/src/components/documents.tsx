@@ -4,6 +4,8 @@ import {
   Check,
   CircleDot,
   Clock,
+  Download,
+  Eye,
   FileCheck2,
   FileText,
   Hourglass,
@@ -14,6 +16,8 @@ import {
 } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { DocumentPreviewModal } from './DocumentPreviewModal'
+export { DocumentPreviewModal } from './DocumentPreviewModal'
 import {
   OFFICE_HELP,
   OFFICE_LABEL,
@@ -653,7 +657,7 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                   </span>
                 )}
                 {it.state === 'done' && (
-                  <span className="text-xs font-medium text-success-600">Completed</span>
+                  <span className="text-xs font-medium text-brand-700">Completed</span>
                 )}
               </div>
               <p className="mt-0.5 text-xs leading-snug text-ink-500">{it.help}</p>
@@ -665,7 +669,6 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                     {it.milestones.map((m, mIdx) => {
                       const isLast = mIdx === it.milestones.length - 1 && it.state !== 'current'
                       const isReturned = m.action === 'returned' || m.action === 'checked_incomplete'
-                      const isApprovedOrDone = m.action === 'approved' || m.action === 'released' || m.action === 'marked_ready'
                       return (
                         <div key={m.id} className="relative flex gap-3 pb-3.5 last:pb-0">
                           {/* Sub-timeline connecting line between milestones */}
@@ -685,9 +688,7 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                               'relative z-10 grid size-5 shrink-0 place-items-center rounded-full ring-2 ring-white shadow-xs',
                               isReturned
                                 ? 'bg-danger-600 text-white'
-                                : isApprovedOrDone
-                                  ? 'bg-success-600 text-white'
-                                  : 'bg-brand-600 text-white',
+                                : 'bg-brand-600 text-white',
                             )}
                             aria-hidden
                           >
@@ -799,6 +800,8 @@ export function ProcessingHistory({ doc }: { doc: DocRecord }) {
 export const sessionFiles = new Map<string, string>()
 
 export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
+  const [selectedAttachId, setSelectedAttachId] = useState<string | undefined>()
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const type = typeOf(db, doc)
   const requester = userById(db, doc.requesterId)
   const byRev = new Map<number, Attachment[]>()
@@ -835,7 +838,6 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
           <ul className="divide-y divide-ink-100 overflow-hidden rounded-lg ring-1 ring-ink-100">
             {byRev.get(rev)!.map((a) => {
               const req = type?.requirements.find((r) => r.id === a.requirementId)
-              const url = sessionFiles.get(a.id)
               return (
                 <li key={a.id} className="flex items-center gap-3 bg-white px-3 py-2.5">
                   <span
@@ -859,30 +861,44 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
                       {a.isSignedCopy ? 'Scanned signed document attached upon release' : (req ? req.label : 'Additional file')} · {formatSize(a.sizeKb)} · added {timeAgo(a.uploadedAt)} by {a.uploadedBy}
                     </p>
                   </div>
-                  {url ? (
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAttachId(a.id)
+                        setIsPreviewOpen(true)
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
+                      title="Preview this document on screen"
                     >
-                      <FileText className="size-3.5" aria-hidden /> View Details
-                    </a>
-                  ) : (
+                      <Eye className="size-3.5 text-brand-600" aria-hidden /> Preview
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleSampleDownload(a)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
+                      className="inline-flex items-center gap-1 rounded-lg bg-ink-50 p-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-colors"
+                      title="Download PDF Copy"
+                      aria-label={`Download ${a.name}`}
                     >
-                      <FileText className="size-3.5" aria-hidden /> View Details
+                      <Download className="size-3.5" aria-hidden />
                     </button>
-                  )}
+                  </div>
                 </li>
               )
             })}
           </ul>
         </div>
       ))}
+
+      {isPreviewOpen && (
+        <DocumentPreviewModal
+          open={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          doc={doc}
+          db={db}
+          initialAttachmentId={selectedAttachId}
+        />
+      )}
     </div>
   )
 }

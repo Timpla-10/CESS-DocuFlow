@@ -5,6 +5,7 @@ import {
   Clock,
   Eye,
   EyeOff,
+  Info,
   KeyRound,
   Lock,
   Mail,
@@ -795,10 +796,13 @@ export function SignInPage() {
                     </span>
                   </button>
                 </div>
-                <p className="mt-2 text-2xs text-purple-700">
-                  {facultyOrigin === 'IDS'
-                    ? 'ℹ️ IDS route includes review by the IDS Principal before the College Dean.'
-                    : 'ℹ️ CESS route routes directly from Department Chairperson to the College Dean.'}
+                <p className="mt-2 flex items-start gap-1.5 text-2xs text-purple-700">
+                  <Info className="size-3 shrink-0 text-purple-600 mt-0.5" />
+                  <span>
+                    {facultyOrigin === 'IDS'
+                      ? 'IDS route includes review by the IDS Principal before the College Dean.'
+                      : 'CESS route routes directly from Department Chairperson to the College Dean.'}
+                  </span>
                 </p>
               </div>
             )}

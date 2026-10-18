@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  CheckCircle2,
   CheckSquare,
   ExternalLink,
   Inbox,
@@ -185,8 +186,9 @@ export function OverviewPage() {
                   showRequester
                   showWaiting
                   empty={
-                    <div className="py-12 text-center text-sm text-ink-500">
-                      ✅ All submitted documents have been checked and routed.
+                    <div className="flex items-center justify-center gap-2 py-12 text-center text-sm text-ink-500">
+                      <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+                      <span>All submitted documents have been checked and routed.</span>
                     </div>
                   }
                 />

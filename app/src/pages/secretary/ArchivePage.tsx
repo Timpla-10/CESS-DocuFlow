@@ -30,9 +30,10 @@ export function ArchivePage() {
         }
       />
 
-      <Callout tone="brand" icon={ShieldCheck} title="Archived Records are Permanent and Read-Only">
+      <Callout tone="brand" icon={ShieldCheck} title="Archived Records are Permanent and Viewable In-App">
         Documents in the archive cannot be altered or hard-deleted. You can search, filter by date range, inspect
-        processing histories, and download electronic copies of forms, endorsements, and final signed scans for audit.
+        full document contents and attached files in the In-App Previewer without downloading, and review complete
+        processing histories and final signed release scans for institutional audit.
       </Callout>
 
       <Card>

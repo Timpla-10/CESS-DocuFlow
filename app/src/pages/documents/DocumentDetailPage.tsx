@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  Eye,
   FileCheck2,
   FileText,
   PackageCheck,
@@ -21,6 +22,7 @@ import { Dialog } from '../../components/Dialog'
 import {
   AttachmentList,
   DelayedBadge,
+  DocumentPreviewModal,
   RouteProgress,
   StatusBadge,
   WaitingTime,
@@ -42,7 +44,6 @@ import {
   OFFICE_LABEL,
   ROLE_OFFICE,
   controlNumber,
-  downloadGeneratedPdf,
   externalOfficeLabel,
   isRequester,
   locationLabel,
@@ -66,6 +67,8 @@ export function DocumentDetailPage() {
   const doc = db.documents.find((d) => d.id === id)
 
   // Sub-dialog states
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
+  const [previewAttachmentId, setPreviewAttachmentId] = useState<string | undefined>()
   const [isResubmitOpen, setIsResubmitOpen] = useState(false)
   const [isCheckOpen, setIsCheckOpen] = useState(false)
   const [isReviewOpen, setIsReviewOpen] = useState(false)
@@ -655,16 +658,29 @@ export function DocumentDetailPage() {
 
       {/* Section 1: Submitted Documents & Attachments (Separated from Routing Path) */}
       <Card className="p-6">
-        <div className="flex items-center justify-between pb-3 border-b border-ink-100 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-ink-100 mb-4">
           <div>
             <h2 className="text-base font-bold text-ink-950">Submitted Files & Attachments</h2>
             <p className="text-xs text-ink-500">
               Official forms and uploaded documents available for verification and review.
             </p>
           </div>
-          <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200">
-            {doc.attachments.filter((a) => a.revision === doc.revision).length} file(s) in {revisionLabel(doc.revision)}
-          </span>
+          <div className="flex items-center gap-2.5">
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={Eye}
+              onClick={() => {
+                setPreviewAttachmentId(undefined)
+                setIsPreviewModalOpen(true)
+              }}
+            >
+              Preview Document & Files
+            </Button>
+            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200">
+              {doc.attachments.filter((a) => a.revision === doc.revision).length} file(s) in {revisionLabel(doc.revision)}
+            </span>
+          </div>
         </div>
         <AttachmentList db={db} doc={doc} />
       </Card>
@@ -813,7 +829,6 @@ export function DocumentDetailPage() {
             <ul className="divide-y divide-ink-100 rounded-xl ring-1 ring-ink-100">
               {currentAttachments.map((a) => {
                 const req = docType?.requirements.find((r) => r.id === a.requirementId)
-                const url = sessionFiles.get(a.id)
                 return (
                   <li key={a.id} className="flex items-center justify-between gap-3 bg-white px-3.5 py-2.5 text-xs">
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -825,31 +840,17 @@ export function DocumentDetailPage() {
                         </p>
                       </div>
                     </div>
-                    {url ? (
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
-                      >
-                        <FileText className="size-3.5" /> View Details
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          downloadGeneratedPdf(a.name, `Inspection Copy: ${a.name}`, [
-                            `Control Number: ${controlNumber(doc)}`,
-                            `Document Title: ${doc.title}`,
-                            `Requester: ${requester?.name ?? ''}`,
-                            `Requirement: ${req?.label ?? 'Supporting File'}`,
-                          ])
-                        }
-                        className="inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
-                      >
-                        <FileText className="size-3.5" /> View Details
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewAttachmentId(a.id)
+                        setIsPreviewModalOpen(true)
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
+                      title="Inspect and read document content before deciding"
+                    >
+                      <Eye className="size-3.5 text-brand-600" /> Preview Content
+                    </button>
                   </li>
                 )
               })}
@@ -952,6 +953,29 @@ export function DocumentDetailPage() {
         }
       >
         <form className="space-y-4">
+          {/* Pre-Action Document Inspection */}
+          <div className="flex items-center justify-between rounded-xl bg-brand-50/70 p-3.5 ring-1 ring-inset ring-brand-200 text-xs">
+            <div className="flex items-center gap-2.5">
+              <FileText className="size-4 text-brand-700 shrink-0" />
+              <div>
+                <p className="font-bold text-brand-950">Inspect Document & Attachments</p>
+                <p className="text-[11px] text-brand-800">
+                  Read the full submission and verify attached files before recording your decision.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPreviewAttachmentId(undefined)
+                setIsPreviewModalOpen(true)
+              }}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-800 shadow-xs ring-1 ring-ink-200 hover:bg-brand-50 transition-colors"
+            >
+              <Eye className="size-3.5 text-brand-600" /> Preview Document
+            </button>
+          </div>
+
           <Field label="Action to Record" required>
             <Select
               value={reviewKind}
@@ -1142,6 +1166,17 @@ export function DocumentDetailPage() {
           </div>
         </form>
       </Dialog>
+
+      {/* 5. In-App Document & Attachment Previewer Modal (Zero-download inspection) */}
+      {isPreviewModalOpen && doc && (
+        <DocumentPreviewModal
+          open={isPreviewModalOpen}
+          onClose={() => setIsPreviewModalOpen(false)}
+          doc={doc}
+          db={db}
+          initialAttachmentId={previewAttachmentId}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Mail, Menu, UserCog, X } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, Mail, Menu, PanelLeftClose, PanelLeftOpen, UserCog, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { navFor } from '../app/nav'
@@ -137,10 +137,14 @@ function Sidebar({
                       'grid size-8 place-items-center rounded-lg transition-colors',
                       isLocked ? 'text-brand-200 hover:bg-white/10 hover:text-white' : 'bg-white/20 text-white shadow-sm'
                     )}
-                    title={isLocked ? 'Click to unlock sidebar (auto-collapse to rail)' : 'Click to lock sidebar open'}
-                    aria-label={isLocked ? 'Unlock sidebar' : 'Lock sidebar open'}
+                    title={isLocked ? 'Collapse sidebar (switch to rail)' : 'Lock sidebar open'}
+                    aria-label={isLocked ? 'Collapse sidebar' : 'Lock sidebar open'}
                   >
-                    <Menu className="size-4" aria-hidden />
+                    {isLocked ? (
+                      <PanelLeftClose className="size-4" aria-hidden />
+                    ) : (
+                      <PanelLeftOpen className="size-4" aria-hidden />
+                    )}
                   </button>
                 )}
                 {onClose && (
@@ -293,25 +297,18 @@ function TopBar({
         <Menu className="size-5" aria-hidden />
       </button>
 
-      {/* Desktop hamburger toggle */}
-      <button
-        type="button"
-        onClick={onToggleLock}
-        className={cn(
-          'hidden lg:grid size-10 place-items-center rounded-lg transition-colors',
-          isLocked
-            ? 'text-ink-600 hover:bg-brand-50 hover:text-brand-900'
-            : 'bg-brand-100 text-brand-800 hover:bg-brand-200'
-        )}
-        title={
-          isLocked
-            ? 'Click hamburger to collapse sidebar to icons (hover to peek)'
-            : 'Click hamburger to lock sidebar open'
-        }
-        aria-label={isLocked ? 'Collapse sidebar to icons' : 'Lock sidebar open'}
-      >
-        <Menu className="size-5" aria-hidden />
-      </button>
+      {/* Desktop hamburger toggle: only rendered when sidebar is collapsed (rail mode) */}
+      {!isLocked && (
+        <button
+          type="button"
+          onClick={onToggleLock}
+          className="hidden lg:grid size-10 place-items-center rounded-lg text-ink-600 hover:bg-brand-50 hover:text-brand-900 transition-colors"
+          title="Expand sidebar"
+          aria-label="Expand sidebar"
+        >
+          <Menu className="size-5" aria-hidden />
+        </button>
+      )}
 
       <div className="lg:hidden">
         <Logo subtitle={false} />

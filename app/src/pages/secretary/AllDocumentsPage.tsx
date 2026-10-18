@@ -1,12 +1,16 @@
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Building2,
+  CheckCircle2,
   Clock,
   Download,
   FilePlus2,
   Files,
   Folder,
   FolderOpen,
+  School,
   Send,
   UploadCloud,
 } from 'lucide-react'
@@ -215,12 +219,14 @@ export function AllDocumentsPage() {
           options={[
             {
               value: 'CESS',
-              label: '🏛️ CESS Documents (College)',
+              label: 'CESS Documents (College)',
+              icon: Building2,
               count: cessCount,
             },
             {
               value: 'IDS',
-              label: '🏫 IDS Documents',
+              label: 'IDS Documents',
+              icon: School,
               count: idsCount,
             },
           ]}
@@ -411,7 +417,8 @@ export function AllDocumentsPage() {
 
                             {doc.status === 'submitted' && (
                               <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-warning-50 px-2.5 py-1 text-xs font-semibold text-warning-800 ring-1 ring-inset ring-warning-200">
-                                ⚠️ Needs content check and routing
+                                <AlertTriangle className="size-3.5 shrink-0 text-warning-700" />
+                                <span>Needs content check and routing</span>
                               </div>
                             )}
                           </div>
@@ -665,8 +672,9 @@ export function AllDocumentsPage() {
                         <span className="ml-1 text-ink-400">(optional)</span>
                       )}
                       {attached ? (
-                        <p className="mt-0.5 text-2xs text-success-700">
-                          ✓ {attached.name} ({attached.sizeKb} KB)
+                        <p className="mt-0.5 inline-flex items-center gap-1 text-2xs text-success-700">
+                          <CheckCircle2 className="size-3 shrink-0" />
+                          <span>{attached.name} ({attached.sizeKb} KB)</span>
                         </p>
                       ) : (
                         <p className="mt-0.5 text-2xs text-ink-500">Not uploaded</p>

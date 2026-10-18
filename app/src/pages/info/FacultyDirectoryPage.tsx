@@ -411,8 +411,9 @@ export function FacultyDirectoryPage() {
                               <span className="text-xs font-semibold text-ink-900 truncate">{sub.title}</span>
                             </div>
                             {sub.syllabusFile && (
-                              <p className="mt-1 truncate text-[11px] text-ink-500">
-                                📄 {sub.syllabusFile}
+                              <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] text-ink-500">
+                                <FileText className="size-3 text-ink-400 shrink-0" />
+                                <span className="truncate">{sub.syllabusFile}</span>
                               </p>
                             )}
                           </div>

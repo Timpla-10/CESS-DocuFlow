@@ -692,13 +692,14 @@ export function Segmented<T extends string>({
 }: {
   value: T
   onChange: (v: T) => void
-  options: { value: T; label: string; count?: number }[]
+  options: { value: T; label: ReactNode; icon?: IconType; count?: number }[]
   label: string
 }) {
   return (
     <div role="tablist" aria-label={label} className="inline-flex flex-wrap gap-1 rounded-xl bg-ink-50 p-1 ring-1 ring-inset ring-ink-100">
       {options.map((o) => {
         const active = o.value === value
+        const Icon = o.icon
         return (
           <button
             key={o.value}
@@ -707,10 +708,11 @@ export function Segmented<T extends string>({
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex items-center gap-2 rounded-[7px] px-3 py-1.5 text-sm font-semibold transition-all',
+              'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all',
               active ? 'bg-white text-brand-800 shadow-xs ring-1 ring-brand-200' : 'text-ink-600 hover:text-brand-700',
             )}
           >
+            {Icon && <Icon className="size-4 shrink-0" aria-hidden />}
             {o.label}
             {o.count !== undefined && (
               <span
@@ -746,7 +748,7 @@ export function Avatar({ name, size = 'md', className }: { name: string; size?: 
   return (
     <span
       className={cn(
-        'grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-400 to-brand-700 font-bold text-white ring-2 ring-white',
+        'grid shrink-0 place-items-center rounded-full bg-[#191970] font-bold text-white',
         sizes[size],
         className,
       )}
