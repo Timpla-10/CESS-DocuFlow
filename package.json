@@ -1,0 +1,11 @@
+{
+  "name": "cess-docuflow-root",
+  "private": true,
+  "version": "1.0.0",
+  "description": "CESS DocuFlow Workspace",
+  "scripts": {
+    "dev": "npm --prefix app run dev",
+    "build": "npm --prefix app run build",
+    "preview": "npm --prefix app run preview"
+  }
+}
