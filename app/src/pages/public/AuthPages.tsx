@@ -753,9 +753,11 @@ export function SignInPage() {
                     {facultyOrigin === 'IDS' ? 'Routes via IDS Principal' : 'Standard College Route'}
                   </span>
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Faculty Unit Affiliation">
                   <button
                     type="button"
+                    role="radio"
+                    aria-checked={facultyOrigin === 'CESS'}
                     onClick={() => handleFacultyOriginChange('CESS')}
                     className={cn(
                       'flex flex-col items-start rounded-xl p-2.5 text-left text-xs transition-all',
@@ -764,19 +766,21 @@ export function SignInPage() {
                         : 'bg-white text-purple-900 ring-1 ring-purple-200 hover:bg-purple-100/50',
                     )}
                   >
-                    <span className="font-bold">CESS Faculty</span>
+                    <span className="font-bold flex items-center gap-1">🏛️ CESS Faculty</span>
                     <span
                       className={cn(
                         'text-2xs mt-0.5',
                         facultyOrigin === 'CESS' ? 'text-purple-200' : 'text-purple-600',
                       )}
                     >
-                      College Departments
+                      College of Education and Social Sciences
                     </span>
                   </button>
 
                   <button
                     type="button"
+                    role="radio"
+                    aria-checked={facultyOrigin === 'IDS'}
                     onClick={() => handleFacultyOriginChange('IDS')}
                     className={cn(
                       'flex flex-col items-start rounded-xl p-2.5 text-left text-xs transition-all',
@@ -785,7 +789,7 @@ export function SignInPage() {
                         : 'bg-white text-purple-900 ring-1 ring-purple-200 hover:bg-purple-100/50',
                     )}
                   >
-                    <span className="font-bold">IDS Faculty</span>
+                    <span className="font-bold flex items-center gap-1">🏫 IDS Faculty</span>
                     <span
                       className={cn(
                         'text-2xs mt-0.5',

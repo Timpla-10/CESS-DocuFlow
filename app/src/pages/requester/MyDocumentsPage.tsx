@@ -94,9 +94,9 @@ export function MyDocumentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Requester Dashboard"
+        eyebrow={user.role === 'student' ? 'Student Workspace' : 'Requester Workspace'}
         title="Document Repository"
-        description="View your requests organized by folder, track approvals, or file a new request."
+        description="Browse your requests organized by official document category folder, track active approvals, or file a new request."
         actions={
           <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
             Submit Document Request
@@ -169,7 +169,7 @@ export function MyDocumentsPage() {
             </button>
             <div className="flex items-center gap-2 text-xs font-medium text-ink-500">
               <span className="hover:underline cursor-pointer" onClick={closeFolder}>
-                Repository
+                Document Repository
               </span>
               <span>/</span>
               <span className="font-bold text-ink-900">{selectedType.name}</span>
@@ -206,7 +206,7 @@ export function MyDocumentsPage() {
                       Turnaround: {selectedType.processingDays[0]}–{selectedType.processingDays[1]} working days
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-700 ring-1 ring-ink-200">
-                      Standard Routing ({user.origin === 'IDS' ? 'IDS Faculty Route' : 'CESS Route'}):{' '}
+                      Routing ({user.origin === 'IDS' ? '🏫 IDS Route' : '🏛️ CESS Route'}):{' '}
                       <strong className="font-semibold text-ink-900">
                         Secretary →{' '}
                         {(user.origin === 'IDS'
@@ -272,7 +272,7 @@ export function MyDocumentsPage() {
 
           {/* Submissions inside this Folder */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-ink-900">
                   Submissions in this Folder
@@ -281,9 +281,18 @@ export function MyDocumentsPage() {
                   All requests filed under {selectedType.name}
                 </p>
               </div>
-              <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
-                {myDocs.filter((d) => d.typeId === selectedType.id).length} record(s)
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
+                  {myDocs.filter((d) => d.typeId === selectedType.id).length} record(s)
+                </span>
+                <ButtonLink
+                  to={`/app/requests/new?type=${selectedType.id}`}
+                  size="sm"
+                  icon={FilePlus2}
+                >
+                  + Request Another {selectedType.name.split('(')[0]?.trim() || selectedType.name}
+                </ButtonLink>
+              </div>
             </div>
 
             {(() => {
@@ -293,28 +302,26 @@ export function MyDocumentsPage() {
                   <Card className="p-8">
                     <EmptyState
                       icon={FolderOpen}
-                      title={`No ${selectedType.name} requests found`}
+                      title={`No ${selectedType.name} requests yet`}
                       action={
                         <div className="flex flex-wrap justify-center gap-2">
                           <ButtonLink
                             to={`/app/requests/new?type=${selectedType.id}`}
                             icon={FilePlus2}
                           >
-                            Submit {selectedType.name}
+                            Submit your first {selectedType.name} request
                           </ButtonLink>
                           <Button
                             variant="secondary"
                             icon={Download}
                             onClick={() => handleDownloadTemplate(selectedType)}
                           >
-                            Download Blank Template
+                            Download Blank Form Template
                           </Button>
                         </div>
                       }
                     >
-                      You haven’t submitted any requests under this folder yet. When you submit one,
-                      its full review history, route progress, and signed copies will be organized
-                      here.
+                      You haven’t submitted any requests under this folder yet. Click below to submit your first request.
                     </EmptyState>
                   </Card>
                 )
@@ -465,7 +472,11 @@ export function MyDocumentsPage() {
                             </Badge>
                           )}
                           <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
-                            {typeDocs.length === 1 ? '1 request' : `${typeDocs.length} requests`}
+                            {typeDocs.length === 0
+                              ? 'Empty — 0 requests'
+                              : typeDocs.length === 1
+                              ? '1 request'
+                              : `${typeDocs.length} requests`}
                           </span>
                         </div>
                       </div>
@@ -482,11 +493,16 @@ export function MyDocumentsPage() {
                         </p>
                       </div>
 
-                      <div className="mt-4 flex items-center gap-2 text-2xs text-ink-500">
-                        <Clock className="size-3.5 text-brand-600" />
-                        <span>
+                      <div className="mt-4 flex flex-wrap items-center gap-2 text-2xs text-ink-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="size-3.5 text-brand-600" />
                           Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days
                         </span>
+                        {user.role === 'faculty' && (
+                          <span className="inline-flex items-center gap-1 rounded bg-brand-50 px-2 py-0.5 text-2xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200/60">
+                            {user.origin === 'IDS' ? '🏫 IDS Route' : '🏛️ CESS Route'}: Sec → Chair → {user.origin === 'IDS' ? 'Principal → ' : ''}Dean → Rel
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -502,9 +518,9 @@ export function MyDocumentsPage() {
 
                       <Link
                         to={`/app/requests/new?type=${t.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50"
+                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
                       >
-                        <FilePlus2 className="size-3 text-brand-600" /> New Request
+                        <FilePlus2 className="size-3 text-brand-600" /> + New Request
                       </Link>
                     </div>
                   </Card>

@@ -304,36 +304,36 @@ export function NewRequestPage() {
 
             {/* Explicit Faculty Affiliation & Routing Path Notice (REQ-PM-FEEDBACK-2) */}
             {user.role === 'faculty' && (
-              <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4 text-xs">
+              <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-brand-950">
-                      {user.origin === 'IDS' ? 'IDS Faculty Submission' : 'CESS Faculty Submission'}
+                      {user.origin === 'IDS' ? '🏫 IDS Faculty' : '🏛️ CESS Faculty'}
                     </span>
                     <Badge tone={user.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
                       {user.origin === 'IDS' ? 'Integrated Developmental School' : 'College of Education and Social Sciences'}
                     </Badge>
                   </div>
-                  <span className="font-mono text-2xs text-brand-700">
-                    Routing Unit: {user.origin ?? 'CESS'}
+                  <span className="font-mono text-2xs font-semibold text-brand-700">
+                    Routing: {user.origin === 'IDS' ? 'Secretary → Chairperson → IDS Principal → Dean → Release' : 'Secretary → Chairperson → Dean → Release'}
                   </span>
                 </div>
                 <div className="mt-2.5 rounded-lg bg-white p-2.5 ring-1 ring-brand-100 text-ink-700">
                   <span className="font-semibold text-ink-900">Official Routing Path: </span>
                   {user.origin === 'IDS' ? (
                     <span>
-                      College Secretary Check → Chairperson →{' '}
+                      Secretary Check → Chairperson →{' '}
                       <strong className="text-warning-800 underline decoration-warning-400">IDS Principal (Review)</strong>{' '}
-                      → College Dean → Release
+                      → Dean Endorsement → Release
                     </span>
                   ) : (
-                    <span>College Secretary Check → Chairperson → College Dean → Release</span>
+                    <span>Secretary Check → Chairperson → Dean Endorsement → Release</span>
                   )}
                 </div>
                 {user.origin === 'IDS' && (
-                  <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-500">
-                    <Info className="size-3 shrink-0 text-brand-600 mt-0.5" />
-                    <span>As an IDS faculty member, your document will route through the IDS Principal before Dean’s endorsement.</span>
+                  <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-600">
+                    <Info className="size-3.5 shrink-0 text-brand-600 mt-0.5" />
+                    <span><strong>Note:</strong> As an IDS faculty member, your document will route through the IDS Principal before the Dean.</span>
                   </p>
                 )}
               </div>

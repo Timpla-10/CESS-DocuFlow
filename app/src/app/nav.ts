@@ -41,6 +41,23 @@ const notices: NavItem = {
 export function navFor(role: Role): NavSection[] {
   switch (role) {
     case 'student':
+      return [
+        {
+          items: [
+            {
+              to: '/app/my-documents',
+              label: 'Document Repository',
+              icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'returned').length,
+              countTone: 'danger',
+            },
+          ],
+        },
+        {
+          heading: 'College information',
+          items: [directory],
+        },
+      ]
     case 'faculty':
       return [
         {
@@ -57,9 +74,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: role === 'faculty'
-            ? [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }, directory]
-            : [directory],
+          items: [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }, directory],
         },
       ]
     case 'secretary':

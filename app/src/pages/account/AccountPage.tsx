@@ -105,7 +105,7 @@ export function AccountPage() {
               <Badge tone="brand">{ROLE_LABEL[user.role]}</Badge>
               {user.role === 'faculty' && (
                 <Badge tone={user.origin === 'IDS' ? 'warning' : 'brand'}>
-                  {user.origin === 'IDS' ? 'IDS Faculty' : 'CESS Faculty'}
+                  {user.origin === 'IDS' ? '🏫 IDS Faculty' : '🏛️ CESS Faculty'}
                 </Badge>
               )}
             </div>
@@ -120,18 +120,18 @@ export function AccountPage() {
               ...(user.role === 'faculty'
                 ? [
                     {
-                      label: 'Faculty Affiliation / College Unit',
+                      label: 'Faculty Unit Affiliation',
                       value:
                         user.origin === 'IDS'
-                          ? 'IDS Faculty — Integrated Developmental School'
-                          : 'CESS Faculty — College of Education and Social Sciences',
+                          ? 'IDS Faculty (Integrated Developmental School)'
+                          : 'CESS Faculty (College of Education and Social Sciences)',
                     },
                     {
-                      label: 'Designated Document Routing Flow',
+                      label: 'Designated Document Route',
                       value:
                         user.origin === 'IDS'
-                          ? 'Secretary Check → Chairperson → IDS Principal (Review) → Dean → Release'
-                          : 'Secretary Check → Chairperson → Dean → Release',
+                          ? 'Includes IDS Principal Review (Secretary → Chairperson → IDS Principal → Dean → Release)'
+                          : 'Standard College Review (Secretary → Chairperson → Dean → Release)',
                     },
                   ]
                 : []),

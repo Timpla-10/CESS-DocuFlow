@@ -157,6 +157,7 @@ export function DocumentDetailPage() {
   // --- Handlers ---
 
   const handleOpenResubmit = () => {
+    if (!canResubmit) return
     setResubmitTitle(doc.title)
     setResubmitDesc(doc.description)
     setResubmitNote('')
@@ -415,6 +416,18 @@ export function DocumentDetailPage() {
                     Archived (Read-Only)
                   </Badge>
                 )}
+                {isReqUser && doc.requesterId === user.id && doc.status !== 'returned' && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-800 ring-1 ring-inset ring-ink-200">
+                    <Lock className="size-3 text-ink-600" aria-hidden />
+                    Locked during routing
+                  </span>
+                )}
+                {isReqUser && doc.requesterId === user.id && doc.status === 'returned' && (
+                  <Badge tone="danger" dot={false} className="gap-1 font-bold">
+                    <RotateCcw className="size-3" aria-hidden />
+                    Unlocked for Revision
+                  </Badge>
+                )}
               </div>
 
               <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-brand-900 sm:text-3xl">
@@ -469,6 +482,26 @@ export function DocumentDetailPage() {
               </div>
             )}
           </Callout>
+
+          {/* Strict Edit Lock Notice for Requesters (REQ-SUB-LOCK) */}
+          {isReqUser && doc.requesterId === user.id && doc.status !== 'returned' && (
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-ink-200 bg-ink-50/80 p-4 shadow-2xs">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-ink-200 text-ink-800">
+                <Lock className="size-4.5 text-ink-700" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-sm font-bold text-ink-950">Submission Locked from Editing</h4>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-ink-200 px-2 py-0.5 text-2xs font-bold uppercase tracking-wider text-ink-800">
+                    Read-Only In Routing
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-ink-600">
+                  Documents in routing cannot be edited or altered. Modifications, replacement of attachments, and resubmissions are strictly permitted only if a reviewing office returns the document for revision.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Automatic Completeness & Content Verification Status Strip (REQ-REQT-3, REQ-REQT-4) */}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -594,26 +627,6 @@ export function DocumentDetailPage() {
             </div>
           )}
 
-          {/* Requester Edit Lock Notice (Student/Faculty cannot edit while in review) */}
-          {isReqUser && doc.requesterId === user.id && doc.status !== 'returned' && (
-            <div className="mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-ink-200 bg-ink-50/70 p-4 text-xs text-ink-700">
-              <div className="flex items-start sm:items-center gap-3">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-ink-200/70 text-ink-700">
-                  <Lock className="size-4" aria-hidden />
-                </div>
-                <div>
-                  <p className="font-bold text-ink-900">Document Locked (Read-Only)</p>
-                  <p className="mt-0.5 text-ink-600">
-                    This document is in official routing. You can only edit and resubmit if an office returns it for revision.
-                  </p>
-                </div>
-              </div>
-              <span className="inline-flex items-center gap-1.5 self-start sm:self-center shrink-0 rounded-md bg-ink-200/80 px-2.5 py-1 text-2xs font-semibold uppercase tracking-wider text-ink-800">
-                <Lock className="size-3" /> Read-Only
-              </span>
-            </div>
-          )}
-
           {/* Document Metadata Grid (REQ-REC-1, REQ-TRK-2) */}
           <div className="mt-6 border-t border-ink-100 pt-6">
             <DefinitionList
@@ -709,7 +722,7 @@ export function DocumentDetailPage() {
 
       {/* 1. Resubmit Dialog (REQ-SUB-8) */}
       <Dialog
-        open={isResubmitOpen}
+        open={isResubmitOpen && canResubmit}
         onClose={() => setIsResubmitOpen(false)}
         title="Resubmit Corrected Document"
         description="Attach your corrected files below. Your request will retain the same control number with an incremented revision number and will return to the College Secretary."
