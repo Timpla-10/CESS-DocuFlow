@@ -12,6 +12,7 @@ import { FacultyDirectoryPage } from './pages/info/FacultyDirectoryPage'
 import { NoticesPage } from './pages/info/NoticesPage'
 import { ForgotPasswordPage, SessionExpiredPage, SignInPage } from './pages/public/AuthPages'
 import { HomePage } from './pages/public/HomePage'
+import { DashboardPage } from './pages/requester/DashboardPage'
 import { MyDocumentsPage } from './pages/requester/MyDocumentsPage'
 import { NewRequestPage } from './pages/requester/NewRequestPage'
 import { ForReviewPage } from './pages/reviewer/ForReviewPage'
@@ -75,6 +76,14 @@ export default function App() {
               <Route index element={<RoleHomeRedirect />} />
 
               {/* Requester (Students and Faculty) */}
+              <Route
+                path="dashboard"
+                element={
+                  <Protected allowedRoles={['student', 'faculty']}>
+                    <DashboardPage />
+                  </Protected>
+                }
+              />
               <Route
                 path="my-documents"
                 element={

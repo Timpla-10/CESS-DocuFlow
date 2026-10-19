@@ -45,12 +45,18 @@ export function navFor(role: Role): NavSection[] {
         {
           items: [
             {
-              to: '/app/my-documents',
-              label: 'Document Repository',
-              icon: FolderOpen,
+              to: '/app/dashboard',
+              label: 'Dashboard',
+              icon: LayoutDashboard,
               count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'returned').length,
               countTone: 'danger',
             },
+            {
+              to: '/app/my-documents',
+              label: 'Document Repository',
+              icon: FolderOpen,
+            },
+            { to: '/app/requests/new', label: 'Request a Document', icon: FilePlus2 },
           ],
         },
         {
@@ -63,11 +69,16 @@ export function navFor(role: Role): NavSection[] {
         {
           items: [
             {
+              to: '/app/dashboard',
+              label: 'Dashboard',
+              icon: LayoutDashboard,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'returned').length,
+              countTone: 'danger',
+            },
+            {
               to: '/app/my-documents',
               label: 'Document Repository',
               icon: FolderOpen,
-              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'returned').length,
-              countTone: 'danger',
             },
             { to: '/app/requests/new', label: 'Request a Document', icon: FilePlus2 },
           ],
@@ -119,7 +130,7 @@ export function navFor(role: Role): NavSection[] {
 
 /** Where each role lands after signing in. */
 export function homeFor(role: Role): string {
-  if (role === 'student' || role === 'faculty') return '/app/my-documents'
+  if (role === 'student' || role === 'faculty') return '/app/dashboard'
   if (role === 'secretary') return '/app/overview'
   return '/app/for-review'
 }

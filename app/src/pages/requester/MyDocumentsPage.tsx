@@ -11,16 +11,12 @@ import {
   PackageCheck,
   RotateCcw,
 } from 'lucide-react'
-import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import {
   DelayedBadge,
-  DocumentList,
-  FilterBar,
   StatusBadge,
   WaitingTime,
-  useDocumentFilters,
 } from '../../components/documents'
 import {
   Badge,
@@ -30,7 +26,6 @@ import {
   Card,
   EmptyState,
   PageHeader,
-  Segmented,
   cn,
 } from '../../components/ui'
 import {
@@ -57,9 +52,6 @@ export function MyDocumentsPage() {
 
   const folderParam = searchParams.get('folder')
   const selectedType = allowedTypes.find((t) => t.id === folderParam)
-
-  const [viewMode, setViewMode] = useState<'folders' | 'table'>('folders')
-  const { filters, setFilters, result, active, clear } = useDocumentFilters(db, myDocs, 'newest')
 
   const openFolder = (typeId: string) => {
     setSearchParams({ folder: typeId })
@@ -405,164 +397,116 @@ export function MyDocumentsPage() {
         </div>
       ) : (
         /* ------------------------------------------------------------------ */
-        /* CASE B: Main Repository (Folders vs Table View)                    */
+        /* ------------------------------------------------------------------ */
+        /* CASE B: Main Repository (Category Folders Grid)                   */
         /* ------------------------------------------------------------------ */
         <div className="space-y-6">
-          {/* Top Controls: View Toggle */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-ink-950">
-                Official Document Categories
-              </h2>
-              <p className="text-xs text-ink-500">
-                Select a document type folder to view all submitted records of that category or download blank templates.
-              </p>
-            </div>
-
-            <Segmented<'folders' | 'table'>
-              label="Repository View Mode"
-              value={viewMode}
-              onChange={setViewMode}
-              options={[
-                { value: 'folders', label: 'Folders by Document Type', count: allowedTypes.length },
-                { value: 'table', label: 'All Requests (Table)', count: myDocs.length },
-              ]}
-            />
+          {/* Section Heading */}
+          <div>
+            <h2 className="text-lg font-bold text-ink-950">
+              Official Document Categories
+            </h2>
+            <p className="text-xs text-ink-500">
+              Select a document type folder to view all submitted records of that category, download blank templates, or file a new request.
+            </p>
           </div>
 
-          {/* VIEW 1: CATEGORY FOLDER GRID */}
-          {viewMode === 'folders' && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-              {allowedTypes.map((t) => {
-                const typeDocs = myDocs.filter((d) => d.typeId === t.id)
-                const returnedCount = typeDocs.filter((d) => d.status === 'returned').length
-                const readyCount = typeDocs.filter((d) => d.status === 'ready').length
-                const inReviewCount = typeDocs.filter(
-                  (d) => d.status !== 'returned' && d.status !== 'ready' && !d.archived,
-                ).length
+          {/* CATEGORY FOLDER GRID */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+            {allowedTypes.map((t) => {
+              const typeDocs = myDocs.filter((d) => d.typeId === t.id)
+              const returnedCount = typeDocs.filter((d) => d.status === 'returned').length
+              const readyCount = typeDocs.filter((d) => d.status === 'ready').length
+              const inReviewCount = typeDocs.filter(
+                (d) => d.status !== 'returned' && d.status !== 'ready' && !d.archived,
+              ).length
 
-                return (
-                  <Card
-                    key={t.id}
-                    className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
-                  >
-                    <div className="p-5 sm:p-6">
-                      <div className="flex items-start justify-between gap-3">
-                        <div
-                          onClick={() => openFolder(t.id)}
-                          className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
-                        >
-                          <Folder className="size-6" />
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {returnedCount > 0 && (
-                            <Badge tone="danger" dot={false}>
-                              {returnedCount} Needs Revision
-                            </Badge>
-                          )}
-                          {readyCount > 0 && (
-                            <Badge tone="success" dot={false}>
-                              {readyCount} Ready to Collect
-                            </Badge>
-                          )}
-                          {inReviewCount > 0 && (
-                            <Badge tone="brand" dot={false}>
-                              {inReviewCount} In Routing
-                            </Badge>
-                          )}
-                          <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
-                            {typeDocs.length === 0
-                              ? 'Empty — 0 requests'
-                              : typeDocs.length === 1
-                              ? '1 request'
-                              : `${typeDocs.length} requests`}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-4">
-                        <h3
-                          onClick={() => openFolder(t.id)}
-                          className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
-                        >
-                          {t.name}
-                        </h3>
-                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
-                          {t.summary}
-                        </p>
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap items-center gap-2 text-2xs text-ink-500">
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="size-3.5 text-brand-600" />
-                          Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days
-                        </span>
-                        {user.role === 'faculty' && (
-                          <span className="inline-flex items-center gap-1 rounded bg-brand-50 px-2 py-0.5 text-2xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200/60">
-                            {user.origin === 'IDS' ? '🏫 IDS Route' : '🏛️ CESS Route'}: Sec → Chair → {user.origin === 'IDS' ? 'Principal → ' : ''}Dean → Rel
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Folder Card Actions */}
-                    <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
-                      <button
-                        type="button"
+              return (
+                <Card
+                  key={t.id}
+                  className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
+                >
+                  <div className="p-5 sm:p-6">
+                    <div className="flex items-start justify-between gap-3">
+                      <div
                         onClick={() => openFolder(t.id)}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                        className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
                       >
-                        Open Folder <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-                      </button>
+                        <Folder className="size-6" />
+                      </div>
 
-                      <Link
-                        to={`/app/requests/new?type=${t.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
-                      >
-                        <FilePlus2 className="size-3 text-brand-600" /> + New Request
-                      </Link>
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        {returnedCount > 0 && (
+                          <Badge tone="danger" dot={false}>
+                            {returnedCount} Needs Revision
+                          </Badge>
+                        )}
+                        {readyCount > 0 && (
+                          <Badge tone="success" dot={false}>
+                            {readyCount} Ready to Collect
+                          </Badge>
+                        )}
+                        {inReviewCount > 0 && (
+                          <Badge tone="brand" dot={false}>
+                            {inReviewCount} In Routing
+                          </Badge>
+                        )}
+                        <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
+                          {typeDocs.length === 0
+                            ? 'Empty — 0 requests'
+                            : typeDocs.length === 1
+                            ? '1 request'
+                            : `${typeDocs.length} requests`}
+                        </span>
+                      </div>
                     </div>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
 
-          {/* VIEW 2: FLAT TABLE WITH SEARCH & FILTERS */}
-          {viewMode === 'table' && (
-            <Card>
-              <FilterBar
-                db={db}
-                filters={filters}
-                setFilters={setFilters}
-                audience={user.role === 'student' ? 'student' : 'faculty'}
-                searchLabel="Search by title, control number, or type…"
-              />
+                    <div className="mt-4">
+                      <h3
+                        onClick={() => openFolder(t.id)}
+                        className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
+                      >
+                        {t.name}
+                      </h3>
+                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+                        {t.summary}
+                      </p>
+                    </div>
 
-              <DocumentList
-                db={db}
-                docs={result}
-                audience="requester"
-                showWaiting={false}
-                filteredEmpty={active ? { onClear: clear } : null}
-                empty={
-                  <EmptyState
-                    icon={FolderOpen}
-                    title="You haven't submitted any document requests yet"
-                    action={
-                      <ButtonLink to="/app/requests/new" icon={FilePlus2}>
-                        Submit Document Request
-                      </ButtonLink>
-                    }
-                  >
-                    When you submit a document request online, you will be able to track its movement
-                    between college offices in real time right here.
-                  </EmptyState>
-                }
-              />
-            </Card>
-          )}
+                    <div className="mt-4 flex flex-wrap items-center gap-2 text-2xs text-ink-500">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="size-3.5 text-brand-600" />
+                        Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days
+                      </span>
+                      {user.role === 'faculty' && (
+                        <span className="inline-flex items-center gap-1 rounded bg-brand-50 px-2 py-0.5 text-2xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200/60">
+                          {user.origin === 'IDS' ? '🏫 IDS Route' : '🏛️ CESS Route'}: Sec → Chair → {user.origin === 'IDS' ? 'Principal → ' : ''}Dean → Rel
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Folder Card Actions */}
+                  <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => openFolder(t.id)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                    >
+                      Open Folder <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                    </button>
+
+                    <Link
+                      to={`/app/requests/new?type=${t.id}`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
+                    >
+                      <FilePlus2 className="size-3 text-brand-600" /> + New Request
+                    </Link>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
