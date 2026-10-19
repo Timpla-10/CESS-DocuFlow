@@ -85,66 +85,6 @@ export function MyDocumentsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow={user.role === 'student' ? 'Student Workspace' : 'Requester Workspace'}
-        title="Document Repository"
-        description="Browse your requests organized by official document category folder, track active approvals, or file a new request."
-        actions={
-          <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-            Submit Document Request
-          </ButtonLink>
-        }
-      />
-
-      {/* High-priority Action Callouts */}
-      {returnedDocs.length > 0 && (
-        <Callout
-          tone="danger"
-          icon={AlertCircle}
-          title={`${returnedDocs.length === 1 ? 'A document needs attention' : `${returnedDocs.length} documents need attention`}`}
-        >
-          <p>
-            {returnedDocs.length === 1
-              ? 'Your document was returned for correction. Review the comments and resubmit.'
-              : 'Some documents were returned for correction. Review the comments and resubmit.'}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {returnedDocs.map((doc) => (
-              <Link
-                key={doc.id}
-                to={`/app/documents/${doc.id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-700"
-              >
-                <RotateCcw className="size-3.5" /> Fix {doc.title}
-              </Link>
-            ))}
-          </div>
-        </Callout>
-      )}
-
-      {readyDocs.length > 0 && (
-        <Callout
-          tone="success"
-          icon={PackageCheck}
-          title={`${readyDocs.length === 1 ? 'A document is' : `${readyDocs.length} documents are`} ready to collect`}
-        >
-          <p>
-            Please visit the College Secretary’s office with your university ID to receive your completed, signed document.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {readyDocs.map((doc) => (
-              <Link
-                key={doc.id}
-                to={`/app/documents/${doc.id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-700"
-              >
-                View {doc.title}
-              </Link>
-            ))}
-          </div>
-        </Callout>
-      )}
-
       {/* ------------------------------------------------------------------ */}
       {/* CASE A: Specific Folder is Selected (Drill-Down View)              */}
       {/* ------------------------------------------------------------------ */}
@@ -397,10 +337,69 @@ export function MyDocumentsPage() {
         </div>
       ) : (
         /* ------------------------------------------------------------------ */
-        /* ------------------------------------------------------------------ */
         /* CASE B: Main Repository (Category Folders Grid)                   */
         /* ------------------------------------------------------------------ */
         <div className="space-y-6">
+          <PageHeader
+            eyebrow={user.role === 'student' ? 'Student Workspace' : 'Requester Workspace'}
+            title="Document Repository"
+            description="Browse your requests organized by official document category folder, track active approvals, or file a new request."
+            actions={
+              <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+                Submit Document Request
+              </ButtonLink>
+            }
+          />
+
+          {/* High-priority Action Callouts */}
+          {returnedDocs.length > 0 && (
+            <Callout
+              tone="danger"
+              icon={AlertCircle}
+              title={`${returnedDocs.length === 1 ? 'A document needs attention' : `${returnedDocs.length} documents need attention`}`}
+            >
+              <p>
+                {returnedDocs.length === 1
+                  ? 'Your document was returned for correction. Review the comments and resubmit.'
+                  : 'Some documents were returned for correction. Review the comments and resubmit.'}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {returnedDocs.map((doc) => (
+                  <Link
+                    key={doc.id}
+                    to={`/app/documents/${doc.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-700"
+                  >
+                    <RotateCcw className="size-3.5" /> Fix {doc.title}
+                  </Link>
+                ))}
+              </div>
+            </Callout>
+          )}
+
+          {readyDocs.length > 0 && (
+            <Callout
+              tone="success"
+              icon={PackageCheck}
+              title={`${readyDocs.length === 1 ? 'A document is' : `${readyDocs.length} documents are`} ready to collect`}
+            >
+              <p>
+                Please visit the College Secretary’s office with your university ID to receive your completed, signed document.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {readyDocs.map((doc) => (
+                  <Link
+                    key={doc.id}
+                    to={`/app/documents/${doc.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-700"
+                  >
+                    View {doc.title}
+                  </Link>
+                ))}
+              </div>
+            </Callout>
+          )}
+
           {/* Section Heading */}
           <div>
             <h2 className="text-lg font-bold text-ink-950">
