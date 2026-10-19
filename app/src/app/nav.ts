@@ -2,7 +2,6 @@ import {
   Archive,
   BookOpen,
   ClipboardCheck,
-  FilePlus2,
   Files,
   FolderOpen,
   History,
@@ -56,7 +55,6 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
-            { to: '/app/requests/new', label: 'Request a Document', icon: FilePlus2 },
           ],
         },
         {
@@ -80,7 +78,6 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
-            { to: '/app/requests/new', label: 'Request a Document', icon: FilePlus2 },
           ],
         },
         {
