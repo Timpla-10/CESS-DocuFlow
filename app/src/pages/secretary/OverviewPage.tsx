@@ -3,7 +3,6 @@ import {
   ArrowRight,
   CheckCircle2,
   CheckSquare,
-  ExternalLink,
   Inbox,
   PackageCheck,
   Route,
@@ -310,7 +309,7 @@ export function OverviewPage() {
           </Card>
         </div>
 
-        {/* Right Col: Office Distribution & Shortcuts */}
+        {/* Right Col: Office Distribution */}
         <div className="space-y-6">
           <Card>
             <CardHeader
@@ -323,62 +322,6 @@ export function OverviewPage() {
                 emptyLabel="No documents currently under review."
                 centerLabel="In Review"
               />
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader
-              title="Secretary Shortcuts"
-              description="Quick administrative navigation"
-            />
-            <div className="p-4 sm:p-5">
-              <ul className="space-y-1.5">
-                <li>
-                  <Link
-                    to="/app/documents"
-                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
-                  >
-                    <span>Central Repository (CESS / IDS)</span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/app/notices"
-                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
-                  >
-                    <span>Post College Notice or Minutes</span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/app/faculty-directory"
-                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
-                  >
-                    <span>Faculty Directory & Syllabi</span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/app/email-log"
-                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
-                  >
-                    <span>Notification & Email Log</span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/app/settings"
-                    className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-ink-800 transition-colors hover:bg-brand-50 hover:text-brand-900"
-                  >
-                    <span>System Settings & Routes</span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </Link>
-                </li>
-              </ul>
             </div>
           </Card>
         </div>
