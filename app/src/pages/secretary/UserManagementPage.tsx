@@ -311,26 +311,48 @@ export function UserManagementPage() {
     }
   }
 
-  const handleDownloadSample = (type: 'student' | 'faculty') => {
+  const handleDownloadSample = (type: 'cess_student' | 'ids_student' | 'faculty') => {
     let content = ''
     let dlName = ''
 
-    if (type === 'student') {
+    if (type === 'cess_student') {
       content = `ID Number,Full Name,Institutional Email,Department,Unit
 2023101,Clara Mae Mendoza,clara.mendoza@msunaawan.edu.ph,BSEd English,CESS
 2023102,Joshua David Tan,joshua.tan@msunaawan.edu.ph,BEEd General Curriculum,CESS
-2023103,Samantha Cruz,samantha.cruz@msunaawan.edu.ph,IDS High School,IDS
 2023104,Arvin Ramos,arvin.ramos@msunaawan.edu.ph,BA Social Sciences,CESS
 2024015,Althea Mae Soriano,althea.soriano@msunaawan.edu.ph,BSEd Filipino,CESS
-2024089,Kenneth Bryan Garcia,kenneth.garcia@msunaawan.edu.ph,BEEd General Curriculum,CESS`
+2024089,Kenneth Bryan Garcia,kenneth.garcia@msunaawan.edu.ph,BEEd General Curriculum,CESS
+2022340,Christian Jay Mercado,christian.mercado@msunaawan.edu.ph,BSEd Social Studies,CESS
+2024112,Princess Diane Gomez,princess.gomez@msunaawan.edu.ph,BSEd English,CESS
+2023205,Mark Anthony Villanueva,mark.villanueva@msunaawan.edu.ph,BA Social Sciences,CESS
+2024156,Bea Nicole Castro,bea.castro@msunaawan.edu.ph,BSEd Mathematics,CESS
+2023308,Lance Patrick Navarro,lance.navarro@msunaawan.edu.ph,BSEd Science,CESS`
       dlName = 'MSUN_CESS_Student_Masterlist_Sample.csv'
+    } else if (type === 'ids_student') {
+      content = `ID Number,Full Name,Institutional Email,Department,Unit
+2024501,Samantha Cruz,samantha.cruz@msunaawan.edu.ph,IDS Grade 12 - STEM,IDS
+2024502,Danica Nicole Perez,danica.perez@msunaawan.edu.ph,IDS Grade 12 - HUMSS,IDS
+2024503,Miguel Luis Reyes,miguel.reyes@msunaawan.edu.ph,IDS Grade 11 - STEM,IDS
+2024504,Kristine Joy Torres,kristine.torres@msunaawan.edu.ph,IDS Grade 11 - HUMSS,IDS
+2024505,Angelo Gabriel Aquino,angelo.aquino@msunaawan.edu.ph,IDS Grade 10 - JHS,IDS
+2024506,Hannah Mae Delos Reyes,hannah.delosreyes@msunaawan.edu.ph,IDS Grade 10 - JHS,IDS
+2024507,Justin Carlo Bautista,justin.bautista@msunaawan.edu.ph,IDS Grade 9 - JHS,IDS
+2024508,Sofia Isabelle Lim,sofia.lim@msunaawan.edu.ph,IDS Grade 8 - JHS,IDS
+2024509,Ethan James Salvador,ethan.salvador@msunaawan.edu.ph,IDS Grade 7 - JHS,IDS
+2024510,Chloe Denise Vergara,chloe.vergara@msunaawan.edu.ph,IDS Grade 7 - JHS,IDS`
+      dlName = 'MSUN_IDS_Student_Masterlist_Sample.csv'
     } else {
       content = `Employee ID,Full Name,Institutional Email,Department,Unit,Position
 1018042,Dr. Elena Bautista,elena.bautista@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Associate Professor
 1020119,Mr. Gabriel Santos,gabriel.santos@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher II
 1015083,Dr. Corazon Morales,corazon.morales@msunaawan.edu.ph,Department of Social Sciences and Humanities,CESS,Professor
-1024003,Prof. Rhea Mendez,rhea.mendez@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Assistant Professor`
-      dlName = 'MSUN_CESS_Faculty_Roster_Sample.csv'
+1024003,Prof. Rhea Mendez,rhea.mendez@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Assistant Professor
+1025018,Engr. Daniel Ocampo,daniel.ocampo@msunaawan.edu.ph,Integrated Developmental School,IDS,Instructor
+1026002,Ms. Fatima Joy Alvarez,fatima.alvarez@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher I
+1019011,Prof. Ana Lim,ana.lim@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Assistant Professor
+1021045,Prof. Ben Aquino,ben.aquino@msunaawan.edu.ph,Department of Social Sciences and Humanities,CESS,Instructor
+1018092,Mr. Jose Dela Cruz,jose.delacruz@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher III`
+      dlName = 'MSUN_Faculty_Roster_Sample.csv'
     }
 
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
@@ -672,16 +694,43 @@ export function UserManagementPage() {
                 </div>
 
                 <div className="flex flex-col justify-end">
+                  <label className="mb-1 block text-xs font-semibold text-ink-700">Sample Templates (7-Digit IDs)</label>
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={Download}
-                      onClick={() => handleDownloadSample(importTargetRole)}
-                      className="w-full"
-                    >
-                      Sample CSV Template
-                    </Button>
+                    {importTargetRole === 'student' ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={Download}
+                          onClick={() => handleDownloadSample('cess_student')}
+                          className="flex-1 text-xs"
+                          title="Download sample CESS College Students CSV"
+                        >
+                          CESS Students
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={Download}
+                          onClick={() => handleDownloadSample('ids_student')}
+                          className="flex-1 text-xs"
+                          title="Download sample IDS High School Students CSV"
+                        >
+                          IDS Students
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={Download}
+                        onClick={() => handleDownloadSample('faculty')}
+                        className="w-full text-xs"
+                        title="Download sample Faculty & Staff CSV"
+                      >
+                        Faculty Roster CSV
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -701,8 +750,43 @@ export function UserManagementPage() {
                     {fileName ? `Selected: ${fileName}` : 'Click to select or drag & drop semester CSV file'}
                   </p>
                   <p className="mt-1 text-xs text-ink-500">
-                    Expected columns: ID Number, Full Name, Institutional Email (@msunaawan.edu.ph), Department, Unit
+                    Expected columns: ID Number (strictly 7 numeric digits), Full Name, Institutional Email (@msunaawan.edu.ph), Department, Unit (CESS or IDS)
                   </p>
+                  <div className="mt-3 flex items-center justify-center gap-3 text-xs text-brand-700">
+                    <span className="text-ink-400">Download templates:</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handleDownloadSample('cess_student')
+                      }}
+                      className="underline hover:text-brand-900 font-medium"
+                    >
+                      CESS Students
+                    </button>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handleDownloadSample('ids_student')
+                      }}
+                      className="underline hover:text-brand-900 font-medium"
+                    >
+                      IDS Students
+                    </button>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handleDownloadSample('faculty')
+                      }}
+                      className="underline hover:text-brand-900 font-medium"
+                    >
+                      Faculty Roster
+                    </button>
+                  </div>
                 </label>
               </div>
 
