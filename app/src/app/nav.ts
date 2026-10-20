@@ -11,6 +11,7 @@ import {
   Megaphone,
   PackageCheck,
   Settings,
+  Users,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { reviewInbox, secretaryQueues, visibleDocuments } from '../data/selectors'
@@ -104,8 +105,21 @@ export function navFor(role: Role): NavSection[] {
           ],
         },
         {
+          heading: 'Administration',
+          items: [
+            {
+              to: '/app/users',
+              label: 'User Management',
+              icon: Users,
+              count: (db) => (db.pendingRegistrations ?? []).filter((p) => p.status === 'pending').length,
+              countTone: 'warning',
+            },
+            { to: '/app/settings', label: 'System Settings', icon: Settings },
+          ],
+        },
+        {
           heading: 'College information',
-          items: [notices, directory, { to: '/app/settings', label: 'System Settings', icon: Settings }],
+          items: [notices, directory],
         },
       ]
     case 'dean':

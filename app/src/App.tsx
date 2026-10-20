@@ -25,6 +25,7 @@ import { OverviewPage } from './pages/secretary/OverviewPage'
 import { ReleasePage } from './pages/secretary/ReleasePage'
 import { RequirementsCheckPage } from './pages/secretary/RequirementsCheckPage'
 import { SettingsPage } from './pages/secretary/SettingsPage'
+import { UserManagementPage } from './pages/secretary/UserManagementPage'
 
 const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'chancellor']
 
@@ -158,6 +159,14 @@ export default function App() {
                 element={
                   <Protected allowedRoles={['secretary']}>
                     <EmailLogPage />
+                  </Protected>
+                }
+              />
+              <Route
+                path="users"
+                element={
+                  <Protected allowedRoles={['secretary']}>
+                    <UserManagementPage />
                   </Protected>
                 }
               />

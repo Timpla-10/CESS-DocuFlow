@@ -234,6 +234,33 @@ export interface Settings {
   reminderEveryDays: number
 }
 
+export interface WhitelistEntry {
+  id: string
+  idNumber: string
+  name: string
+  email: string
+  role: 'student' | 'faculty' | 'chairperson' | 'dean' | 'ids_principal'
+  department: string
+  origin?: Origin
+  term: string
+  status: 'pre_registered' | 'activated'
+  importedAt: string
+  importedBy: string
+}
+
+export interface PendingRegistration {
+  id: string
+  name: string
+  email: string
+  idNumber?: string
+  requestedRole: Role
+  department: string
+  origin?: Origin
+  submittedAt: string
+  status: 'pending' | 'approved' | 'rejected'
+  rejectionReason?: string
+}
+
 export interface Database {
   version: number
   users: User[]
@@ -246,4 +273,7 @@ export interface Database {
   syllabusTemplate?: SyllabusTemplate
   settings: Settings
   counter: number
+  whitelist: WhitelistEntry[]
+  pendingRegistrations: PendingRegistration[]
 }
+

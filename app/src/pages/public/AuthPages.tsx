@@ -12,6 +12,7 @@ import {
   MailCheck,
   Shield,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
@@ -22,7 +23,7 @@ import { ButtonLink, Callout, cn } from '../../components/ui'
 import { MESSAGES, ROLE_LABEL, friendlyError } from '../../content/language'
 import { DEMO_PASSWORD } from '../../data/seed'
 import { api, useDb } from '../../data/store'
-import type { Role } from '../../data/types'
+import type { Origin, Role } from '../../data/types'
 
 const PORTAL_OPTIONS: { id: string; label: string; role: Role; origin?: 'CESS' | 'IDS' }[] = [
   { id: 'student', label: ROLE_LABEL.student, role: 'student', origin: 'CESS' },
@@ -531,6 +532,21 @@ export function SignInPage() {
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
   const [busy, setBusy] = useState(false)
 
+  // Registration Mode State
+  const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin')
+  const [regName, setRegName] = useState('')
+  const [regEmail, setRegEmail] = useState('')
+  const [regIdNumber, setRegIdNumber] = useState('')
+  const [regRole, setRegRole] = useState<Role>('student')
+  const [regOrigin, setRegOrigin] = useState<'CESS' | 'IDS'>('CESS')
+  const [regDept, setRegDept] = useState('BSEd English')
+  const [regBusy, setRegBusy] = useState(false)
+  const [regFeedback, setRegFeedback] = useState<{
+    type: 'success' | 'pending' | 'error'
+    title: string
+    message: string
+  } | null>(null)
+
   const fromPath = typeof state.from === 'string' ? state.from : state.from?.pathname
 
   if (user) return <Navigate to={fromPath ?? homeFor(user.role)} replace />
@@ -609,28 +625,92 @@ export function SignInPage() {
     }
   }
 
+  const submitRegister = async (e: FormEvent) => {
+    e.preventDefault()
+    setRegFeedback(null)
+    const nextErrors: typeof errors = {}
+    if (!regName.trim()) nextErrors.email = 'Please enter your full name.'
+    if (!regEmail.trim()) nextErrors.email = 'Please enter your institutional email.'
+    else if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(regEmail.trim())) {
+      nextErrors.email = 'Email must be an official @msunaawan.edu.ph address.'
+    }
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors)
+      return
+    }
+
+    setRegBusy(true)
+    try {
+      const res = await api.registerUser({
+        name: regName,
+        email: regEmail,
+        idNumber: regIdNumber,
+        requestedRole: regRole,
+        department: regDept,
+        origin: regOrigin,
+      })
+
+      if (res.status === 'activated') {
+        setRegFeedback({
+          type: 'success',
+          title: '🎉 Masterlist Match Confirmed!',
+          message: `Your record was verified on the official semester masterlist. Your account has been activated automatically as ${ROLE_LABEL[res.user.role]} (${res.user.department}). You can now sign in!`,
+        })
+        setEmail(regEmail)
+        setPassword(DEMO_PASSWORD)
+        setAuthMode('signin')
+      } else {
+        setRegFeedback({
+          type: 'pending',
+          title: '⏳ Submitted to College Secretary',
+          message: `Your email address is not currently on the pre-loaded semester masterlist. Your registration has been submitted to the College Secretary (Ms. Carmela Ortiz) for manual verification. You will be able to access the system once approved.`,
+        })
+      }
+    } catch (err) {
+      setRegFeedback({
+        type: 'error',
+        title: 'Registration Error',
+        message: friendlyError(err),
+      })
+    } finally {
+      setRegBusy(false)
+    }
+  }
+
   return (
     <AuthLayout>
       <div className="w-full animate-fade-up">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-[#1E1035] sm:text-[30px] sm:leading-tight">
-          Welcome to CESS DocuFlow
-        </h1>
-        <p className="mt-1.5 text-sm font-medium text-[#6B7280]">
-          Your documents, one clear path.
-        </p>
+        {authMode === 'signin' ? (
+          <>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-[#1E1035] sm:text-[30px] sm:leading-tight">
+              Welcome to CESS DocuFlow
+            </h1>
+            <p className="mt-1.5 text-sm font-medium text-[#6B7280]">
+              Your documents, one clear path.
+            </p>
 
-        {state.signedOut && !errors.form && (
-          <Callout tone="success" icon={ShieldCheck} className="mt-5">
-            You’ve signed out. See you next time!
-          </Callout>
-        )}
-        {errors.form && (
-          <Callout tone="danger" className="mt-5" title="We couldn’t sign you in">
-            {errors.form.replace(/^We couldn’t sign you in\. /, '')}
-          </Callout>
-        )}
+            {regFeedback && (
+              <Callout
+                tone={regFeedback.type === 'success' ? 'success' : regFeedback.type === 'pending' ? 'warning' : 'danger'}
+                className="mt-5"
+                title={regFeedback.title}
+              >
+                {regFeedback.message}
+              </Callout>
+            )}
 
-        <form onSubmit={submit} noValidate className="mt-7 space-y-4">
+            {state.signedOut && !errors.form && !regFeedback && (
+              <Callout tone="success" icon={ShieldCheck} className="mt-5">
+                You’ve signed out. See you next time!
+              </Callout>
+            )}
+            {errors.form && (
+              <Callout tone="danger" className="mt-5" title="We couldn’t sign you in">
+                {errors.form.replace(/^We couldn’t sign you in\. /, '')}
+              </Callout>
+            )}
+
+            <form onSubmit={submit} noValidate className="mt-7 space-y-4">
           {/* Field 1: Institutional Email */}
           <div>
             <label htmlFor={emailId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
@@ -832,24 +912,172 @@ export function SignInPage() {
             </Link>
           </div>
 
-          {/* Primary Sign In Button */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={busy}
-              aria-busy={busy}
-              className={cn(
-                'inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-8 text-sm font-bold text-white transition-all duration-200',
-                'bg-gradient-to-r from-[#5B3A99] via-[#4B2E81] to-[#3D246B] shadow-[0_8px_22px_-6px_rgba(91,58,153,0.60)]',
-                'hover:-translate-y-0.5 hover:from-[#4B2E81] hover:to-[#2A174C] hover:shadow-[0_12px_28px_-6px_rgba(42,23,76,0.75)]',
-                'active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60',
-              )}
-            >
-              <span>{busy ? 'Signing in…' : 'Sign In'}</span>
-              {!busy && <ArrowRight className="size-4" aria-hidden="true" />}
-            </button>
-          </div>
-        </form>
+              {/* Primary Sign In Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={busy}
+                  aria-busy={busy}
+                  className={cn(
+                    'inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-8 text-sm font-bold text-white transition-all duration-200',
+                    'bg-gradient-to-r from-[#5B3A99] via-[#4B2E81] to-[#3D246B] shadow-[0_8px_22px_-6px_rgba(91,58,153,0.60)]',
+                    'hover:-translate-y-0.5 hover:from-[#4B2E81] hover:to-[#2A174C] hover:shadow-[0_12px_28px_-6px_rgba(42,23,76,0.75)]',
+                    'active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer',
+                  )}
+                >
+                  <span>{busy ? 'Signing in…' : 'Sign In'}</span>
+                  {!busy && <ArrowRight className="size-4" aria-hidden="true" />}
+                </button>
+              </div>
+
+              {/* Toggle to Registration Mode */}
+              <div className="mt-5 text-center text-xs text-[#6B7280]">
+                First time using CESS DocuFlow?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegFeedback(null)
+                    setErrors({})
+                    setAuthMode('register')
+                  }}
+                  className="font-bold text-purple-800 hover:text-purple-950 hover:underline cursor-pointer"
+                >
+                  Register with Institutional Email
+                </button>
+              </div>
+            </form>
+          </>
+        ) : (
+          /* REGISTRATION MODE */
+          <>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-[#1E1035] sm:text-[30px] sm:leading-tight">
+              Create University Account
+            </h1>
+            <p className="mt-1.5 text-sm font-medium text-[#6B7280]">
+              Register with your @msunaawan.edu.ph institutional email.
+            </p>
+
+            {regFeedback && (
+              <Callout
+                tone={regFeedback.type === 'success' ? 'success' : regFeedback.type === 'pending' ? 'warning' : 'danger'}
+                className="mt-5"
+                title={regFeedback.title}
+              >
+                {regFeedback.message}
+              </Callout>
+            )}
+
+            <form onSubmit={submitRegister} noValidate className="mt-6 space-y-3.5">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Full Name</label>
+                <input
+                  type="text"
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="e.g. Maria Clara Santos"
+                  required
+                  className="h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#1E1035]">
+                  MSU at Naawan Email (@msunaawan.edu.ph)
+                </label>
+                <input
+                  type="email"
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                  placeholder="username@msunaawan.edu.ph"
+                  required
+                  className="h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#1E1035]">
+                  Student / Employee ID Number
+                </label>
+                <input
+                  type="text"
+                  value={regIdNumber}
+                  onChange={(e) => setRegIdNumber(e.target.value)}
+                  placeholder="e.g. 2024-0012 or EMP-2024-003"
+                  className="h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Role</label>
+                  <select
+                    value={regRole}
+                    onChange={(e) => setRegRole(e.target.value as Role)}
+                    className="h-10 w-full rounded-full bg-[#F1ECF9] px-3 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  >
+                    <option value="student">Student</option>
+                    <option value="faculty">Faculty Member</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Unit / School</label>
+                  <select
+                    value={regOrigin}
+                    onChange={(e) => setRegOrigin(e.target.value as Origin)}
+                    className="h-10 w-full rounded-full bg-[#F1ECF9] px-3 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  >
+                    <option value="CESS">CESS Main Campus</option>
+                    <option value="IDS">IDS Developmental School</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Department / Degree Program</label>
+                <input
+                  type="text"
+                  value={regDept}
+                  onChange={(e) => setRegDept(e.target.value)}
+                  placeholder="e.g. BSEd English, BEEd, or IDS High School"
+                  required
+                  className="h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={regBusy}
+                  className={cn(
+                    'inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-8 text-sm font-bold text-white transition-all duration-200',
+                    'bg-gradient-to-r from-[#5B3A99] via-[#4B2E81] to-[#3D246B] shadow-[0_8px_22px_-6px_rgba(91,58,153,0.60)]',
+                    'hover:-translate-y-0.5 hover:from-[#4B2E81] hover:to-[#2A174C] hover:shadow-[0_12px_28px_-6px_rgba(42,23,76,0.75)]',
+                    'active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer',
+                  )}
+                >
+                  <Sparkles className="size-4" />
+                  <span>{regBusy ? 'Verifying with Masterlist…' : 'Verify & Register Account'}</span>
+                </button>
+              </div>
+
+              <div className="mt-4 text-center text-xs text-[#6B7280]">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegFeedback(null)
+                    setErrors({})
+                    setAuthMode('signin')
+                  }}
+                  className="font-bold text-purple-800 hover:text-purple-950 hover:underline cursor-pointer"
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </AuthLayout>
   )

@@ -24,8 +24,9 @@ import {
 } from './engine'
 import type { Database, DocumentType, ExternalOfficeItem, User } from './types'
 
-export const DB_VERSION = 11
+export const DB_VERSION = 12
 export const DEMO_PASSWORD = 'cess2026'
+
 
 const users: User[] = [
   { id: 'u-student-1', name: 'Maria Santos', email: 'maria.santos@msunaawan.edu.ph', role: 'student', origin: 'CESS', department: 'BSEd English, 3rd Year', position: 'Student', active: true, notificationPreference: 'both' },
@@ -254,7 +255,44 @@ export function createSeed(): Database {
     },
     settings: { reminderEveryDays: 3 },
     counter: 100,
+    whitelist: [
+      { id: 'wl-1', idNumber: '2023-0142', name: 'Maria Santos', email: 'maria.santos@msunaawan.edu.ph', role: 'student', department: 'BSEd English', origin: 'CESS', term: '1st Sem AY 2026-2027', status: 'activated', importedAt: '2026-08-15T08:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-2', idNumber: '2022-0891', name: 'Paolo Reyes', email: 'paolo.reyes@msunaawan.edu.ph', role: 'student', department: 'BA Social Sciences', origin: 'CESS', term: '1st Sem AY 2026-2027', status: 'activated', importedAt: '2026-08-15T08:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-3', idNumber: 'EMP-2019-011', name: 'Prof. Ana Lim', email: 'ana.lim@msunaawan.edu.ph', role: 'faculty', department: 'Department of Secondary and Elementary Education', origin: 'CESS', term: '1st Sem AY 2026-2027', status: 'activated', importedAt: '2026-08-12T09:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-4', idNumber: 'EMP-2021-045', name: 'Prof. Ben Aquino', email: 'ben.aquino@msunaawan.edu.ph', role: 'faculty', department: 'Department of Social Sciences and Humanities', origin: 'CESS', term: '1st Sem AY 2026-2027', status: 'activated', importedAt: '2026-08-12T09:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-5', idNumber: 'EMP-2018-092', name: 'Mr. Jose Dela Cruz', email: 'jose.delacruz@msunaawan.edu.ph', role: 'faculty', department: 'Integrated Developmental School', origin: 'IDS', term: '1st Sem AY 2026-2027', status: 'activated', importedAt: '2026-08-12T09:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-6', idNumber: '2024-0012', name: 'Althea Mae Soriano', email: 'althea.soriano@msunaawan.edu.ph', role: 'student', department: 'BSEd Filipino', origin: 'CESS', term: '1st Sem AY 2026-2027', status: 'pre_registered', importedAt: '2026-08-15T08:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-7', idNumber: '2024-0089', name: 'Kenneth Bryan Garcia', email: 'kenneth.garcia@msunaawan.edu.ph', role: 'student', department: 'BEEd General Curriculum', origin: 'CESS', term: '1st Sem AY 2026-2027', status: 'pre_registered', importedAt: '2026-08-15T08:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-8', idNumber: '2023-0451', name: 'Danica Nicole Perez', email: 'danica.perez@msunaawan.edu.ph', role: 'student', department: 'IDS Grade 12 - STEM', origin: 'IDS', term: '1st Sem AY 2026-2027', status: 'pre_registered', importedAt: '2026-08-15T08:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-9', idNumber: 'EMP-2024-003', name: 'Prof. Rhea Mendez', email: 'rhea.mendez@msunaawan.edu.ph', role: 'faculty', department: 'Department of Secondary and Elementary Education', origin: 'CESS', term: '1st Sem AY 2026-2027', status: 'pre_registered', importedAt: '2026-08-12T09:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+      { id: 'wl-10', idNumber: 'EMP-2025-018', name: 'Engr. Daniel Ocampo', email: 'daniel.ocampo@msunaawan.edu.ph', role: 'faculty', department: 'Integrated Developmental School', origin: 'IDS', term: '1st Sem AY 2026-2027', status: 'pre_registered', importedAt: '2026-08-12T09:00:00Z', importedBy: 'Ms. Carmela Ortiz' },
+    ],
+    pendingRegistrations: [
+      {
+        id: 'pr-1',
+        name: 'Christian Jay Mercado',
+        email: 'christian.mercado@msunaawan.edu.ph',
+        idNumber: '2025-TRANS-04',
+        requestedRole: 'student',
+        department: 'BSEd Social Studies',
+        origin: 'CESS',
+        submittedAt: ago(1, 4),
+        status: 'pending',
+      },
+      {
+        id: 'pr-2',
+        name: 'Ms. Fatima Joy Alvarez',
+        email: 'fatima.alvarez@msunaawan.edu.ph',
+        idNumber: 'EMP-2026-NEW-02',
+        requestedRole: 'faculty',
+        department: 'Integrated Developmental School',
+        origin: 'IDS',
+        submittedAt: ago(0, 5),
+        status: 'pending',
+      },
+    ],
   }
+
 
   const U = (id: string) => db.users.find((u) => u.id === id)!
   const sec = U('u-secretary')

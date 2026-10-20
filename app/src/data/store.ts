@@ -19,9 +19,11 @@ import type {
   FacultyEntry,
   NotificationPreference,
   Origin,
+  PendingRegistration,
   Role,
   SyllabusTemplate,
   User,
+  WhitelistEntry,
 } from './types'
 
 const KEY = 'docuflow.db'
@@ -247,6 +249,270 @@ export const api = {
       const u = d.users.find((x) => x.id === userId)
       if (u) u.active = active
     }),
+
+  /** Masterlist / Whitelist Import (REQ-AUTH-3, Pre-loaded Semester Masterlist) */
+  importWhitelist: (
+    actor: User,
+    entries: Omit<WhitelistEntry, 'id' | 'status' | 'term' | 'importedAt' | 'importedBy'>[],
+    term: string,
+  ) =>
+    mutate((d, at) => {
+      if (actor.role !== 'secretary') {
+        throw new FriendlyError('Only the College Secretary can import masterlists.')
+      }
+      if (!term.trim()) {
+        throw new FriendlyError('Please specify the academic term for this masterlist.')
+      }
+      if (!entries.length) {
+        throw new FriendlyError('No valid rows found in the imported file.')
+      }
+
+      let added = 0
+      let updated = 0
+
+      for (const entry of entries) {
+        const cleanEmail = entry.email.trim().toLowerCase()
+        if (!cleanEmail || !cleanEmail.endsWith('@msunaawan.edu.ph')) continue
+
+        const existingUser = d.users.find((u) => u.email.toLowerCase() === cleanEmail)
+        const isAlreadyActive = !!existingUser
+
+        const existingWl = d.whitelist.find((w) => w.email.toLowerCase() === cleanEmail)
+        if (existingWl) {
+          existingWl.idNumber = entry.idNumber || existingWl.idNumber
+          existingWl.name = entry.name || existingWl.name
+          existingWl.role = entry.role || existingWl.role
+          existingWl.department = entry.department || existingWl.department
+          existingWl.origin = entry.origin ?? existingWl.origin
+          existingWl.term = term.trim()
+          existingWl.status = isAlreadyActive ? 'activated' : existingWl.status
+          existingWl.importedAt = at
+          existingWl.importedBy = actor.name
+          updated++
+        } else {
+          d.whitelist.push({
+            id: engine.nextId(d, 'wl-'),
+            idNumber: entry.idNumber.trim(),
+            name: entry.name.trim(),
+            email: cleanEmail,
+            role: entry.role,
+            department: entry.department.trim(),
+            origin: entry.origin ?? 'CESS',
+            term: term.trim(),
+            status: isAlreadyActive ? 'activated' : 'pre_registered',
+            importedAt: at,
+            importedBy: actor.name,
+          })
+          added++
+        }
+      }
+
+      return { added, updated, total: entries.length }
+    }),
+
+  deleteWhitelistEntry: (actor: User, entryId: string) =>
+    mutate((d) => {
+      if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can manage the whitelist.')
+      const idx = d.whitelist.findIndex((w) => w.id === entryId)
+      if (idx !== -1) {
+        d.whitelist.splice(idx, 1)
+      }
+    }),
+
+  approvePendingRegistration: (
+    actor: User,
+    registrationId: string,
+    overrides?: { role?: Role; department?: string; origin?: Origin },
+  ) =>
+    mutate((d, at) => {
+      if (actor.role !== 'secretary') {
+        throw new FriendlyError('Only the College Secretary can approve pending registrations.')
+      }
+      const reg = d.pendingRegistrations.find((r) => r.id === registrationId)
+      if (!reg) throw new FriendlyError('Pending registration record not found.')
+      if (reg.status !== 'pending') throw new FriendlyError('This registration request has already been processed.')
+
+      const role = overrides?.role ?? reg.requestedRole
+      const department = overrides?.department ?? reg.department
+      const origin = overrides?.origin ?? reg.origin ?? 'CESS'
+
+      // Check if user account already exists
+      let existing = d.users.find((u) => u.email.toLowerCase() === reg.email.toLowerCase())
+      if (existing) {
+        existing.active = true
+        existing.role = role
+        existing.department = department
+        existing.origin = role === 'student' || role === 'faculty' ? origin : undefined
+      } else {
+        const newUser: User = {
+          id: engine.nextId(d, 'u-'),
+          name: reg.name,
+          email: reg.email.toLowerCase(),
+          role,
+          department,
+          origin: role === 'student' || role === 'faculty' ? origin : undefined,
+          position: role === 'student' ? 'Student' : 'Faculty',
+          active: true,
+          notificationPreference: 'both',
+        }
+        d.users.push(newUser)
+        existing = newUser
+      }
+
+      reg.status = 'approved'
+
+      // Mark or insert whitelist record
+      const wl = d.whitelist.find((w) => w.email.toLowerCase() === reg.email.toLowerCase())
+      if (wl) {
+        wl.status = 'activated'
+        wl.role = role as any
+        wl.department = department
+        wl.origin = origin
+      } else {
+        d.whitelist.push({
+          id: engine.nextId(d, 'wl-'),
+          idNumber: reg.idNumber ?? 'UNLISTED-APP',
+          name: reg.name,
+          email: reg.email.toLowerCase(),
+          role: role as any,
+          department,
+          origin,
+          term: 'Current Semester',
+          status: 'activated',
+          importedAt: at,
+          importedBy: actor.name,
+        })
+      }
+
+      // Add notification log
+      d.notifications.unshift({
+        id: engine.nextId(d, 'n'),
+        kind: 'update',
+        recipientId: existing.id,
+        recipientLabel: existing.name,
+        recipientEmail: existing.email,
+        subject: 'CESS DocuFlow Account Verified & Approved',
+        body: `Welcome to CESS DocuFlow! Your university registration has been officially verified and approved by the College Secretary (${actor.name}). You can now sign in with your institutional email.`,
+        at,
+        result: 'sent',
+        readBy: [],
+        channels: ['email', 'in_system'],
+      })
+
+      return existing
+    }),
+
+  rejectPendingRegistration: (actor: User, registrationId: string, reason: string) =>
+    mutate((d, at) => {
+      if (actor.role !== 'secretary') {
+        throw new FriendlyError('Only the College Secretary can reject registrations.')
+      }
+      const reg = d.pendingRegistrations.find((r) => r.id === registrationId)
+      if (!reg) throw new FriendlyError('Pending registration record not found.')
+      reg.status = 'rejected'
+      reg.rejectionReason = reason.trim() || 'Institutional verification could not be completed.'
+
+      d.notifications.unshift({
+        id: engine.nextId(d, 'n'),
+        kind: 'update',
+        recipientId: reg.id,
+        recipientLabel: reg.name,
+        recipientEmail: reg.email,
+        subject: 'CESS DocuFlow Registration Status',
+        body: `Your registration request for CESS DocuFlow was not approved. Reason: ${reg.rejectionReason}. Please contact the College Secretary for assistance.`,
+        at,
+        result: 'sent',
+        readBy: [],
+        channels: ['email'],
+      })
+    }),
+
+  registerUser: (input: {
+    name: string
+    email: string
+    idNumber?: string
+    requestedRole: Role
+    department: string
+    origin?: Origin
+  }) =>
+    mutate((d, at) => {
+      const cleanName = input.name.trim()
+      const cleanEmail = input.email.trim().toLowerCase()
+      if (!cleanName) throw new FriendlyError('Please enter your full name.')
+      if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+        throw new FriendlyError('Please enter your valid MSU at Naawan email address (@msunaawan.edu.ph).')
+      }
+
+      const existingUser = d.users.find((u) => u.email.toLowerCase() === cleanEmail)
+      if (existingUser) {
+        throw new FriendlyError('An account with this institutional email already exists. Please proceed to Sign In.')
+      }
+
+      // Check Whitelist match
+      const wlMatch = d.whitelist.find((w) => w.email.toLowerCase() === cleanEmail)
+
+      if (wlMatch) {
+        // Instant Activation via Masterlist Whitelist
+        const role = wlMatch.role
+        const department = wlMatch.department || input.department
+        const origin = wlMatch.origin ?? input.origin ?? 'CESS'
+        const newUser: User = {
+          id: engine.nextId(d, 'u-'),
+          name: wlMatch.name || cleanName,
+          email: cleanEmail,
+          role,
+          department,
+          origin: role === 'student' || role === 'faculty' ? origin : undefined,
+          position: role === 'student' ? 'Student' : 'Faculty',
+          active: true,
+          notificationPreference: 'both',
+        }
+        d.users.push(newUser)
+        wlMatch.status = 'activated'
+
+        d.notifications.unshift({
+          id: engine.nextId(d, 'n'),
+          kind: 'update',
+          recipientId: newUser.id,
+          recipientLabel: newUser.name,
+          recipientEmail: newUser.email,
+          subject: 'Welcome to CESS DocuFlow (Masterlist Verified)',
+          body: `Your student/faculty record was verified against the official semester masterlist. Your account is active. Welcome!`,
+          at,
+          result: 'sent',
+          readBy: [],
+          channels: ['email', 'in_system'],
+        })
+
+        return { status: 'activated' as const, user: newUser }
+      }
+
+      // Unlisted User: Queue for College Secretary approval
+      const existingPending = d.pendingRegistrations.find(
+        (p) => p.email.toLowerCase() === cleanEmail && p.status === 'pending',
+      )
+      if (existingPending) {
+        throw new FriendlyError(
+          'Your registration is already pending verification with the College Secretary. Please await approval.',
+        )
+      }
+
+      const pending: PendingRegistration = {
+        id: engine.nextId(d, 'pr-'),
+        name: cleanName,
+        email: cleanEmail,
+        idNumber: input.idNumber?.trim(),
+        requestedRole: input.requestedRole,
+        department: input.department.trim(),
+        origin: input.origin ?? 'CESS',
+        submittedAt: at,
+        status: 'pending',
+      }
+      d.pendingRegistrations.push(pending)
+
+      return { status: 'pending' as const, pending }
+    }),
+
 
   updateProcessingDays: (actor: User, typeId: string, days: [number, number]) =>
     mutate((d) => {

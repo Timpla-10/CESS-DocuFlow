@@ -11,30 +11,29 @@ import {
   ShieldAlert,
   Trash2,
   UploadCloud,
-  UserCheck,
-  UserPlus,
-  UserX,
   Users,
   X,
 } from 'lucide-react'
 import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
 import { Badge, Button, Card, CardHeader, PageHeader } from '../../components/ui'
-import { OFFICE_LABEL, ROLE_LABEL } from '../../content/language'
+import { OFFICE_LABEL } from '../../content/language'
 import { api, useDb } from '../../data/store'
-import type { DocumentType, ExternalOfficeItem, OfficeId, Origin, Requirement, Role, User } from '../../data/types'
+import type { DocumentType, ExternalOfficeItem, OfficeId, Requirement } from '../../data/types'
 
 const REVIEW_OFFICE_CHOICES: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
 const HIGHER_OFFICE_CHOICES: OfficeId[] = ['ovcaa', 'chancellor']
-const ALL_ROLES: Role[] = ['student', 'faculty', 'secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+
 
 export function SettingsPage() {
   const user = useUser()
   const db = useDb()
   const toast = useToast()
+  const navigate = useNavigate()
 
   // 1. Reminder days state (REQ-NOT-3)
   const [reminderDays, setReminderDays] = useState(db.settings.reminderEveryDays)
@@ -55,16 +54,7 @@ export function SettingsPage() {
   const [editingExtId, setEditingExtId] = useState<string | null>(null)
   const [extBusy, setExtBusy] = useState(false)
 
-  // 5. User Account Create / Edit Dialog State (REQ-AUTH-3)
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false)
-  const [editingUserId, setEditingUserId] = useState<string | undefined>(undefined)
-  const [uName, setUName] = useState('')
-  const [uEmail, setUEmail] = useState('')
-  const [uRole, setURole] = useState<Role>('student')
-  const [uOrigin, setUOrigin] = useState<Origin>('CESS')
-  const [uDept, setUDept] = useState('')
-  const [uPos, setUPos] = useState('')
-  const [userBusy, setUserBusy] = useState(false)
+
 
   // --- Handlers ---
 
@@ -197,67 +187,6 @@ export function SettingsPage() {
     }
   }
 
-  // User Account Modal Handlers
-  const openCreateUser = () => {
-    setEditingUserId(undefined)
-    setUName('')
-    setUEmail('')
-    setURole('student')
-    setUOrigin('CESS')
-    setUDept('BSEd English')
-    setUPos('Student')
-    setIsUserModalOpen(true)
-  }
-
-  const openEditUser = (u: User) => {
-    setEditingUserId(u.id)
-    setUName(u.name)
-    setUEmail(u.email)
-    setURole(u.role)
-    setUOrigin(u.origin ?? 'CESS')
-    setUDept(u.department)
-    setUPos(u.position)
-    setIsUserModalOpen(true)
-  }
-
-  const handleSaveUser = async (e: FormEvent) => {
-    e.preventDefault()
-    setUserBusy(true)
-    try {
-      await api.saveUserAccount(user, {
-        id: editingUserId,
-        name: uName,
-        email: uEmail,
-        role: uRole,
-        origin: uRole === 'student' || uRole === 'faculty' ? uOrigin : undefined,
-        department: uDept,
-        position: uPos,
-      })
-      toast.success(
-        editingUserId ? 'Account Updated' : 'Account Created',
-        `Saved account for ${uName.trim()} (${ROLE_LABEL[uRole]}).`,
-      )
-      setIsUserModalOpen(false)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unable to save user account.'
-      toast.error('Save Failed', msg)
-    } finally {
-      setUserBusy(false)
-    }
-  }
-
-  const handleToggleUser = async (targetUserId: string, currentActive: boolean) => {
-    try {
-      await api.setUserActive(user, targetUserId, !currentActive)
-      toast.success(
-        !currentActive ? 'Account Activated' : 'Account Deactivated',
-        !currentActive ? 'User can now sign in.' : 'User will be denied access upon next login.',
-      )
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Action failed.'
-      toast.error('Action Failed', msg)
-    }
-  }
 
   const handleResetDemo = () => {
     if (window.confirm('Reset all demo data back to default sample state? Any changes made during this session will be replaced.')) {
@@ -493,72 +422,32 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {/* 4. User Accounts Management (REQ-AUTH-2, REQ-AUTH-3, REQ-AUTH-9) */}
-      <Card>
+      {/* 4. User Accounts & Masterlist Migration Link Card */}
+      <Card className="border-brand-200 bg-brand-50/20">
         <CardHeader
           icon={Users}
-          title="Authorized User Accounts & Roles (REQ-AUTH-2, REQ-AUTH-3)"
-          description="Create, edit, assign roles, and activate or deactivate university accounts (@msunaawan.edu.ph)."
+          title="User Accounts, Roles & Semester Masterlists"
+          description="Manage all student and faculty accounts, semester CSV/Excel masterlist imports, and pending account approvals in the dedicated User Management module."
           action={
-            <Button size="sm" icon={UserPlus} onClick={openCreateUser}>
-              Create User Account
+            <Button size="sm" icon={Users} onClick={() => navigate('/app/users')}>
+              Open User Management
             </Button>
           }
         />
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-ink-100 text-xs font-semibold uppercase tracking-wider text-ink-500">
-                <th className="px-5 py-3.5 min-w-[200px]">Name & Department</th>
-                <th className="px-5 py-3.5 min-w-[180px]">Role & Origin</th>
-                <th className="px-5 py-3.5 min-w-[200px]">University Email</th>
-                <th className="px-5 py-3.5 min-w-[120px]">Status</th>
-                <th className="px-5 py-3.5 min-w-[200px] text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-100">
-              {db.users.map((u) => (
-                <tr key={u.id} className="hover:bg-brand-50/50">
-                  <td className="px-5 py-4">
-                    <div className="font-semibold text-ink-900">{u.name}</div>
-                    <div className="mt-0.5 text-xs text-ink-500">{u.department}</div>
-                  </td>
-                  <td className="px-5 py-4 text-ink-700">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-ink-800">{ROLE_LABEL[u.role]}</span>
-                      {u.origin && <Badge tone="neutral" dot={false}>{u.origin}</Badge>}
-                    </div>
-                    <div className="mt-0.5 text-xs text-ink-500">{u.position}</div>
-                  </td>
-                  <td className="px-5 py-4 font-mono text-xs text-ink-600">{u.email}</td>
-                  <td className="px-5 py-4 whitespace-nowrap">
-                    {u.active ? (
-                      <Badge tone="success">Active</Badge>
-                    ) : (
-                      <Badge tone="danger">Deactivated</Badge>
-                    )}
-                  </td>
-                  <td className="px-5 py-4 text-right whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button size="sm" variant="ghost" icon={Edit3} onClick={() => openEditUser(u)}>
-                        Edit / Role
-                      </Button>
-                      {u.id !== user.id && (
-                        <Button
-                          size="sm"
-                          variant={u.active ? 'danger-soft' : 'secondary'}
-                          onClick={() => handleToggleUser(u.id, u.active)}
-                          icon={u.active ? UserX : UserCheck}
-                        >
-                          {u.active ? 'Deactivate' : 'Activate'}
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-ink-900">
+                {db.users.length} University Accounts · {(db.whitelist ?? []).length} Whitelisted Records · {(db.pendingRegistrations ?? []).filter((p) => p.status === 'pending').length} Pending Verifications
+              </p>
+              <p className="text-xs text-ink-600">
+                Bulk imports for student enrollment rosters, faculty records, automated role assignments, and instant whitelist matching have moved to the dedicated module.
+              </p>
+            </div>
+            <Button variant="secondary" onClick={() => navigate('/app/users')}>
+              Go to User Management &rarr;
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -905,90 +794,6 @@ export function SettingsPage() {
         )}
       </Dialog>
 
-      {/* ========================================================================= */}
-      {/* DIALOG 2: User Account Create / Edit & Role Assignment (REQ-AUTH-3)       */}
-      {/* ========================================================================= */}
-      <Dialog
-        open={isUserModalOpen}
-        onClose={() => setIsUserModalOpen(false)}
-        title={editingUserId ? 'Edit User Account & Role' : 'Create Authorized User Account'}
-        description="Assign roles and university email addresses (@msunaawan.edu.ph) for students, faculty, and reviewing offices (REQ-AUTH-3, REQ-AUTH-9)."
-        busy={userBusy}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setIsUserModalOpen(false)} disabled={userBusy}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveUser} loading={userBusy} icon={Save}>
-              {editingUserId ? 'Save Changes' : 'Create Account'}
-            </Button>
-          </>
-        }
-      >
-        <form className="space-y-4">
-          <Field label="Full Name" required>
-            <Input
-              type="text"
-              value={uName}
-              onChange={(e) => setUName(e.target.value)}
-              placeholder="e.g. Prof. Elena Gomez"
-            />
-          </Field>
-
-          <Field
-            label="MSU at Naawan University Email (REQ-AUTH-9)"
-            required
-            hint="Must end with @msunaawan.edu.ph. Used to sign in and receive alerts."
-          >
-            <Input
-              type="email"
-              value={uEmail}
-              onChange={(e) => setUEmail(e.target.value)}
-              placeholder="username@msunaawan.edu.ph"
-            />
-          </Field>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Assigned System Role (REQ-AUTH-2)" required>
-              <Select value={uRole} onChange={(e) => setURole(e.target.value as Role)}>
-                {ALL_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-
-            {(uRole === 'student' || uRole === 'faculty') && (
-              <Field label="Origin School / College (REQ-SUB-6)" required>
-                <Select value={uOrigin} onChange={(e) => setUOrigin(e.target.value as Origin)}>
-                  <option value="CESS">CESS (College of Education & Social Sciences)</option>
-                  <option value="IDS">IDS (Integrated Development School)</option>
-                </Select>
-              </Field>
-            )}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Department / Academic Program" required>
-              <Input
-                type="text"
-                value={uDept}
-                onChange={(e) => setUDept(e.target.value)}
-                placeholder="e.g. Department of Social Sciences"
-              />
-            </Field>
-            <Field label="Official Position / Title" required>
-              <Input
-                type="text"
-                value={uPos}
-                onChange={(e) => setUPos(e.target.value)}
-                placeholder="e.g. Assistant Professor"
-              />
-            </Field>
-          </div>
-        </form>
-      </Dialog>
     </div>
   )
 }
