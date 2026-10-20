@@ -779,74 +779,169 @@ export function ArchivePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {visibleFolders.map((folder) => {
-                  const hasRecords = folder.count > 0
-                  return (
-                    <button
-                      key={folder.docType.id}
-                      type="button"
-                      onClick={() => setSelectedTypeId(folder.docType.id)}
-                      className={cn(
-                        'group flex flex-col justify-between rounded-xl p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-raised',
-                        hasRecords
-                          ? 'bg-white ring-1 ring-ink-200 hover:ring-brand-400'
-                          : 'bg-ink-50/50 ring-1 ring-ink-100 hover:bg-white hover:ring-ink-300',
-                      )}
-                    >
-                      <div>
-                        <div className="flex items-start justify-between gap-2">
-                          <span
-                            className={cn(
-                              'grid size-10 shrink-0 place-items-center rounded-xl transition-transform group-hover:scale-105',
-                              hasRecords
-                                ? 'bg-amber-100 text-warning-700 ring-1 ring-inset ring-amber-300'
-                                : 'bg-ink-100 text-ink-500',
-                            )}
-                          >
-                            {hasRecords ? (
-                              <FolderOpen className="size-5" aria-hidden />
-                            ) : (
-                              <Folder className="size-5" aria-hidden />
-                            )}
-                          </span>
+              {viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {visibleFolders.map((folder) => {
+                    const hasRecords = folder.count > 0
+                    return (
+                      <button
+                        key={folder.docType.id}
+                        type="button"
+                        onClick={() => setSelectedTypeId(folder.docType.id)}
+                        className={cn(
+                          'group flex flex-col justify-between rounded-xl p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-raised',
+                          hasRecords
+                            ? 'bg-white ring-1 ring-ink-200 hover:ring-brand-400'
+                            : 'bg-ink-50/50 ring-1 ring-ink-100 hover:bg-white hover:ring-ink-300',
+                        )}
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <span
+                              className={cn(
+                                'grid size-10 shrink-0 place-items-center rounded-xl transition-transform group-hover:scale-105',
+                                hasRecords
+                                  ? 'bg-amber-100 text-warning-700 ring-1 ring-inset ring-amber-300'
+                                  : 'bg-ink-100 text-ink-500',
+                              )}
+                            >
+                              {hasRecords ? (
+                                <FolderOpen className="size-5" aria-hidden />
+                              ) : (
+                                <Folder className="size-5" aria-hidden />
+                              )}
+                            </span>
 
-                          <span
-                            className={cn(
-                              'inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-bold tabular-nums',
-                              hasRecords
-                                ? 'bg-brand-600 text-white'
-                                : 'bg-ink-100 text-ink-500',
-                            )}
-                          >
-                            {plural(folder.count, 'file')}
-                          </span>
+                            <span
+                              className={cn(
+                                'inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-bold tabular-nums',
+                                hasRecords
+                                  ? 'bg-brand-600 text-white'
+                                  : 'bg-ink-100 text-ink-500',
+                              )}
+                            >
+                              {plural(folder.count, 'file')}
+                            </span>
+                          </div>
+
+                          <h3 className="mt-3 line-clamp-1 text-sm font-bold text-ink-900 group-hover:text-brand-700">
+                            {folder.docType.name}
+                          </h3>
+                          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-500">
+                            {folder.docType.summary}
+                          </p>
                         </div>
 
-                        <h3 className="mt-3 line-clamp-1 text-sm font-bold text-ink-900 group-hover:text-brand-700">
-                          {folder.docType.name}
-                        </h3>
-                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-500">
-                          {folder.docType.summary}
-                        </p>
-                      </div>
-
-                      <div className="mt-4 flex items-center justify-between border-t border-ink-100 pt-2.5 text-[11px] text-ink-500">
-                        <span className="font-medium">
-                          {folder.latestReleasedAt
-                            ? `Released ${formatDate(folder.latestReleasedAt)}`
-                            : 'Empty folder'}
-                        </span>
-                        {folder.totalSizeKb > 0 && (
-                          <span className="font-mono font-semibold text-ink-600">
-                            {formatSize(folder.totalSizeKb)}
+                        <div className="mt-4 flex items-center justify-between border-t border-ink-100 pt-2.5 text-[11px] text-ink-500">
+                          <span className="font-medium">
+                            {folder.latestReleasedAt
+                              ? `Released ${formatDate(folder.latestReleasedAt)}`
+                              : 'Empty folder'}
                           </span>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
+                          {folder.totalSizeKb > 0 && (
+                            <span className="font-mono font-semibold text-ink-600">
+                              {formatSize(folder.totalSizeKb)}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl ring-1 ring-ink-100">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-ink-100 bg-ink-50/70 text-xs font-semibold uppercase tracking-wider text-ink-500">
+                        <th className="px-4 py-3.5 min-w-[280px]">Category Folder</th>
+                        <th className="px-4 py-3.5 min-w-[130px]">Filing Type</th>
+                        <th className="px-4 py-3.5 min-w-[120px]">Archived Records</th>
+                        <th className="px-4 py-3.5 min-w-[110px]">Vault Storage</th>
+                        <th className="px-4 py-3.5 min-w-[160px]">Last Release</th>
+                        <th className="px-4 py-3.5 text-right min-w-[130px]">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-ink-100 bg-white">
+                      {visibleFolders.map((folder) => {
+                        const hasRecords = folder.count > 0
+                        return (
+                          <tr
+                            key={folder.docType.id}
+                            onClick={() => setSelectedTypeId(folder.docType.id)}
+                            className="group cursor-pointer transition-colors hover:bg-brand-50/60"
+                          >
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className={cn(
+                                    'grid size-9 shrink-0 place-items-center rounded-lg ring-1 ring-inset',
+                                    hasRecords
+                                      ? 'bg-amber-100 text-warning-700 ring-amber-300'
+                                      : 'bg-ink-100 text-ink-500 ring-ink-200',
+                                  )}
+                                >
+                                  {hasRecords ? (
+                                    <FolderOpen className="size-4" aria-hidden />
+                                  ) : (
+                                    <Folder className="size-4" aria-hidden />
+                                  )}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-ink-900 group-hover:text-brand-700">
+                                    {folder.docType.name}
+                                  </div>
+                                  <div className="line-clamp-1 text-xs text-ink-500">
+                                    {folder.docType.summary}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <Badge
+                                tone={folder.docType.audience === 'student' ? 'brand' : 'dssh'}
+                                dot={false}
+                              >
+                                {folder.docType.audience === 'student' ? 'Student' : 'Faculty'}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span
+                                className={cn(
+                                  'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold tabular-nums',
+                                  hasRecords
+                                    ? 'bg-brand-50 text-brand-800 ring-1 ring-inset ring-brand-200'
+                                    : 'text-ink-400',
+                                )}
+                              >
+                                {plural(folder.count, 'file')}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 font-mono text-xs text-ink-600">
+                              {folder.totalSizeKb > 0 ? formatSize(folder.totalSizeKb) : '—'}
+                            </td>
+                            <td className="px-4 py-3.5 text-xs text-ink-600">
+                              {folder.latestReleasedAt ? formatDate(folder.latestReleasedAt) : 'No releases'}
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedTypeId(folder.docType.id)
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-ink-50 px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-ink-200 hover:bg-brand-600 hover:text-white transition-colors"
+                              >
+                                <span>Open Folder</span>
+                                <ChevronRight className="size-3.5" aria-hidden />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
 
             {/* Sub-section: Recent Releases / Pinned Audits */}
