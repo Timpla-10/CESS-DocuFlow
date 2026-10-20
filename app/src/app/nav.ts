@@ -105,6 +105,10 @@ export function navFor(role: Role): NavSection[] {
           ],
         },
         {
+          heading: 'College information',
+          items: [notices, directory],
+        },
+        {
           heading: 'Administration',
           items: [
             {
@@ -116,10 +120,6 @@ export function navFor(role: Role): NavSection[] {
             },
             { to: '/app/settings', label: 'System Settings', icon: Settings },
           ],
-        },
-        {
-          heading: 'College information',
-          items: [notices, directory],
         },
       ]
     case 'dean':
