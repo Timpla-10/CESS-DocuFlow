@@ -317,16 +317,19 @@ export function UserManagementPage() {
 
     if (type === 'student') {
       content = `ID Number,Full Name,Institutional Email,Department,Unit
-2023-0101,Clara Mae Mendoza,clara.mendoza@msunaawan.edu.ph,BSEd English,CESS
-2023-0102,Joshua David Tan,joshua.tan@msunaawan.edu.ph,BEEd General Curriculum,CESS
-2023-0103,Samantha Cruz,samantha.cruz@msunaawan.edu.ph,IDS High School,IDS
-2023-0104,Arvin Ramos,arvin.ramos@msunaawan.edu.ph,BA Social Sciences,CESS`
+2023101,Clara Mae Mendoza,clara.mendoza@msunaawan.edu.ph,BSEd English,CESS
+2023102,Joshua David Tan,joshua.tan@msunaawan.edu.ph,BEEd General Curriculum,CESS
+2023103,Samantha Cruz,samantha.cruz@msunaawan.edu.ph,IDS High School,IDS
+2023104,Arvin Ramos,arvin.ramos@msunaawan.edu.ph,BA Social Sciences,CESS
+2024015,Althea Mae Soriano,althea.soriano@msunaawan.edu.ph,BSEd Filipino,CESS
+2024089,Kenneth Bryan Garcia,kenneth.garcia@msunaawan.edu.ph,BEEd General Curriculum,CESS`
       dlName = 'MSUN_CESS_Student_Masterlist_Sample.csv'
     } else {
       content = `Employee ID,Full Name,Institutional Email,Department,Unit,Position
-EMP-2018-04,Dr. Elena Bautista,elena.bautista@msunaawan.edu.ph,Department of Science Education,CESS,Associate Professor
-EMP-2020-12,Mr. Gabriel Santos,gabriel.santos@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher II
-EMP-2015-01,Dr. Corazon Morales,corazon.morales@msunaawan.edu.ph,Department of Social Sciences,CESS,Professor`
+1018042,Dr. Elena Bautista,elena.bautista@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Associate Professor
+1020119,Mr. Gabriel Santos,gabriel.santos@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher II
+1015083,Dr. Corazon Morales,corazon.morales@msunaawan.edu.ph,Department of Social Sciences and Humanities,CESS,Professor
+1024003,Prof. Rhea Mendez,rhea.mendez@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Assistant Professor`
       dlName = 'MSUN_CESS_Faculty_Roster_Sample.csv'
     }
 
