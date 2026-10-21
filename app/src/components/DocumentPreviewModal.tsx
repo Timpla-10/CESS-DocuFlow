@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   CheckCircle2,
   Download,
   FileCheck2,
@@ -316,6 +317,8 @@ export function DocumentPreviewModal({
                       ? 'ARCHIVED RECORD'
                       : doc.status === 'released'
                       ? 'OFFICIALLY RELEASED'
+                      : doc.status === 'rejected'
+                      ? 'DISAPPROVED / REJECTED'
                       : 'OFFICIAL DOCUMENT'}
                   </p>
                   <p className="mt-2 text-2xl font-bold tracking-widest text-slate-800 font-sans">
@@ -549,6 +552,8 @@ export function DocumentPreviewModal({
                         'inline-flex items-center justify-center gap-1 mt-1 text-xs font-bold',
                         doc.status === 'released' || doc.status === 'ready'
                           ? 'text-brand-800'
+                          : doc.status === 'rejected'
+                          ? 'text-danger-700'
                           : 'text-slate-600',
                       )}
                     >
@@ -556,6 +561,11 @@ export function DocumentPreviewModal({
                         <>
                           <CheckCircle2 className="size-3.5" />
                           <span>APPROVED</span>
+                        </>
+                      ) : doc.status === 'rejected' ? (
+                        <>
+                          <AlertCircle className="size-3.5 text-danger-600" />
+                          <span>DISAPPROVED</span>
                         </>
                       ) : (
                         <span>ROUTING IN PROGRESS</span>

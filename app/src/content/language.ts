@@ -122,6 +122,8 @@ export function statusView(doc: DocRecord, audience: 'requester' | 'staff', db?:
       }
     case 'returned':
       return { label: 'Returned for Correction', tone: 'danger' }
+    case 'rejected':
+      return { label: 'Disapproved / Rejected', tone: 'danger' }
     case 'with_office':
       if (step?.stage === 'final') {
         return {
@@ -143,6 +145,7 @@ export function statusView(doc: DocRecord, audience: 'requester' | 'staff', db?:
 export const STATUS_FILTER_LABEL: Record<Status, string> = {
   submitted: 'Waiting for requirements check',
   returned: 'Returned for correction',
+  rejected: 'Disapproved / Rejected',
   with_office: 'Under review',
   with_external: 'At an external office',
   ready: 'Ready for release',
@@ -152,6 +155,7 @@ export const STATUS_FILTER_LABEL: Record<Status, string> = {
 /** Where the document is right now, in plain words. */
 export function locationLabel(doc: DocRecord, db?: Pick<Database, 'externalOffices'>): string {
   if (doc.status === 'returned') return 'With you (the requester)'
+  if (doc.status === 'rejected') return `Disapproved by ${doc.rejectionInfo?.office ?? 'Office'}`
   if (doc.status === 'with_external' && doc.externalOffice) return externalOfficeLabel(doc.externalOffice, db)
   if (doc.status === 'released') return 'Released to requester'
   const step = doc.route[doc.routeIndex]
@@ -162,6 +166,7 @@ export function locationLabel(doc: DocRecord, db?: Pick<Database, 'externalOffic
 
 export function locationLabelForStaff(doc: DocRecord, db?: Pick<Database, 'externalOffices'>): string {
   if (doc.status === 'returned') return 'Requester (for correction)'
+  if (doc.status === 'rejected') return `Disapproved by ${doc.rejectionInfo?.office ?? 'Office'}`
   return locationLabel(doc, db)
 }
 
@@ -182,6 +187,13 @@ export function requesterMessage(doc: DocRecord, delayed: boolean, db?: Pick<Dat
       return {
         title: 'Returned for correction',
         body: 'Please check the feedback below, update your document, and submit again.',
+      }
+    case 'rejected':
+      return {
+        title: 'Document Disapproved / Rejected',
+        body: doc.rejectionInfo
+          ? `Disapproved by the ${doc.rejectionInfo.office}. Reason: “${doc.rejectionInfo.reasons}”. Resubmission is not permitted for this document.`
+          : 'This document has been disapproved / rejected. Resubmission is not permitted for this document.',
       }
     case 'with_office':
       if (step?.stage === 'final') {
@@ -244,6 +256,8 @@ export function historyTitle(e: HistoryEntry): string {
       return `Approved by the ${e.office}`
     case 'returned':
       return `Returned for correction by the ${e.office}`
+    case 'rejected':
+      return `Disapproved / Rejected by the ${e.office}`
     case 'sent_external':
       return `Sent to the ${e.target ?? 'external office'}`
     case 'returned_external':
@@ -259,6 +273,7 @@ export function historyTone(e: HistoryEntry): Tone {
   switch (e.action) {
     case 'returned':
     case 'checked_incomplete':
+    case 'rejected':
       return 'danger'
     case 'approved':
     case 'marked_ready':

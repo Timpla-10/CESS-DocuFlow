@@ -82,23 +82,27 @@ export function DocumentDetailPage() {
   const [resubmitNote, setResubmitNote] = useState('')
   const [resubmitFiles, setResubmitFiles] = useState<{ name: string; sizeKb: number; fileObj?: File }[]>([])
   const [resubmitBusy, setResubmitBusy] = useState(false)
+  const [resubmitErrors, setResubmitErrors] = useState<{ title?: string; general?: string }>({})
 
   // Secretary Content Verification form state (REQ-REQT-4, REQ-REQT-5)
-  const [checkDecision, setCheckDecision] = useState<'complete' | 'return'>('complete')
+  const [checkDecision, setCheckDecision] = useState<'complete' | 'return' | 'reject'>('complete')
   const [flaggedReqIds, setFlaggedReqIds] = useState<string[]>([])
   const [checkReasons, setCheckReasons] = useState('')
   const [checkBusy, setCheckBusy] = useState(false)
+  const [checkErrors, setCheckErrors] = useState<{ reasons?: string }>({})
 
   // Review Office form state
   const [reviewKind, setReviewKind] = useState<ReviewKind>('endorse')
   const [reviewRemarks, setReviewRemarks] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewErrors, setReviewErrors] = useState<{ remarks?: string }>({})
 
   // External Office form state
   const [externalOffice, setExternalOffice] = useState<ExternalOfficeId>(db.externalOffices[0]?.id ?? 'hrmo')
   const [externalHandedBy, setExternalHandedBy] = useState(user.name)
   const [externalRemarks, setExternalRemarks] = useState('')
   const [externalBusy, setExternalBusy] = useState(false)
+  const [externalErrors, setExternalErrors] = useState<{ handedBy?: string }>({})
 
   // External Return form state
   const [extReturnRemarks, setExtReturnRemarks] = useState('')
@@ -108,6 +112,7 @@ export function DocumentDetailPage() {
   const [releaseReceivedBy, setReleaseReceivedBy] = useState('')
   const [releaseSignedFile, setReleaseSignedFile] = useState<{ name: string; sizeKb: number; fileObj?: File } | null>(null)
   const [releaseBusy, setReleaseBusy] = useState(false)
+  const [releaseErrors, setReleaseErrors] = useState<{ receivedBy?: string }>({})
 
   if (!doc || !canView(user, doc)) {
     return (
@@ -162,6 +167,7 @@ export function DocumentDetailPage() {
     setResubmitDesc(doc.description)
     setResubmitNote('')
     setResubmitFiles([])
+    setResubmitErrors({})
     setIsResubmitOpen(true)
   }
 
@@ -169,18 +175,21 @@ export function DocumentDetailPage() {
     setCheckDecision('complete')
     setFlaggedReqIds([])
     setCheckReasons('')
+    setCheckErrors({})
     setIsCheckOpen(true)
   }
 
   const handleOpenReview = () => {
     setReviewKind(allowedReviewOpts[0]?.kind ?? 'endorse')
     setReviewRemarks('')
+    setReviewErrors({})
     setIsReviewOpen(true)
   }
 
   const handleOpenRelease = () => {
     setReleaseReceivedBy(requester?.name ?? '')
     setReleaseSignedFile(null)
+    setReleaseErrors({})
     setIsReleaseOpen(true)
   }
 
@@ -199,6 +208,7 @@ export function DocumentDetailPage() {
       return
     }
     setResubmitFiles((prev) => [...prev, { name: file.name, sizeKb, fileObj: file }])
+    setResubmitErrors((prev) => ({ ...prev, general: undefined }))
     e.target.value = ''
   }
 
@@ -222,6 +232,19 @@ export function DocumentDetailPage() {
 
   const handleResubmitSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    setResubmitErrors({})
+    const errs: { title?: string; general?: string } = {}
+    if (!resubmitTitle.trim()) {
+      errs.title = 'Please enter a document title.'
+    }
+    if (resubmitFiles.length === 0 && !resubmitNote.trim()) {
+      errs.general = 'Please attach at least one corrected file or explain what you revised.'
+    }
+    if (Object.keys(errs).length > 0) {
+      setResubmitErrors(errs)
+      toast.error('Incomplete Resubmission', 'Please resolve the highlighted issues before submitting.')
+      return
+    }
     setResubmitBusy(true)
     try {
       const payloadFiles: NewFile[] = resubmitFiles.map((f) => ({
@@ -229,9 +252,9 @@ export function DocumentDetailPage() {
         sizeKb: f.sizeKb,
       }))
       const updated = await api.resubmit(user, doc.id, {
-        title: resubmitTitle,
-        description: resubmitDesc,
-        note: resubmitNote,
+        title: resubmitTitle.trim(),
+        description: resubmitDesc.trim(),
+        note: resubmitNote.trim(),
         files: payloadFiles,
       })
       // Save object URLs
@@ -256,6 +279,17 @@ export function DocumentDetailPage() {
 
   const handleCheckRequirements = async (e: FormEvent) => {
     e.preventDefault()
+    setCheckErrors({})
+    if (checkDecision === 'return' && !checkReasons.trim()) {
+      setCheckErrors({ reasons: 'Please enter the specific reasons for returning this submission.' })
+      toast.error('Reason Required', 'Please provide feedback explaining what needs correction.')
+      return
+    }
+    if (checkDecision === 'reject' && !checkReasons.trim()) {
+      setCheckErrors({ reasons: 'Please enter the reasons for disapproving/rejecting this submission.' })
+      toast.error('Rejection Reason Required', 'Please provide feedback explaining why the document is disapproved.')
+      return
+    }
     setCheckBusy(true)
     try {
       await api.checkRequirements(user, doc.id, {
@@ -264,9 +298,15 @@ export function DocumentDetailPage() {
         reasons: checkReasons,
       })
       toast.success(
-        checkDecision === 'return' ? 'Returned for Content Correction' : 'Content Verified & Routed',
+        checkDecision === 'return'
+          ? 'Returned for Content Correction'
+          : checkDecision === 'reject'
+          ? 'Document Disapproved / Rejected'
+          : 'Content Verified & Routed',
         checkDecision === 'return'
           ? 'The submission was returned to the requester with your content verification feedback.'
+          : checkDecision === 'reject'
+          ? 'The submission has been disapproved and rejected. The requester has been notified.'
           : 'Content verification recorded. The document has been logged and routed automatically.',
       )
       setIsCheckOpen(false)
@@ -280,6 +320,17 @@ export function DocumentDetailPage() {
 
   const handleReviewSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    setReviewErrors({})
+    if (reviewKind === 'return' && !reviewRemarks.trim()) {
+      setReviewErrors({ remarks: 'Please enter correction remarks explaining what needs to be changed.' })
+      toast.error('Remarks Required', 'Please provide correction feedback before returning.')
+      return
+    }
+    if (reviewKind === 'reject' && !reviewRemarks.trim()) {
+      setReviewErrors({ remarks: 'Please state the reason for disapproving/rejecting this document.' })
+      toast.error('Reason Required', 'Please provide the disapproval reason.')
+      return
+    }
     setReviewBusy(true)
     try {
       await api.recordReview(user, doc.id, {
@@ -289,11 +340,15 @@ export function DocumentDetailPage() {
       toast.success(
         reviewKind === 'return'
           ? 'Document Returned for Correction'
+          : reviewKind === 'reject'
+          ? 'Document Disapproved / Rejected'
           : reviewKind === 'approve'
           ? 'Document Approved'
           : 'Document Endorsed',
         reviewKind === 'return'
           ? 'The requester was notified with your correction remarks.'
+          : reviewKind === 'reject'
+          ? 'The document has been officially disapproved. The requester was notified.'
           : 'Your decision has been recorded and the document routed accordingly.',
       )
       setIsReviewOpen(false)
@@ -307,6 +362,12 @@ export function DocumentDetailPage() {
 
   const handleSendExternal = async (e: FormEvent) => {
     e.preventDefault()
+    setExternalErrors({})
+    if (!externalHandedBy.trim()) {
+      setExternalErrors({ handedBy: 'Please specify the name of the person who handed over the document.' })
+      toast.error('Hand-off Person Required', 'Please state who is delivering the document.')
+      return
+    }
     setExternalBusy(true)
     try {
       await api.sendToExternal(user, doc.id, {
@@ -356,6 +417,12 @@ export function DocumentDetailPage() {
 
   const handleReleaseSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    setReleaseErrors({})
+    if (!releaseReceivedBy.trim()) {
+      setReleaseErrors({ receivedBy: 'Please enter the name of the person who received the document.' })
+      toast.error('Recipient Name Required', 'Please enter who collected the document.')
+      return
+    }
     setReleaseBusy(true)
     try {
       const updated = await api.recordRelease(user, doc.id, {
@@ -416,7 +483,7 @@ export function DocumentDetailPage() {
                     Archived (Read-Only)
                   </Badge>
                 )}
-                {isReqUser && doc.requesterId === user.id && doc.status !== 'returned' && (
+                {isReqUser && doc.requesterId === user.id && doc.status !== 'returned' && doc.status !== 'rejected' && (
                   <span className="inline-flex items-center gap-1 rounded-md bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-800 ring-1 ring-inset ring-ink-200">
                     <Lock className="size-3 text-ink-600" aria-hidden />
                     Locked during routing
@@ -426,6 +493,12 @@ export function DocumentDetailPage() {
                   <Badge tone="danger" dot={false} className="gap-1 font-bold">
                     <RotateCcw className="size-3" aria-hidden />
                     Unlocked for Revision
+                  </Badge>
+                )}
+                {doc.status === 'rejected' && (
+                  <Badge tone="danger" dot={false} className="gap-1 font-bold">
+                    <AlertCircle className="size-3" aria-hidden />
+                    Disapproved / Closed
                   </Badge>
                 )}
               </div>
@@ -452,7 +525,7 @@ export function DocumentDetailPage() {
         <div className="p-6">
           <Callout
             tone={
-              doc.status === 'returned'
+              doc.status === 'returned' || doc.status === 'rejected'
                 ? 'danger'
                 : doc.status === 'ready'
                 ? 'success'
@@ -481,10 +554,32 @@ export function DocumentDetailPage() {
                 )}
               </div>
             )}
+
+            {/* Specific rejection info details */}
+            {doc.status === 'rejected' && doc.rejectionInfo && (
+              <div className="mt-3 rounded-lg bg-white p-4 ring-2 ring-danger-300 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-danger-100 pb-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-danger-700 flex items-center gap-1.5">
+                    <AlertCircle className="size-3.5 text-danger-600" />
+                    Official Disapproval from {doc.rejectionInfo.office}
+                  </p>
+                  <span className="text-2xs font-semibold text-ink-500">
+                    Recorded {formatDateTime(doc.rejectionInfo.at)} by {doc.rejectionInfo.by}
+                  </span>
+                </div>
+                <div className="mt-2.5">
+                  <p className="text-xs font-bold text-ink-800">Reason for Rejection / Disapproval:</p>
+                  <p className="mt-1 text-sm font-medium text-ink-950 whitespace-pre-wrap">{doc.rejectionInfo.reasons}</p>
+                </div>
+                <div className="mt-3 rounded-md bg-danger-50 px-3 py-2 text-2xs text-danger-800 border border-danger-200">
+                  <strong>Notice:</strong> This document request has been closed and disapproved. Unlike returned requests, rejected documents cannot be resubmitted. If you have questions or require reconsideration, please visit the {doc.rejectionInfo.office} or the College Secretary in person.
+                </div>
+              </div>
+            )}
           </Callout>
 
           {/* Strict Edit Lock Notice for Requesters (REQ-SUB-LOCK) */}
-          {isReqUser && doc.requesterId === user.id && doc.status !== 'returned' && (
+          {isReqUser && doc.requesterId === user.id && doc.status !== 'returned' && doc.status !== 'rejected' && (
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-ink-200 bg-ink-50/80 p-4 shadow-2xs">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-ink-200 text-ink-800">
                 <Lock className="size-4.5 text-ink-700" aria-hidden="true" />
@@ -744,23 +839,30 @@ export function DocumentDetailPage() {
         }
       >
         <form className="space-y-4">
-          <Field label="Document Title" required>
+          <Field label="Document Title" required error={resubmitErrors.title}>
             <Input
               type="text"
               value={resubmitTitle}
-              onChange={(e) => setResubmitTitle(e.target.value)}
+              onChange={(e) => {
+                setResubmitTitle(e.target.value)
+                if (resubmitErrors.title) setResubmitErrors((prev) => ({ ...prev, title: undefined }))
+              }}
             />
           </Field>
 
           <Field
             label="What changes did you make?"
             required
+            error={resubmitErrors.general}
             hint="Explain how you addressed the comments provided by the reviewing office."
           >
             <Textarea
               rows={3}
               value={resubmitNote}
-              onChange={(e) => setResubmitNote(e.target.value)}
+              onChange={(e) => {
+                setResubmitNote(e.target.value)
+                if (resubmitErrors.general) setResubmitErrors((prev) => ({ ...prev, general: undefined }))
+              }}
               placeholder="e.g. Attached the signed certification and updated page 2..."
             />
           </Field>
@@ -804,7 +906,7 @@ export function DocumentDetailPage() {
         onClose={() => setIsCheckOpen(false)}
         size="lg"
         title="Verify Content & Log Submission"
-        description="The automatic completeness checker has verified that all required attachments are present. Review the uploaded files for content correctness, then mark Complete to log and route, or Return if content issues are found."
+        description="The automatic completeness checker has verified that all required attachments are present. Review the uploaded files for content correctness, then mark Complete to log and route, Return if content issues are found, or Disapprove / Reject if the submission is invalid."
         busy={checkBusy}
         footer={
           <>
@@ -814,10 +916,14 @@ export function DocumentDetailPage() {
             <Button
               onClick={handleCheckRequirements}
               loading={checkBusy}
-              variant={checkDecision === 'return' ? 'danger' : 'primary'}
-              icon={checkDecision === 'return' ? AlertCircle : CheckCircle2}
+              variant={checkDecision === 'return' || checkDecision === 'reject' ? 'danger' : 'primary'}
+              icon={checkDecision === 'return' ? AlertCircle : checkDecision === 'reject' ? X : CheckCircle2}
             >
-              {checkDecision === 'return' ? 'Return for Content Issues' : 'Mark Complete, Log & Route'}
+              {checkDecision === 'return'
+                ? 'Return for Content Issues'
+                : checkDecision === 'reject'
+                ? 'Disapprove & Reject Submission'
+                : 'Mark Complete, Log & Route'}
             </Button>
           </>
         }
@@ -878,10 +984,14 @@ export function DocumentDetailPage() {
             <Segmented
               label="Verification Result"
               value={checkDecision}
-              onChange={(v) => setCheckDecision(v)}
+              onChange={(v) => {
+                setCheckDecision(v)
+                setCheckErrors({})
+              }}
               options={[
                 { value: 'complete', label: 'Complete — Content is Correct' },
                 { value: 'return', label: 'Return — Content Has Issues' },
+                { value: 'reject', label: 'Disapprove / Reject Submission' },
               ]}
             />
           </div>
@@ -914,22 +1024,36 @@ export function DocumentDetailPage() {
           )}
 
           <Field
-            label={checkDecision === 'return' ? 'Reasons for Returning (Content Issues)' : 'Verification Remarks'}
-            required={checkDecision === 'return'}
+            label={
+              checkDecision === 'return'
+                ? 'Reasons for Returning (Content Issues)'
+                : checkDecision === 'reject'
+                ? 'Reasons for Disapproval / Rejection'
+                : 'Verification Remarks'
+            }
+            required={checkDecision === 'return' || checkDecision === 'reject'}
             optional={checkDecision === 'complete'}
+            error={checkErrors.reasons}
             hint={
               checkDecision === 'return'
                 ? 'Required (REQ-REQT-5): Explain what information inside the document or attachments is incorrect or incomplete.'
+                : checkDecision === 'reject'
+                ? 'Required: Explain why this submission is disapproved/rejected. The requester will receive this notification.'
                 : 'Optional note recorded with your content verification.'
             }
           >
             <Textarea
               rows={3}
               value={checkReasons}
-              onChange={(e) => setCheckReasons(e.target.value)}
+              onChange={(e) => {
+                setCheckReasons(e.target.value)
+                if (checkErrors.reasons) setCheckErrors({})
+              }}
               placeholder={
                 checkDecision === 'return'
                   ? 'e.g. Page 2 of the form is unsigned, or the attached certification is missing the instructor signature...'
+                  : checkDecision === 'reject'
+                  ? 'e.g. Document does not meet institutional academic requirements or ineligible request...'
                   : 'Content verified complete and accurate. Logging and routing...'
               }
             />
@@ -942,7 +1066,7 @@ export function DocumentDetailPage() {
         open={isReviewOpen}
         onClose={() => setIsReviewOpen(false)}
         title={`Review Document — ${currentStep?.label ?? OFFICE_LABEL[user.role as keyof typeof OFFICE_LABEL]}`}
-        description="Record your decision on this document. You can endorse it, approve it, or return it to the requester for necessary revisions."
+        description="Record your decision on this document. You can endorse it, approve it, return it for revisions, or disapprove/reject it."
         busy={reviewBusy}
         footer={
           <>
@@ -952,10 +1076,12 @@ export function DocumentDetailPage() {
             <Button
               onClick={handleReviewSubmit}
               loading={reviewBusy}
-              variant={reviewKind === 'return' ? 'danger' : 'primary'}
+              variant={reviewKind === 'return' || reviewKind === 'reject' ? 'danger' : 'primary'}
             >
               {reviewKind === 'return'
                 ? 'Return for Correction'
+                : reviewKind === 'reject'
+                ? 'Disapprove & Reject Document'
                 : reviewKind === 'approve'
                 ? 'Approve Document'
                 : reviewKind === 'endorse_higher'
@@ -992,7 +1118,10 @@ export function DocumentDetailPage() {
           <Field label="Action to Record" required>
             <Select
               value={reviewKind}
-              onChange={(e) => setReviewKind(e.target.value as ReviewKind)}
+              onChange={(e) => {
+                setReviewKind(e.target.value as ReviewKind)
+                if (reviewErrors.remarks) setReviewErrors({})
+              }}
             >
               {allowedReviewOpts.map((opt) => (
                 <option key={opt.kind} value={opt.kind}>
@@ -1002,6 +1131,8 @@ export function DocumentDetailPage() {
                     ? `Needs Higher Approval — Route to ${docType?.higherApproval.map((o) => OFFICE_LABEL[o]).join(' & ')}`
                     : opt.kind === 'approve'
                     ? 'Approve Document (Complete Office Review)'
+                    : opt.kind === 'reject'
+                    ? 'Disapprove / Reject Document (Final Disapproval)'
                     : 'Return for Correction'}
                 </option>
               ))}
@@ -1010,18 +1141,28 @@ export function DocumentDetailPage() {
 
           <Field
             label="Remarks / Comments"
-            required={reviewKind === 'return'}
+            required={reviewKind === 'return' || reviewKind === 'reject'}
+            error={reviewErrors.remarks}
             hint={
               reviewKind === 'return'
                 ? 'Please explain what needs to be corrected. The requester will review your comments.'
+                : reviewKind === 'reject'
+                ? 'Please state the reason for disapproving/rejecting this document. The requester will review your comments.'
                 : 'Optional notes to accompany your endorsement or approval.'
             }
           >
             <Textarea
               rows={3}
               value={reviewRemarks}
-              onChange={(e) => setReviewRemarks(e.target.value)}
-              placeholder="Enter your comments or decision rationale..."
+              onChange={(e) => {
+                setReviewRemarks(e.target.value)
+                if (reviewErrors.remarks) setReviewErrors({})
+              }}
+              placeholder={
+                reviewKind === 'reject'
+                  ? 'Enter the official reason for disapproving this document...'
+                  : 'Enter your comments or decision rationale...'
+              }
             />
           </Field>
         </form>
@@ -1059,11 +1200,14 @@ export function DocumentDetailPage() {
             </Select>
           </Field>
 
-          <Field label="Handed Over By" required>
+          <Field label="Handed Over By" required error={externalErrors.handedBy}>
             <Input
               type="text"
               value={externalHandedBy}
-              onChange={(e) => setExternalHandedBy(e.target.value)}
+              onChange={(e) => {
+                setExternalHandedBy(e.target.value)
+                if (externalErrors.handedBy) setExternalErrors({})
+              }}
             />
           </Field>
 
@@ -1130,12 +1274,16 @@ export function DocumentDetailPage() {
           <Field
             label="Name of Person Who Received Document (REQ-REL-2)"
             required
+            error={releaseErrors.receivedBy}
             hint="Enter the full name of the student, faculty member, or authorized representative."
           >
             <Input
               type="text"
               value={releaseReceivedBy}
-              onChange={(e) => setReleaseReceivedBy(e.target.value)}
+              onChange={(e) => {
+                setReleaseReceivedBy(e.target.value)
+                if (releaseErrors.receivedBy) setReleaseErrors({})
+              }}
               placeholder="e.g. Maria Santos"
             />
           </Field>

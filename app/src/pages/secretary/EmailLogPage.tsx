@@ -22,6 +22,7 @@ const KIND_LABEL: Record<NotificationKind, string> = {
   reminder: 'Office Turnaround Reminder',
   update: 'Requester Progress Update',
   notice: 'Notice / Minutes Released',
+  rejected: 'Disapproval / Rejection Notice',
 }
 
 export function EmailLogPage() {

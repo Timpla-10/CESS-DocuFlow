@@ -93,6 +93,7 @@ export function AllDocumentsPage() {
     { requirementId?: string; name: string; sizeKb: number; fileObj?: File }[]
   >([])
   const [walkInBusy, setWalkInBusy] = useState(false)
+  const [walkInErrors, setWalkInErrors] = useState<{ title?: string; files?: string }>({})
 
   const handleOpenWalkIn = (preselectedTypeId?: string) => {
     const firstReq = requesters[0]
@@ -102,6 +103,7 @@ export function AllDocumentsPage() {
     setTitle('')
     setDescription('')
     setAttachedFiles([])
+    setWalkInErrors({})
     setIsWalkInOpen(true)
   }
 
@@ -111,6 +113,7 @@ export function AllDocumentsPage() {
     const nextTypes = db.documentTypes.filter((t) => !req || t.audience === req.role)
     setTypeId(nextTypes[0]?.id ?? '')
     setAttachedFiles([])
+    setWalkInErrors({})
   }
 
   const handleFileChosen = (e: ChangeEvent<HTMLInputElement>, req?: Requirement) => {
@@ -133,17 +136,35 @@ export function AllDocumentsPage() {
       const filtered = req ? prev.filter((f) => f.requirementId !== req.id) : prev
       return [...filtered, { requirementId: req?.id, name: file.name, sizeKb, fileObj: file }]
     })
+    setWalkInErrors((prev) => ({ ...prev, files: undefined }))
     e.target.value = ''
   }
 
   const handleWalkInSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!selectedType || !selectedRequester) return
+
+    const errs: { title?: string; files?: string } = {}
     if (!title.trim()) {
-      toast.error('Missing Title', 'Please enter a title or subject for the walk-in document.')
+      errs.title = 'Please enter a title or subject for this walk-in document.'
+    }
+    const missingReqs = (selectedType.requirements ?? []).filter(
+      (r) => r.required && !attachedFiles.some((f) => f.requirementId === r.id),
+    )
+    if (missingReqs.length > 0) {
+      errs.files = `Missing required attachment: ${missingReqs.map((r) => r.label).join(', ')}`
+    }
+
+    if (errs.title || errs.files) {
+      setWalkInErrors(errs)
+      toast.error(
+        'Submission Incomplete',
+        errs.title ?? errs.files ?? 'Please provide all required walk-in information.',
+      )
       return
     }
 
+    setWalkInErrors({})
     setWalkInBusy(true)
     try {
       const payloadFiles: NewFile[] = attachedFiles.map((f) => ({
@@ -632,12 +653,16 @@ export function AllDocumentsPage() {
           <Field
             label="Title or Subject"
             required
+            error={walkInErrors.title}
             hint="A clear title identifying the paper packet (e.g. Leave Application — First Semester)."
           >
             <Input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value)
+                if (walkInErrors.title) setWalkInErrors((prev) => ({ ...prev, title: undefined }))
+              }}
               placeholder="Enter specific subject / title"
             />
           </Field>
@@ -653,9 +678,16 @@ export function AllDocumentsPage() {
 
           {/* Attachments Section */}
           <div>
-            <label className="block text-xs font-semibold text-ink-800">
-              Attach Physical Document Scans
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-ink-800">
+                Attach Physical Document Scans
+              </label>
+              {walkInErrors.files && (
+                <p role="alert" className="text-2xs font-semibold text-danger-700">
+                  {walkInErrors.files}
+                </p>
+              )}
+            </div>
             <div className="mt-2 space-y-2">
               {selectedType?.requirements.map((req) => {
                 const attached = attachedFiles.find((f) => f.requirementId === req.id)

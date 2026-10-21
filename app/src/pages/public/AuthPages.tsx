@@ -540,6 +540,7 @@ export function SignInPage() {
   const [regRole, setRegRole] = useState<Role>('student')
   const [regOrigin, setRegOrigin] = useState<'CESS' | 'IDS'>('CESS')
   const [regDept, setRegDept] = useState('BSEd English')
+  const [regErrors, setRegErrors] = useState<{ name?: string; email?: string; dept?: string }>({})
   const [regBusy, setRegBusy] = useState(false)
   const [regFeedback, setRegFeedback] = useState<{
     type: 'success' | 'pending' | 'error'
@@ -628,14 +629,15 @@ export function SignInPage() {
   const submitRegister = async (e: FormEvent) => {
     e.preventDefault()
     setRegFeedback(null)
-    const nextErrors: typeof errors = {}
-    if (!regName.trim()) nextErrors.email = 'Please enter your full name.'
-    if (!regEmail.trim()) nextErrors.email = 'Please enter your institutional email.'
+    const errs: { name?: string; email?: string; dept?: string } = {}
+    if (!regName.trim()) errs.name = 'Please enter your full name.'
+    if (!regEmail.trim()) errs.email = 'Please enter your institutional email.'
     else if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(regEmail.trim())) {
-      nextErrors.email = 'Email must be an official @msunaawan.edu.ph address.'
+      errs.email = 'Email must be an official @msunaawan.edu.ph address.'
     }
-    if (Object.keys(nextErrors).length) {
-      setErrors(nextErrors)
+    if (!regDept.trim()) errs.dept = 'Please specify your department or degree program.'
+    setRegErrors(errs)
+    if (Object.keys(errs).length) {
       return
     }
 
@@ -973,11 +975,24 @@ export function SignInPage() {
                 <input
                   type="text"
                   value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
+                  onChange={(e) => {
+                    setRegName(e.target.value)
+                    if (regErrors.name) setRegErrors((prev) => ({ ...prev, name: undefined }))
+                  }}
                   placeholder="e.g. Maria Clara Santos"
                   required
-                  className="h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  aria-invalid={!!regErrors.name}
+                  className={cn(
+                    'h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 transition-all',
+                    regErrors.name && 'bg-danger-50/50 ring-danger-500 focus:ring-danger-500',
+                  )}
                 />
+                {regErrors.name && (
+                  <p role="alert" className="mt-1 flex items-center gap-1.5 pl-3 text-xs font-medium text-danger-700">
+                    <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
+                    {regErrors.name}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -987,11 +1002,24 @@ export function SignInPage() {
                 <input
                   type="email"
                   value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
+                  onChange={(e) => {
+                    setRegEmail(e.target.value)
+                    if (regErrors.email) setRegErrors((prev) => ({ ...prev, email: undefined }))
+                  }}
                   placeholder="username@msunaawan.edu.ph"
                   required
-                  className="h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  aria-invalid={!!regErrors.email}
+                  className={cn(
+                    'h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 transition-all',
+                    regErrors.email && 'bg-danger-50/50 ring-danger-500 focus:ring-danger-500',
+                  )}
                 />
+                {regErrors.email && (
+                  <p role="alert" className="mt-1 flex items-center gap-1.5 pl-3 text-xs font-medium text-danger-700">
+                    <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
+                    {regErrors.email}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -1038,11 +1066,24 @@ export function SignInPage() {
                 <input
                   type="text"
                   value={regDept}
-                  onChange={(e) => setRegDept(e.target.value)}
+                  onChange={(e) => {
+                    setRegDept(e.target.value)
+                    if (regErrors.dept) setRegErrors((prev) => ({ ...prev, dept: undefined }))
+                  }}
                   placeholder="e.g. BSEd English, BEEd, or IDS High School"
                   required
-                  className="h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  aria-invalid={!!regErrors.dept}
+                  className={cn(
+                    'h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 transition-all',
+                    regErrors.dept && 'bg-danger-50/50 ring-danger-500 focus:ring-danger-500',
+                  )}
                 />
+                {regErrors.dept && (
+                  <p role="alert" className="mt-1 flex items-center gap-1.5 pl-3 text-xs font-medium text-danger-700">
+                    <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
+                    {regErrors.dept}
+                  </p>
+                )}
               </div>
 
               <div className="pt-2">

@@ -65,7 +65,7 @@ export function reviewedBy(db: Database, user: User): DocRecord[] {
   const office = ROLE_OFFICE[user.role]
   if (!office) return []
   return db.documents
-    .filter((d) => d.history.some((h) => h.actorName === user.name && ['endorsed', 'approved', 'returned'].includes(h.action)))
+    .filter((d) => d.history.some((h) => h.actorName === user.name && ['endorsed', 'approved', 'returned', 'rejected'].includes(h.action)))
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 }
 

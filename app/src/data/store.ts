@@ -147,7 +147,7 @@ export const api = {
   resubmit: (user: User, docId: string, input: { title: string; description: string; files: engine.NewFile[]; note: string }) =>
     mutate((d, at) => engine.resubmit(d, user, docId, input, at)),
 
-  checkRequirements: (user: User, docId: string, input: { decision?: 'complete' | 'return'; missing: string[]; reasons: string }) =>
+  checkRequirements: (user: User, docId: string, input: { decision?: 'complete' | 'return' | 'reject'; missing: string[]; reasons: string }) =>
     mutate((d, at) => engine.checkRequirements(d, user, docId, input, at)),
 
   recordReview: (user: User, docId: string, input: { kind: engine.ReviewKind; remarks: string }) =>

@@ -319,13 +319,42 @@ export function checkRequirements(
   db: Database,
   actor: User,
   docId: string,
-  input: { decision?: 'complete' | 'return'; missing: string[]; reasons: string },
+  input: { decision?: 'complete' | 'return' | 'reject'; missing: string[]; reasons: string },
   at: string,
 ): DocRecord {
   if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can check requirements.')
   const doc = getDoc(db, docId)
   if (doc.status !== 'submitted') throw new FriendlyError(MESSAGES.notAllowedToAct)
   const type = getType(db, doc.typeId)
+
+  if (input.decision === 'reject') {
+    if (!input.reasons.trim())
+      throw new FriendlyError('Please enter the reasons for disapproving/rejecting this submission.')
+    const reasons = input.reasons.trim()
+    doc.status = 'rejected'
+    doc.currentOffice = null
+    doc.officeSince = at
+    doc.rejectionInfo = { office: OFFICE_LABEL.secretary, by: actor.name, at, reasons }
+    doc.contentVerification = {
+      verifiedBy: actor.name,
+      at,
+      result: 'returned',
+      remarks: `Disapproved: ${reasons}`,
+    }
+    addHistory(
+      doc,
+      {
+        at,
+        office: OFFICE_LABEL.secretary,
+        actorName: actor.name,
+        action: 'rejected',
+        remarks: reasons,
+      },
+      db,
+    )
+    notifyRejected(db, doc, OFFICE_LABEL.secretary, reasons, at)
+    return doc
+  }
 
   const isReturn = input.decision === 'return' || (input.decision !== 'complete' && (input.missing.length > 0 || !!input.reasons.trim()))
 
@@ -515,7 +544,7 @@ export function recordRelease(
 /* Reviewing office actions (REQ-ROUTE-5..8)                                 */
 /* ------------------------------------------------------------------------ */
 
-export type ReviewKind = 'endorse' | 'endorse_higher' | 'approve' | 'return'
+export type ReviewKind = 'endorse' | 'endorse_higher' | 'approve' | 'return' | 'reject'
 
 export interface ReviewOption {
   kind: ReviewKind
@@ -539,6 +568,7 @@ export function reviewOptions(db: Database, doc: DocRecord, office: OfficeId): R
     opts.push({ kind: 'approve' })
   }
   opts.push({ kind: 'return' })
+  opts.push({ kind: 'reject' })
   return opts
 }
 
@@ -566,6 +596,18 @@ export function recordReview(
     doc.returnInfo = { office: officeName, by: actor.name, at, reasons: remarks, missing: [] }
     addHistory(doc, { at, office: officeName, actorName: actor.name, action: 'returned', remarks }, db)
     notifyReturned(db, doc, officeName, remarks, [], at)
+    return doc
+  }
+
+  if (input.kind === 'reject') {
+    if (!remarks)
+      throw new FriendlyError('Please state the reasons for disapproving/rejecting this document. The requester will review your comments.')
+    doc.status = 'rejected'
+    doc.currentOffice = null
+    doc.officeSince = at
+    doc.rejectionInfo = { office: officeName, by: actor.name, at, reasons: remarks }
+    addHistory(doc, { at, office: officeName, actorName: actor.name, action: 'rejected', remarks }, db)
+    notifyRejected(db, doc, officeName, remarks, at)
     return doc
   }
 
@@ -601,6 +643,22 @@ export function recordReview(
   }
   doc.status = 'with_office'
   return doc
+}
+
+function notifyRejected(db: Database, doc: DocRecord, officeName: string, reasons: string, at: string) {
+  const req = getUser(db, doc.requesterId)
+  if (!req) return
+  const type = getType(db, doc.typeId)
+  notify(db, {
+    kind: 'rejected',
+    recipientId: req.id,
+    recipientLabel: req.name,
+    recipientEmail: req.email,
+    doc,
+    subject: `Update: your ${type.name} was disapproved / rejected`,
+    body: `Hello ${firstName(req)},\n\nYour ${type.name} (${controlNumber(doc)}) was disapproved / rejected by the ${officeName}.\n\nReason: ${reasons}\n\nSince this document was rejected, no further resubmission is permitted for this document. If you have questions, please contact the ${officeName} or the College Secretary.\n\nView details: ${requesterLink(doc)}${SIGNOFF}`,
+    at,
+  })
 }
 
 function notifyReturned(db: Database, doc: DocRecord, officeName: string, reasons: string, missing: string[], at: string) {

@@ -73,7 +73,7 @@ export interface DocumentType {
 }
 
 /** Fixed status list (REQ-TRK-1). "Delayed" is a computed flag, not a status. */
-export type Status = 'submitted' | 'returned' | 'with_office' | 'with_external' | 'ready' | 'released'
+export type Status = 'submitted' | 'returned' | 'with_office' | 'with_external' | 'ready' | 'released' | 'rejected'
 
 /** One stop in a document's route (REQ-ROUTE-1). */
 export interface RouteStep {
@@ -105,6 +105,7 @@ export type HistoryAction =
   | 'endorsed'
   | 'approved'
   | 'returned'
+  | 'rejected'
   | 'sent_external'
   | 'returned_external'
   | 'marked_ready'
@@ -130,6 +131,13 @@ export interface ReturnInfo {
   reasons: string
   /** Requirement ids flagged for content or completeness issues. */
   missing: string[]
+}
+
+export interface RejectionInfo {
+  office: string
+  by: string
+  at: string
+  reasons: string
 }
 
 /** Content verification result recorded by the College Secretary (REQ-REQT-4). */
@@ -162,6 +170,7 @@ export interface DocRecord {
   attachments: Attachment[]
   history: HistoryEntry[]
   returnInfo?: ReturnInfo
+  rejectionInfo?: RejectionInfo
   /** Automatic completeness check result before reaching the Secretary (REQ-REQT-3, REQ-REQT-4). */
   autoCompletenessPassed?: boolean
   /** Content verification recorded by the College Secretary (REQ-REQT-4). */
@@ -177,7 +186,7 @@ export interface DocRecord {
   archived: boolean
 }
 
-export type NotificationKind = 'returned' | 'ready' | 'reminder' | 'update' | 'notice' | 'submitted'
+export type NotificationKind = 'returned' | 'ready' | 'reminder' | 'update' | 'notice' | 'submitted' | 'rejected'
 
 /** Hybrid notification log entry (REQ-NOT-4, REQ-NOT-7). */
 export interface NotificationLog {

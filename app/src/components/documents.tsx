@@ -595,9 +595,10 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
         : s.stage === 'final'
           ? 'The College Secretary prepares and releases the signed document.'
           : OFFICE_HELP[s.office]
-    let state: 'done' | 'current' | 'next' | 'returned' = i < doc.routeIndex ? 'done' : i === doc.routeIndex ? 'current' : 'next'
+    let state: 'done' | 'current' | 'next' | 'returned' | 'rejected' = i < doc.routeIndex ? 'done' : i === doc.routeIndex ? 'current' : 'next'
     if (done) state = 'done'
     if (doc.status === 'returned' && i === doc.routeIndex) state = 'returned'
+    if (doc.status === 'rejected' && i === doc.routeIndex) state = 'rejected'
     if (doc.status === 'with_external' && i === doc.routeIndex) state = 'current'
     return { key: `${s.office}-${i}`, label, help, state, milestones: historyByStep.get(i) ?? [] }
   })
@@ -624,6 +625,7 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                 it.state === 'current' && 'bg-white text-brand-700 ring-brand-100 outline-2 outline-brand-600',
                 it.state === 'next' && 'bg-ink-100 text-ink-400',
                 it.state === 'returned' && 'bg-danger-500 text-white',
+                it.state === 'rejected' && 'bg-danger-600 text-white',
               )}
               aria-hidden
             >
@@ -634,7 +636,7 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-500 opacity-60" />
                   <span className="relative inline-flex size-2.5 rounded-full bg-brand-600" />
                 </span>
-              ) : it.state === 'returned' ? (
+              ) : it.state === 'returned' || it.state === 'rejected' ? (
                 <AlertTriangle className="size-3.5" strokeWidth={2.5} />
               ) : (
                 <CircleDot className="size-3.5" />
@@ -656,6 +658,11 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                     Returned here
                   </span>
                 )}
+                {it.state === 'rejected' && (
+                  <span className="rounded-full bg-danger-100 px-2 py-0.5 text-xs font-bold text-danger-700">
+                    Disapproved here
+                  </span>
+                )}
                 {it.state === 'done' && (
                   <span className="text-xs font-medium text-brand-700">Completed</span>
                 )}
@@ -668,7 +675,7 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                   <div className="relative">
                     {it.milestones.map((m, mIdx) => {
                       const isLast = mIdx === it.milestones.length - 1 && it.state !== 'current'
-                      const isReturned = m.action === 'returned' || m.action === 'checked_incomplete'
+                      const isReturned = m.action === 'returned' || m.action === 'checked_incomplete' || m.action === 'rejected'
                       return (
                         <div key={m.id} className="relative flex gap-3 pb-3.5 last:pb-0">
                           {/* Sub-timeline connecting line between milestones */}

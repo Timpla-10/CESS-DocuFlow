@@ -164,6 +164,12 @@ export function NewRequestPage() {
 
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) {
+      toast.error(
+        'Submission Incomplete',
+        newErrors.title && newErrors.attachments
+          ? 'Please enter a title and attach all required forms.'
+          : newErrors.title || newErrors.attachments || 'Please resolve all required fields.',
+      )
       return
     }
 

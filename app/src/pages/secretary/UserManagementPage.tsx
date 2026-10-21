@@ -63,6 +63,7 @@ export function UserManagementPage() {
   const [uDept, setUDept] = useState('')
   const [uPos, setUPos] = useState('')
   const [userBusy, setUserBusy] = useState(false)
+  const [userErrors, setUserErrors] = useState<Record<string, string>>({})
 
   // ---------------------------------------------------------------------------
   // TAB 2: Masterlist & Whitelist Import State
@@ -88,6 +89,7 @@ export function UserManagementPage() {
   const [rejectDialogReg, setRejectDialogReg] = useState<PendingRegistration | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectBusy, setRejectBusy] = useState(false)
+  const [rejectError, setRejectError] = useState<string>('')
 
   // ---------------------------------------------------------------------------
   // Derived Data
@@ -149,6 +151,7 @@ export function UserManagementPage() {
     setUOrigin('CESS')
     setUDept('BSEd English')
     setUPos('Student')
+    setUserErrors({})
     setIsUserModalOpen(true)
   }
 
@@ -160,21 +163,46 @@ export function UserManagementPage() {
     setUOrigin(u.origin ?? 'CESS')
     setUDept(u.department)
     setUPos(u.position)
+    setUserErrors({})
     setIsUserModalOpen(true)
   }
 
   const handleSaveUser = async (e: FormEvent) => {
     e.preventDefault()
+    const errors: Record<string, string> = {}
+    if (!uName.trim()) {
+      errors.name = 'Full name is required.'
+    }
+    const trimmedEmail = uEmail.trim().toLowerCase()
+    if (!trimmedEmail) {
+      errors.email = 'Institutional email is required.'
+    } else if (!trimmedEmail.endsWith('@msunaawan.edu.ph')) {
+      errors.email = 'Email must end with @msunaawan.edu.ph.'
+    }
+    if (!uDept.trim()) {
+      errors.department = 'Department or academic program is required.'
+    }
+    if (!uPos.trim()) {
+      errors.position = 'Position or designation is required.'
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setUserErrors(errors)
+      toast.error('Validation Error', 'Please correct the highlighted fields before saving.')
+      return
+    }
+
+    setUserErrors({})
     setUserBusy(true)
     try {
       await api.saveUserAccount(currentUser, {
         id: editingUserId,
-        name: uName,
-        email: uEmail,
+        name: uName.trim(),
+        email: trimmedEmail,
         role: uRole,
         origin: uRole === 'student' || uRole === 'faculty' ? uOrigin : undefined,
-        department: uDept,
-        position: uPos,
+        department: uDept.trim(),
+        position: uPos.trim(),
       })
       toast.success(
         editingUserId ? 'Account Updated' : 'Account Created',
@@ -413,13 +441,20 @@ export function UserManagementPage() {
   const openRejectModal = (reg: PendingRegistration) => {
     setRejectDialogReg(reg)
     setRejectReason('Student/employee record not found in official CESS semester enrollment records.')
+    setRejectError('')
   }
 
   const handleConfirmRejection = async () => {
     if (!rejectDialogReg) return
+    if (!rejectReason.trim()) {
+      setRejectError('Please provide a reason for rejecting this registration.')
+      toast.error('Reason Required', 'A reason is required to reject the registration request.')
+      return
+    }
+    setRejectError('')
     setRejectBusy(true)
     try {
-      await api.rejectPendingRegistration(currentUser, rejectDialogReg.id, rejectReason)
+      await api.rejectPendingRegistration(currentUser, rejectDialogReg.id, rejectReason.trim())
       toast.info('Registration Rejected', `Registration for ${rejectDialogReg.name} was rejected.`)
       setRejectDialogReg(null)
     } catch (err: unknown) {
@@ -1039,20 +1074,26 @@ export function UserManagementPage() {
         }
       >
         <form onSubmit={handleSaveUser} className="space-y-4">
-          <Field label="Full Name" required>
+          <Field label="Full Name" required error={userErrors.name}>
             <Input
               value={uName}
-              onChange={(e) => setUName(e.target.value)}
+              onChange={(e) => {
+                setUName(e.target.value)
+                if (userErrors.name) setUserErrors((prev) => ({ ...prev, name: '' }))
+              }}
               placeholder="e.g. Maria Santos or Dr. Jose Cruz"
               required
             />
           </Field>
 
-          <Field label="University Email (@msunaawan.edu.ph)" required>
+          <Field label="University Email (@msunaawan.edu.ph)" required error={userErrors.email}>
             <Input
               type="email"
               value={uEmail}
-              onChange={(e) => setUEmail(e.target.value)}
+              onChange={(e) => {
+                setUEmail(e.target.value)
+                if (userErrors.email) setUserErrors((prev) => ({ ...prev, email: '' }))
+              }}
               placeholder="username@msunaawan.edu.ph"
               required
             />
@@ -1079,19 +1120,25 @@ export function UserManagementPage() {
             )}
           </div>
 
-          <Field label="Department / Program" required>
+          <Field label="Department / Program" required error={userErrors.department}>
             <Input
               value={uDept}
-              onChange={(e) => setUDept(e.target.value)}
+              onChange={(e) => {
+                setUDept(e.target.value)
+                if (userErrors.department) setUserErrors((prev) => ({ ...prev, department: '' }))
+              }}
               placeholder="e.g. BSEd English, DSEE, or IDS Science"
               required
             />
           </Field>
 
-          <Field label="Position / Designation" required>
+          <Field label="Position / Designation" required error={userErrors.position}>
             <Input
               value={uPos}
-              onChange={(e) => setUPos(e.target.value)}
+              onChange={(e) => {
+                setUPos(e.target.value)
+                if (userErrors.position) setUserErrors((prev) => ({ ...prev, position: '' }))
+              }}
               placeholder="e.g. Student, Assistant Professor, Instructor"
               required
             />
@@ -1191,10 +1238,13 @@ export function UserManagementPage() {
             <p className="text-xs text-ink-600">
               Rejecting will notify <span className="font-bold">{rejectDialogReg.name}</span> ({rejectDialogReg.email}).
             </p>
-            <Field label="Rejection Reason" required>
+            <Field label="Rejection Reason" required error={rejectError}>
               <Input
                 value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
+                onChange={(e) => {
+                  setRejectReason(e.target.value)
+                  if (rejectError) setRejectError('')
+                }}
                 placeholder="e.g. Not enrolled this semester or invalid institutional details"
                 required
               />
