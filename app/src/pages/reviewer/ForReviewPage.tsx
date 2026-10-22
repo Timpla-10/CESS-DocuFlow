@@ -1,7 +1,7 @@
-import { Inbox, FilePlus2 } from 'lucide-react'
+import { Inbox } from 'lucide-react'
 import { useUser } from '../../app/session'
 import { DocumentList, FilterBar, useDocumentFilters } from '../../components/documents'
-import { ButtonLink, Card, EmptyState, PageHeader } from '../../components/ui'
+import { Card, EmptyState, PageHeader } from '../../components/ui'
 import { OFFICE_LABEL } from '../../content/language'
 import { reviewInbox } from '../../data/selectors'
 import { useDb } from '../../data/store'
@@ -13,7 +13,6 @@ export function ForReviewPage() {
   const officeName = OFFICE_LABEL[user.role as keyof typeof OFFICE_LABEL] || 'Reviewing Office'
 
   const { filters, setFilters, result, active, clear } = useDocumentFilters(db, inboxDocs, 'oldest')
-  const canSubmit = user.role === 'ids_principal' || user.role === 'dean'
 
   const eyebrow =
     user.role === 'chairperson'
@@ -32,13 +31,6 @@ export function ForReviewPage() {
         eyebrow={eyebrow}
         title={`Documents Awaiting ${officeName} Action`}
         description={`Review, endorse, approve, return for correction, or disapprove document requests assigned to your office. Requests are prioritized by date submitted (oldest first).`}
-        actions={
-          canSubmit ? (
-            <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-              Submit Document Request
-            </ButtonLink>
-          ) : undefined
-        }
       />
 
       <Card>

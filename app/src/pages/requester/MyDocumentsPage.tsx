@@ -44,20 +44,20 @@ export function MyDocumentsPage() {
   const db = useDb()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const canSubmit = ['student', 'faculty', 'ids_principal', 'dean'].includes(user.role)
-  const isReviewAuthority = ['chairperson', 'ovcaa', 'chancellor', 'dean'].includes(user.role)
+  const isRequesterUser = user.role === 'student' || user.role === 'faculty'
+  const canSubmit = isRequesterUser
   const myDocs =
-    isReviewAuthority
-      ? visibleDocuments(db, user)
-      : visibleDocuments(db, user).filter((d) => d.requesterId === user.id)
+    isRequesterUser
+      ? visibleDocuments(db, user).filter((d) => d.requesterId === user.id)
+      : visibleDocuments(db, user)
   const userAudience = user.role === 'student' ? 'student' : 'faculty'
   const allowedTypes =
-    isReviewAuthority
-      ? db.documentTypes
-      : db.documentTypes.filter((t) => t.audience === userAudience)
+    isRequesterUser
+      ? db.documentTypes.filter((t) => t.audience === userAudience)
+      : db.documentTypes
 
-  const returnedDocs = myDocs.filter((d) => d.status === 'returned')
-  const readyDocs = myDocs.filter((d) => d.status === 'ready')
+  const returnedDocs = isRequesterUser ? myDocs.filter((d) => d.status === 'returned') : []
+  const readyDocs = isRequesterUser ? myDocs.filter((d) => d.status === 'ready') : []
 
   const folderParam = searchParams.get('folder')
   const selectedType = allowedTypes.find((t) => t.id === folderParam)
@@ -177,12 +177,14 @@ export function MyDocumentsPage() {
                   >
                     Blank Form Template
                   </Button>
-                  <ButtonLink
-                    to={`/app/requests/new?type=${selectedType.id}`}
-                    icon={FilePlus2}
-                  >
-                    Submit {selectedType.name.split('(')[0]?.trim() || selectedType.name}
-                  </ButtonLink>
+                  {canSubmit && (
+                    <ButtonLink
+                      to={`/app/requests/new?type=${selectedType.id}`}
+                      icon={FilePlus2}
+                    >
+                      Submit {selectedType.name.split('(')[0]?.trim() || selectedType.name}
+                    </ButtonLink>
+                  )}
                 </div>
               </div>
 
@@ -380,8 +382,8 @@ export function MyDocumentsPage() {
             }
           />
 
-          {/* High-priority Action Callouts */}
-          {returnedDocs.length > 0 && (
+          {/* High-priority Action Callouts (Requesters: Student & Faculty only) */}
+          {isRequesterUser && returnedDocs.length > 0 && (
             <Callout
               tone="danger"
               icon={AlertCircle}
@@ -406,7 +408,7 @@ export function MyDocumentsPage() {
             </Callout>
           )}
 
-          {readyDocs.length > 0 && (
+          {isRequesterUser && readyDocs.length > 0 && (
             <Callout
               tone="success"
               icon={PackageCheck}
@@ -443,8 +445,12 @@ export function MyDocumentsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
             {allowedTypes.map((t) => {
               const typeDocs = myDocs.filter((d) => d.typeId === t.id)
-              const returnedCount = typeDocs.filter((d) => d.status === 'returned').length
-              const readyCount = typeDocs.filter((d) => d.status === 'ready').length
+              const returnedCount = isRequesterUser
+                ? typeDocs.filter((d) => d.status === 'returned').length
+                : 0
+              const readyCount = isRequesterUser
+                ? typeDocs.filter((d) => d.status === 'ready').length
+                : 0
               const inReviewCount = typeDocs.filter(
                 (d) => d.status !== 'returned' && d.status !== 'ready' && !d.archived,
               ).length
@@ -528,12 +534,14 @@ export function MyDocumentsPage() {
                       Open Folder <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
                     </button>
 
-                    <Link
-                      to={`/app/requests/new?type=${t.id}`}
-                      className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
-                    >
-                      <FilePlus2 className="size-3 text-brand-600" /> + New Request
-                    </Link>
+                    {canSubmit && (
+                      <Link
+                        to={`/app/requests/new?type=${t.id}`}
+                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
+                      >
+                        <FilePlus2 className="size-3 text-brand-600" /> + New Request
+                      </Link>
+                    )}
                   </div>
                 </Card>
               )

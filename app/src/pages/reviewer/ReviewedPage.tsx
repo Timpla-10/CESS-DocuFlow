@@ -1,6 +1,5 @@
 import {
   History,
-  FilePlus2,
   RotateCcw,
   XCircle,
   CheckCircle2,
@@ -9,7 +8,7 @@ import {
 import { useState, useMemo } from 'react'
 import { useUser } from '../../app/session'
 import { DocumentList, FilterBar, useDocumentFilters } from '../../components/documents'
-import { ButtonLink, Card, EmptyState, PageHeader, Segmented } from '../../components/ui'
+import { Card, EmptyState, PageHeader, Segmented } from '../../components/ui'
 import { OFFICE_LABEL } from '../../content/language'
 import { reviewedBy, userById } from '../../data/selectors'
 import { useDb } from '../../data/store'
@@ -102,21 +101,12 @@ export function ReviewedPage() {
       ? 'College-Wide Records'
       : 'Institutional Records'
 
-  const canSubmit = user.role === 'ids_principal' || user.role === 'dean'
-
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Review History & Document Tracking"
         title={`Documents Acted On & Monitored by ${officeName}`}
         description={`Track the ongoing movement, review outcomes, and inspection trail of documents — including approved, returned, and rejected submissions.`}
-        actions={
-          canSubmit ? (
-            <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-              Submit Document Request
-            </ButtonLink>
-          ) : undefined
-        }
       />
 
       <Card>
