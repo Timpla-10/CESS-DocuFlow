@@ -139,21 +139,13 @@ export function navFor(role: Role): NavSection[] {
     case 'dean':
       return [
         {
-          heading: 'Review tasks',
-          items: [
-            { to: '/app/for-review', label: 'For Your Review', icon: Inbox, count: (db, u) => reviewInbox(db, u).length, countTone: 'warning' },
-            { to: '/app/reviewed', label: 'Reviewed by You', icon: History },
-          ],
-        },
-        {
-          heading: 'My documents',
           items: [
             {
               to: '/app/dashboard',
               label: 'Dashboard',
               icon: LayoutDashboard,
-              count: (db, u) => visibleDocuments(db, u).filter((d) => d.requesterId === u.id && d.status === 'returned').length,
-              countTone: 'danger',
+              count: (db, u) => reviewInbox(db, u).length,
+              countTone: 'warning',
             },
             {
               to: '/app/my-documents',
@@ -198,7 +190,8 @@ export function homeFor(role: Role): string {
     role === 'faculty' ||
     role === 'chairperson' ||
     role === 'ovcaa' ||
-    role === 'chancellor'
+    role === 'chancellor' ||
+    role === 'dean'
   )
     return '/app/dashboard'
   if (role === 'secretary') return '/app/overview'

@@ -22,6 +22,8 @@ export function ForReviewPage() {
       ? 'OVCAA Workspace'
       : user.role === 'chancellor'
       ? 'Chancellor Workspace'
+      : user.role === 'dean'
+      ? 'College Dean Workspace'
       : 'Review Inbox'
 
   return (

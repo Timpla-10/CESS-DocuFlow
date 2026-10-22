@@ -28,7 +28,12 @@ import { ForReviewPage } from '../reviewer/ForReviewPage'
 
 export function DashboardPage() {
   const user = useUser()
-  if (user.role === 'chairperson' || user.role === 'ovcaa' || user.role === 'chancellor') {
+  if (
+    user.role === 'chairperson' ||
+    user.role === 'ovcaa' ||
+    user.role === 'chancellor' ||
+    user.role === 'dean'
+  ) {
     return <ForReviewPage />
   }
   return <RequesterDashboard />

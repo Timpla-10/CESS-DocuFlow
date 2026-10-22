@@ -45,7 +45,7 @@ export function MyDocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const canSubmit = ['student', 'faculty', 'ids_principal', 'dean'].includes(user.role)
-  const isReviewAuthority = ['chairperson', 'ovcaa', 'chancellor'].includes(user.role)
+  const isReviewAuthority = ['chairperson', 'ovcaa', 'chancellor', 'dean'].includes(user.role)
   const myDocs =
     isReviewAuthority
       ? visibleDocuments(db, user)
@@ -365,6 +365,8 @@ export function MyDocumentsPage() {
                 ? 'OVCAA Workspace'
                 : user.role === 'chancellor'
                 ? 'Chancellor Workspace'
+                : user.role === 'dean'
+                ? 'College Dean Workspace'
                 : 'Requester Workspace'
             }
             title="Document Repository"
