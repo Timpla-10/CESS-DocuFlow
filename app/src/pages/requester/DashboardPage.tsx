@@ -32,7 +32,8 @@ export function DashboardPage() {
     user.role === 'chairperson' ||
     user.role === 'ovcaa' ||
     user.role === 'chancellor' ||
-    user.role === 'dean'
+    user.role === 'dean' ||
+    user.role === 'ids_principal'
   ) {
     return <ForReviewPage />
   }

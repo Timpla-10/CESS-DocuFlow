@@ -781,17 +781,6 @@ export function DocumentDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2.5">
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={Eye}
-              onClick={() => {
-                setPreviewAttachmentId(undefined)
-                setIsPreviewModalOpen(true)
-              }}
-            >
-              Preview Document & Files
-            </Button>
             <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200">
               {doc.attachments.filter((a) => a.revision === doc.revision).length} file(s) in {revisionLabel(doc.revision)}
             </span>

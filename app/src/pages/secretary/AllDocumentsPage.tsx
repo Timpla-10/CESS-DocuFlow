@@ -14,7 +14,7 @@ import {
   Send,
   UploadCloud,
 } from 'lucide-react'
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useState, useRef, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
@@ -35,6 +35,7 @@ import { Badge, Button, Card, EmptyState, PageHeader, Segmented, cn } from '../.
 import {
   OFFICE_LABEL,
   controlNumber,
+  downloadGeneratedPdf,
   revisionLabel,
 } from '../../content/language'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
@@ -210,6 +211,58 @@ export function AllDocumentsPage() {
     }
   }
 
+  const templateInputRef = useRef<HTMLInputElement>(null)
+
+  const handleDownloadTemplate = (type: DocumentType) => {
+    const fileName = type.templateName || `${type.name.replace(/\s+/g, '_')}_Template.pdf`
+    downloadGeneratedPdf(fileName, `OFFICIAL FORM TEMPLATE: ${type.name}`, [
+      `Document Service: ${type.name}`,
+      `Eligible Audience: ${type.audience === 'student' ? 'Students' : 'CESS & IDS Faculty'}`,
+      `Standard Processing Time: ${type.processingDays[0]} to ${type.processingDays[1]} working days`,
+      '',
+      'REQUIRED CHECKLIST ITEMS:',
+      ...type.requirements.map(
+        (r, i) =>
+          `${i + 1}. [${r.required ? 'REQUIRED' : 'OPTIONAL'}] ${r.label}${
+            r.source ? ` (${r.source})` : ''
+          }`,
+      ),
+      '',
+      'INSTRUCTIONS FOR SECRETARY & APPLICANTS:',
+      '1. Complete all required fields accurately before submission.',
+      '2. Physical and digital attachments must adhere to official college standards.',
+    ])
+    toast.info('Template Downloaded', `Downloaded ${fileName}.`)
+  }
+
+  const handleUploadTemplate = async (
+    e: ChangeEvent<HTMLInputElement>,
+    docType: DocumentType,
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const sizeKb = Math.round(file.size / 1024)
+    if (sizeKb > MAX_FILE_MB * 1024) {
+      toast.error('File Too Large', 'Please upload a template smaller than 10 MB.')
+      return
+    }
+    try {
+      await api.saveDocumentType(user, {
+        ...docType,
+        templateName: file.name,
+      })
+      toast.success(
+        'Template Updated',
+        `Successfully uploaded "${file.name}" as the official template for ${docType.name}.`,
+      )
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update template.'
+      toast.error('Update Failed', msg)
+    } finally {
+      e.target.value = ''
+    }
+  }
+
   const cessCount = allActiveDocs.filter((d) => (d.origin ?? 'CESS') === 'CESS').length
   const idsCount = allActiveDocs.filter((d) => d.origin === 'IDS').length
 
@@ -346,15 +399,45 @@ export function AllDocumentsPage() {
                         → Release
                       </strong>
                     </span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-700 ring-1 ring-ink-200">
+                      <Files className="size-3.5 text-brand-600" />
+                      Official Template:{' '}
+                      <strong className="font-semibold text-ink-900">
+                        {selectedFolderType.templateName || 'Default PDF Template'}
+                      </strong>
+                    </span>
                   </div>
                 </div>
 
-                <Button
-                  onClick={() => handleOpenWalkIn(selectedFolderType.id)}
-                  icon={FilePlus2}
-                >
-                  Encode Walk-In for this Type
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    icon={Download}
+                    onClick={() => handleDownloadTemplate(selectedFolderType)}
+                  >
+                    Download Template
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    icon={UploadCloud}
+                    onClick={() => templateInputRef.current?.click()}
+                  >
+                    Upload / Replace Template
+                  </Button>
+                  <input
+                    type="file"
+                    ref={templateInputRef}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.xlsx,.xls"
+                    onChange={(e) => handleUploadTemplate(e, selectedFolderType)}
+                  />
+                  <Button
+                    onClick={() => handleOpenWalkIn(selectedFolderType.id)}
+                    icon={FilePlus2}
+                  >
+                    Encode Walk-In for this Type
+                  </Button>
+                </div>
               </div>
             </div>
           </Card>

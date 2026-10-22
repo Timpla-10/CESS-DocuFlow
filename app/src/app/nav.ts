@@ -4,8 +4,6 @@ import {
   ClipboardCheck,
   Files,
   FolderOpen,
-  History,
-  Inbox,
   LayoutDashboard,
   Mail,
   Megaphone,
@@ -125,10 +123,19 @@ export function navFor(role: Role): NavSection[] {
     case 'ids_principal':
       return [
         {
-          heading: 'Review tasks',
           items: [
-            { to: '/app/for-review', label: 'For Your Review', icon: Inbox, count: (db, u) => reviewInbox(db, u).length, countTone: 'warning' },
-            { to: '/app/reviewed', label: 'Reviewed by You', icon: History },
+            {
+              to: '/app/dashboard',
+              label: 'Dashboard',
+              icon: LayoutDashboard,
+              count: (db, u) => reviewInbox(db, u).length,
+              countTone: 'warning',
+            },
+            {
+              to: '/app/my-documents',
+              label: 'Document Repository',
+              icon: FolderOpen,
+            },
           ],
         },
         {
@@ -189,6 +196,7 @@ export function homeFor(role: Role): string {
     role === 'student' ||
     role === 'faculty' ||
     role === 'chairperson' ||
+    role === 'ids_principal' ||
     role === 'ovcaa' ||
     role === 'chancellor' ||
     role === 'dean'

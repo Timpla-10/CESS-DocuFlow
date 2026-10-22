@@ -23,6 +23,8 @@ export function ForReviewPage() {
       ? 'Chancellor Workspace'
       : user.role === 'dean'
       ? 'College Dean Workspace'
+      : user.role === 'ids_principal'
+      ? 'IDS Principal Workspace'
       : 'Review Inbox'
 
   return (

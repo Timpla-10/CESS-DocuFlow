@@ -230,15 +230,6 @@ export function MyDocumentsPage() {
                 <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
                   {myDocs.filter((d) => d.typeId === selectedType.id).length} record(s)
                 </span>
-                {canSubmit && (
-                  <ButtonLink
-                    to={`/app/requests/new?type=${selectedType.id}`}
-                    size="sm"
-                    icon={FilePlus2}
-                  >
-                    + Request Another {selectedType.name.split('(')[0]?.trim() || selectedType.name}
-                  </ButtonLink>
-                )}
               </div>
             </div>
 
@@ -369,6 +360,8 @@ export function MyDocumentsPage() {
                 ? 'Chancellor Workspace'
                 : user.role === 'dean'
                 ? 'College Dean Workspace'
+                : user.role === 'ids_principal'
+                ? 'IDS Principal Workspace'
                 : 'Requester Workspace'
             }
             title="Document Repository"
