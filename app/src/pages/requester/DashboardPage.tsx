@@ -24,8 +24,17 @@ import {
 } from '../../components/ui'
 import { visibleDocuments } from '../../data/selectors'
 import { useDb } from '../../data/store'
+import { ForReviewPage } from '../reviewer/ForReviewPage'
 
 export function DashboardPage() {
+  const user = useUser()
+  if (user.role === 'chairperson') {
+    return <ForReviewPage />
+  }
+  return <RequesterDashboard />
+}
+
+function RequesterDashboard() {
   const user = useUser()
   const db = useDb()
 

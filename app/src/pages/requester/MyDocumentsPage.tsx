@@ -44,9 +44,16 @@ export function MyDocumentsPage() {
   const db = useDb()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const myDocs = visibleDocuments(db, user).filter((d) => d.requesterId === user.id)
+  const canSubmit = ['student', 'faculty', 'ids_principal', 'dean'].includes(user.role)
+  const myDocs =
+    user.role === 'chairperson'
+      ? visibleDocuments(db, user)
+      : visibleDocuments(db, user).filter((d) => d.requesterId === user.id)
   const userAudience = user.role === 'student' ? 'student' : 'faculty'
-  const allowedTypes = db.documentTypes.filter((t) => t.audience === userAudience)
+  const allowedTypes =
+    user.role === 'chairperson'
+      ? db.documentTypes
+      : db.documentTypes.filter((t) => t.audience === userAudience)
 
   const returnedDocs = myDocs.filter((d) => d.status === 'returned')
   const readyDocs = myDocs.filter((d) => d.status === 'ready')
@@ -220,13 +227,15 @@ export function MyDocumentsPage() {
                 <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
                   {myDocs.filter((d) => d.typeId === selectedType.id).length} record(s)
                 </span>
-                <ButtonLink
-                  to={`/app/requests/new?type=${selectedType.id}`}
-                  size="sm"
-                  icon={FilePlus2}
-                >
-                  + Request Another {selectedType.name.split('(')[0]?.trim() || selectedType.name}
-                </ButtonLink>
+                {canSubmit && (
+                  <ButtonLink
+                    to={`/app/requests/new?type=${selectedType.id}`}
+                    size="sm"
+                    icon={FilePlus2}
+                  >
+                    + Request Another {selectedType.name.split('(')[0]?.trim() || selectedType.name}
+                  </ButtonLink>
+                )}
               </div>
             </div>
 
@@ -240,12 +249,14 @@ export function MyDocumentsPage() {
                       title={`No ${selectedType.name} requests yet`}
                       action={
                         <div className="flex flex-wrap justify-center gap-2">
-                          <ButtonLink
-                            to={`/app/requests/new?type=${selectedType.id}`}
-                            icon={FilePlus2}
-                          >
-                            Submit your first {selectedType.name} request
-                          </ButtonLink>
+                          {canSubmit && (
+                            <ButtonLink
+                              to={`/app/requests/new?type=${selectedType.id}`}
+                              icon={FilePlus2}
+                            >
+                              Submit your first {selectedType.name} request
+                            </ButtonLink>
+                          )}
                           <Button
                             variant="secondary"
                             icon={Download}
@@ -344,13 +355,21 @@ export function MyDocumentsPage() {
         /* ------------------------------------------------------------------ */
         <div className="space-y-6">
           <PageHeader
-            eyebrow={user.role === 'student' ? 'Student Workspace' : 'Requester Workspace'}
+            eyebrow={
+              user.role === 'student'
+                ? 'Student Workspace'
+                : user.role === 'chairperson'
+                ? 'Department Workspace'
+                : 'Requester Workspace'
+            }
             title="Document Repository"
             description="Browse your requests organized by official document category folder, track active approvals, or file a new request."
             actions={
-              <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-                Submit Document Request
-              </ButtonLink>
+              canSubmit ? (
+                <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+                  Submit Document Request
+                </ButtonLink>
+              ) : undefined
             }
           />
 

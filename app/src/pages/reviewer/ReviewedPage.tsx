@@ -102,6 +102,8 @@ export function ReviewedPage() {
       ? 'College-Wide Records'
       : 'Institutional Records'
 
+  const canSubmit = user.role === 'ids_principal' || user.role === 'dean'
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -109,9 +111,11 @@ export function ReviewedPage() {
         title={`Documents Acted On & Monitored by ${officeName}`}
         description={`Track the ongoing movement, review outcomes, and inspection trail of documents — including approved, returned, and rejected submissions.`}
         actions={
-          <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-            Submit Document Request
-          </ButtonLink>
+          canSubmit ? (
+            <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+              Submit Document Request
+            </ButtonLink>
+          ) : undefined
         }
       />
 

@@ -13,17 +13,20 @@ export function ForReviewPage() {
   const officeName = OFFICE_LABEL[user.role as keyof typeof OFFICE_LABEL] || 'Reviewing Office'
 
   const { filters, setFilters, result, active, clear } = useDocumentFilters(db, inboxDocs, 'oldest')
+  const canSubmit = user.role === 'ids_principal' || user.role === 'dean'
 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Review Inbox"
+        eyebrow={user.role === 'chairperson' ? 'Department Workspace' : 'Review Inbox'}
         title={`Documents Awaiting ${officeName} Action`}
         description={`Review, endorse, approve, return for correction, or disapprove document requests assigned to your office. Requests are prioritized by date submitted (oldest first).`}
         actions={
-          <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-            Submit Document Request
-          </ButtonLink>
+          canSubmit ? (
+            <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+              Submit Document Request
+            </ButtonLink>
+          ) : undefined
         }
       />
 

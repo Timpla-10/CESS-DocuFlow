@@ -96,7 +96,7 @@ export default function App() {
               <Route
                 path="requests/new"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'ids_principal', 'chairperson', 'dean']}>
+                  <Protected allowedRoles={['student', 'faculty', 'ids_principal', 'dean']}>
                     <NewRequestPage />
                   </Protected>
                 }

@@ -169,21 +169,13 @@ export function navFor(role: Role): NavSection[] {
     case 'chairperson':
       return [
         {
-          heading: 'Review tasks',
-          items: [
-            { to: '/app/for-review', label: 'For Your Review', icon: Inbox, count: (db, u) => reviewInbox(db, u).length, countTone: 'warning' },
-            { to: '/app/reviewed', label: 'Reviewed by You', icon: History },
-          ],
-        },
-        {
-          heading: 'My documents',
           items: [
             {
               to: '/app/dashboard',
               label: 'Dashboard',
               icon: LayoutDashboard,
-              count: (db, u) => visibleDocuments(db, u).filter((d) => d.requesterId === u.id && d.status === 'returned').length,
-              countTone: 'danger',
+              count: (db, u) => reviewInbox(db, u).length,
+              countTone: 'warning',
             },
             {
               to: '/app/my-documents',
@@ -208,7 +200,7 @@ export function navFor(role: Role): NavSection[] {
 
 /** Where each role lands after signing in. */
 export function homeFor(role: Role): string {
-  if (role === 'student' || role === 'faculty') return '/app/dashboard'
+  if (role === 'student' || role === 'faculty' || role === 'chairperson') return '/app/dashboard'
   if (role === 'secretary') return '/app/overview'
   return '/app/for-review'
 }
