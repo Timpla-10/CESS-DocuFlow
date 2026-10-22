@@ -24,7 +24,7 @@ import {
 } from './engine'
 import type { Database, DocumentType, ExternalOfficeItem, User } from './types'
 
-export const DB_VERSION = 13
+export const DB_VERSION = 14
 export const DEMO_PASSWORD = 'cess2026'
 
 
@@ -245,6 +245,10 @@ export function createSeed(): Database {
       { id: 'fac-4', name: 'Prof. Rhea Mendez', department: 'Department of Secondary and Elementary Education', subjects: [
         { code: 'ENG 102', title: 'Purposive Communication', syllabusFile: 'ENG102_Syllabus_2026.pdf' },
         { code: 'ENG 215', title: 'Teaching Literature', syllabusFile: 'ENG215_Syllabus_2026.pdf' },
+      ] },
+      { id: 'fac-5', userId: 'u-faculty-3', name: 'Mr. Jose Dela Cruz', department: 'Integrated Developmental School', subjects: [
+        { code: 'SCI 10', title: 'Integrated Science and Environmental Studies', syllabusFile: 'SCI10_Syllabus_2026.pdf' },
+        { code: 'MATH 10', title: 'Advanced Algebra and Trigonometry', syllabusFile: 'MATH10_Syllabus_2026.pdf' },
       ] },
     ],
     syllabusTemplate: {

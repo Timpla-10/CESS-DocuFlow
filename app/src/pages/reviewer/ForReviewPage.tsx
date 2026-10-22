@@ -19,7 +19,7 @@ export function ForReviewPage() {
       <PageHeader
         eyebrow="Review Inbox"
         title={`Documents Awaiting ${officeName} Action`}
-        description={`Review, endorse, or approve document requests assigned to your office. Requests are prioritized by date submitted (oldest first).`}
+        description={`Review, endorse, approve, return for correction, or disapprove document requests assigned to your office. Requests are prioritized by date submitted (oldest first).`}
         actions={
           <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
             Submit Document Request

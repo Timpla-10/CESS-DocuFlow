@@ -89,6 +89,7 @@ export function ArchivePage() {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('')
   const [originFilter, setOriginFilter] = useState<'' | 'CESS' | 'IDS'>('')
+  const [recordStatusFilter, setRecordStatusFilter] = useState<'all' | 'released' | 'rejected'>('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [sortOrder, setSortOrder] = useState<ArchiveSortMode>('newest')
@@ -103,8 +104,13 @@ export function ArchivePage() {
   }
 
   const archivedDocs = useMemo(
-    () => db.documents.filter((d) => d.archived),
-    [db.documents],
+    () =>
+      db.documents.filter((d) => {
+        if (recordStatusFilter === 'released') return d.status === 'released' || (d.archived && d.status !== 'rejected')
+        if (recordStatusFilter === 'rejected') return d.status === 'rejected'
+        return d.archived || d.status === 'rejected' || d.status === 'released'
+      }),
+    [db.documents, recordStatusFilter],
   )
 
   const hasSearchOrFilter = !!(
@@ -234,6 +240,7 @@ export function ArchivePage() {
   const clearAllFilters = () => {
     setSearchQuery('')
     setOriginFilter('')
+    setRecordStatusFilter('all')
     setDateFrom('')
     setDateTo('')
     setSortOrder('newest')
@@ -556,7 +563,7 @@ export function ArchivePage() {
             </label>
 
             {/* Origin / Unit Filter */}
-            <label className="block min-w-[140px]">
+            <label className="block min-w-[130px]">
               <span className="mb-1 block text-xs font-semibold text-ink-600">
                 Origin / Unit
               </span>
@@ -570,6 +577,24 @@ export function ArchivePage() {
                 <option value="">All Units</option>
                 <option value="CESS">CESS</option>
                 <option value="IDS">IDS</option>
+              </Select>
+            </label>
+
+            {/* Record Outcome Filter (PM-FEEDBACK-2) */}
+            <label className="block min-w-[150px]">
+              <span className="mb-1 block text-xs font-semibold text-ink-600">
+                Record Outcome
+              </span>
+              <Select
+                value={recordStatusFilter}
+                onChange={(e) =>
+                  setRecordStatusFilter(e.target.value as 'all' | 'released' | 'rejected')
+                }
+                className="h-10"
+              >
+                <option value="all">All Vault Records</option>
+                <option value="released">Released & Audited</option>
+                <option value="rejected">Disapproved / Rejected</option>
               </Select>
             </label>
 

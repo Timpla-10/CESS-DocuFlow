@@ -197,8 +197,15 @@ export default function App() {
                 }
               />
 
-              {/* Shared College Information */}
-              <Route path="faculty-directory" element={<FacultyDirectoryPage />} />
+              {/* Shared College Information (Protected by RBAC) */}
+              <Route
+                path="faculty-directory"
+                element={
+                  <Protected allowedRoles={['secretary', 'dean', 'ids_principal', 'faculty', 'student']}>
+                    <FacultyDirectoryPage />
+                  </Protected>
+                }
+              />
               <Route path="notices" element={<NoticesPage />} />
               <Route path="account" element={<AccountPage />} />
 

@@ -3,6 +3,7 @@ import {
   Download,
   Eye,
   FileText,
+  Info,
   Search,
   Sparkles,
   Trash2,
@@ -13,7 +14,7 @@ import { useUser } from '../../app/session'
 import { Input } from '../../components/form'
 import { SyllabusPreviewModal } from '../../components/SyllabusPreviewModal'
 import { useToast } from '../../components/Toast'
-import { Avatar, Card, EmptyState, PageHeader } from '../../components/ui'
+import { Avatar, Badge, Card, EmptyState, PageHeader, Segmented } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { api, useDb } from '../../data/store'
 import type { FacultyEntry, Subject, SyllabusTemplate } from '../../data/types'
@@ -32,14 +33,68 @@ export function FacultyDirectoryPage() {
   const [search, setSearch] = useState('')
 
   const isSecretary = user.role === 'secretary'
-  const isFacultyUser = user.role === 'faculty' || user.role === 'chairperson'
+  const isFacultyUser = user.role === 'faculty'
+  const isDean = user.role === 'dean'
+  const isIdsPrincipal = user.role === 'ids_principal'
+  const isStudent = user.role === 'student'
+
+  const [secretaryUnit, setSecretaryUnit] = useState<'all' | 'CESS' | 'IDS'>('all')
 
   const syllabusTemplate: SyllabusTemplate = db.syllabusTemplate || DEFAULT_SYLLABUS_TEMPLATE
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
   const [previewSyllabus, setPreviewSyllabus] = useState<{ faculty: FacultyEntry; subject: Subject } | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState(false)
 
-  const facultyList = db.faculty.filter((f) => {
+  // Determine scoped faculty list by role (PM-FEEDBACK-3, 4, 5)
+  const scopedFaculty = (() => {
+    if (isDean) {
+      // College Dean: Limited to CESS Department only (DSEE & DSSH)
+      return db.faculty.filter((f) => !f.department.toLowerCase().includes('integrated'))
+    }
+    if (isIdsPrincipal) {
+      // IDS Principal: Limited to IDS Department only
+      return db.faculty.filter((f) => f.department.toLowerCase().includes('integrated'))
+    }
+    if (isStudent) {
+      // Student: Limited to professors that teach subjects they are enrolled in this semester
+      if (user.department.toLowerCase().includes('english') || user.id === 'u-student-1') {
+        return db.faculty.filter((f) =>
+          f.subjects.some((s) => s.code.startsWith('EDUC') || s.code.startsWith('ENG')),
+        )
+      }
+      if (user.department.toLowerCase().includes('social') || user.id === 'u-student-2') {
+        return db.faculty.filter((f) =>
+          f.subjects.some((s) => s.code.startsWith('SOCSCI')),
+        )
+      }
+      if (user.origin === 'IDS' || user.department.toLowerCase().includes('ids')) {
+        return db.faculty.filter((f) => f.department.toLowerCase().includes('integrated'))
+      }
+      return db.faculty.filter((f) =>
+        user.origin === 'IDS'
+          ? f.department.toLowerCase().includes('integrated')
+          : !f.department.toLowerCase().includes('integrated'),
+      )
+    }
+    if (isFacultyUser) {
+      // Faculty: Can view and upload their own syllabus but CANNOT view other faculties' syllabi
+      return db.faculty.filter(
+        (f) =>
+          (f.userId && f.userId === user.id) ||
+          f.name.trim().toLowerCase() === user.name.trim().toLowerCase(),
+      )
+    }
+    // College Secretary: Full directory with unit filtering
+    if (secretaryUnit === 'CESS') {
+      return db.faculty.filter((f) => !f.department.toLowerCase().includes('integrated'))
+    }
+    if (secretaryUnit === 'IDS') {
+      return db.faculty.filter((f) => f.department.toLowerCase().includes('integrated'))
+    }
+    return db.faculty
+  })()
+
+  const facultyList = scopedFaculty.filter((f) => {
     if (!search.trim()) return true
     const q = search.toLowerCase()
     return (
@@ -222,25 +277,93 @@ export function FacultyDirectoryPage() {
         </div>
       </div>
 
-      {/* Search Input */}
+      {/* Scoping and Role Information Notice (PM-FEEDBACK-3, 4, 5) */}
+      {isDean && (
+        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
+          <div className="flex items-center gap-2">
+            <Info className="size-4 shrink-0 text-brand-700" />
+            <span>
+              <strong>Dean Scoped View:</strong> Displaying faculty members and syllabi for College of Education and Social Sciences (CESS) collegiate departments only.
+            </span>
+          </div>
+          <Badge tone="brand">🏛️ CESS Departments</Badge>
+        </div>
+      )}
+
+      {isIdsPrincipal && (
+        <div className="flex items-center justify-between rounded-xl border border-warning-200 bg-warning-50/70 p-3.5 text-xs text-warning-900">
+          <div className="flex items-center gap-2">
+            <Info className="size-4 shrink-0 text-warning-700" />
+            <span>
+              <strong>IDS Principal Scoped View:</strong> Displaying faculty members and syllabi for the Integrated Developmental School (IDS) only.
+            </span>
+          </div>
+          <Badge tone="warning">🏫 IDS Department</Badge>
+        </div>
+      )}
+
+      {isStudent && (
+        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
+          <div className="flex items-center gap-2">
+            <Info className="size-4 shrink-0 text-brand-700" />
+            <span>
+              <strong>Enrolled Course Syllabi:</strong> Displaying assigned professors and course syllabi for your registered subjects this semester.
+            </span>
+          </div>
+          <Badge tone="brand">🎓 1st Semester AY 2026-2027</Badge>
+        </div>
+      )}
+
+      {isFacultyUser && (
+        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
+          <div className="flex items-center gap-2">
+            <Info className="size-4 shrink-0 text-brand-700" />
+            <span>
+              <strong>Faculty Self-Service Portal:</strong> You can download the official syllabus template and manage syllabi for your assigned subjects. In accordance with university privacy standards, other faculties' syllabi are hidden.
+            </span>
+          </div>
+          <Badge tone="brand">📋 My Teaching Load</Badge>
+        </div>
+      )}
+
+      {/* Search Input & Secretary Unit Filter */}
       <Card className="p-4">
-        <div className="relative max-w-md">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
-          <Input
-            type="search"
-            placeholder="Search faculty name, department, subject code, or title…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 pr-4"
-          />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="relative min-w-[260px] flex-1 max-w-md">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
+            <Input
+              type="search"
+              placeholder="Search faculty name, department, subject code, or title…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 pr-4"
+            />
+          </div>
+          {isSecretary && (
+            <Segmented<'all' | 'CESS' | 'IDS'>
+              label="Unit Selection"
+              value={secretaryUnit}
+              onChange={setSecretaryUnit}
+              options={[
+                { value: 'all', label: 'All Units' },
+                { value: 'CESS', label: 'CESS Collegiate' },
+                { value: 'IDS', label: 'IDS Department' },
+              ]}
+            />
+          )}
         </div>
       </Card>
 
       {/* Directory Grid */}
       {facultyList.length === 0 ? (
         <Card className="p-8">
-          <EmptyState icon={BookOpen} title="No faculty or subjects match your search">
-            Try searching with a different instructor name or subject code.
+          <EmptyState
+            icon={BookOpen}
+            title={isFacultyUser ? 'No teaching load assigned yet' : 'No faculty or subjects match your search'}
+          >
+            {isFacultyUser
+              ? 'You do not have any subjects or teaching assignments recorded for the current semester. Please coordinate with the College Secretary if your course allocations need to be updated.'
+              : 'Try searching with a different instructor name or subject code.'}
           </EmptyState>
         </Card>
       ) : (
@@ -314,28 +437,32 @@ export function FacultyDirectoryPage() {
                           </div>
 
                           <div className="flex shrink-0 items-center gap-2">
-                            {/* Preview and Download Buttons (Available to all when file exists) */}
+                            {/* Preview and Download Buttons (Protected: faculty cannot view other faculty syllabi) */}
                             {sub.syllabusFile ? (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setPreviewSyllabus({ faculty: fac, subject: sub })}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 active:scale-95 transition"
-                                  title={`Preview syllabus for ${sub.code} on screen`}
-                                >
-                                  <Eye className="size-3 text-brand-700" />
-                                  <span>Preview</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownloadSyllabus(fac, sub)}
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-xs ring-1 ring-ink-200 hover:bg-brand-50 active:scale-95 transition"
-                                  title={`Download ${sub.syllabusFile}`}
-                                >
-                                  <Download className="size-3" />
-                                  <span>Syllabus</span>
-                                </button>
-                              </div>
+                              !isFacultyUser || isMyProfile ? (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewSyllabus({ faculty: fac, subject: sub })}
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 active:scale-95 transition"
+                                    title={`Preview syllabus for ${sub.code} on screen`}
+                                  >
+                                    <Eye className="size-3 text-brand-700" />
+                                    <span>Preview</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadSyllabus(fac, sub)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-xs ring-1 ring-ink-200 hover:bg-brand-50 active:scale-95 transition"
+                                    title={`Download ${sub.syllabusFile}`}
+                                  >
+                                    <Download className="size-3" />
+                                    <span>Syllabus</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] italic text-ink-400">Restricted to instructor</span>
+                              )
                             ) : !isMyProfile ? (
                               <span className="text-[11px] italic text-ink-400">No syllabus uploaded</span>
                             ) : null}

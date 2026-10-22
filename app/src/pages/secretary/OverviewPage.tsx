@@ -5,7 +5,9 @@ import {
   CheckSquare,
   Inbox,
   PackageCheck,
+  RotateCcw,
   Route,
+  XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -33,8 +35,12 @@ export function OverviewPage() {
   const allDocs = db.documents
   const delayedDocs = allDocs.filter((d) => isDelayed(db, d))
   const idsDocs = allDocs.filter((d) => d.origin === 'IDS' && !d.archived)
+  const returnedDocs = allDocs.filter((d) => d.status === 'returned')
+  const rejectedDocs = allDocs.filter((d) => d.status === 'rejected')
 
-  const [activeQueueTab, setActiveQueueTab] = useState<'toCheck' | 'ready' | 'ids'>('toCheck')
+  const [activeQueueTab, setActiveQueueTab] = useState<
+    'toCheck' | 'ready' | 'returned' | 'rejected' | 'ids'
+  >('toCheck')
 
   // Distribution by holding office with official institutional gradients
   const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
@@ -95,28 +101,42 @@ export function OverviewPage() {
         </Callout>
       )}
 
-      {/* Non-Clickable Key Metric StatCards (REQ-PM-FEEDBACK-3) */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Key Metric StatCards (PM-FEEDBACK-2) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
-          label="Awaiting Content Verification"
+          label="Awaiting Verification"
           value={queues.toCheck.length}
           hint="Passed completeness check"
           icon={CheckSquare}
           tone={queues.toCheck.length > 0 ? 'warning' : 'neutral'}
         />
         <StatCard
-          label="Currently In Review"
+          label="In Office Review"
           value={allDocs.filter((d) => d.status === 'with_office').length}
           hint="Under review across offices"
           icon={Inbox}
           tone="brand"
         />
         <StatCard
-          label="Approved & Ready to Release"
+          label="Ready to Release"
           value={queues.ready.length}
           hint="Ready for requester pickup"
           icon={PackageCheck}
           tone={queues.ready.length > 0 ? 'success' : 'neutral'}
+        />
+        <StatCard
+          label="Returned for Revision"
+          value={returnedDocs.length}
+          hint="With requester for corrections"
+          icon={RotateCcw}
+          tone={returnedDocs.length > 0 ? 'warning' : 'neutral'}
+        />
+        <StatCard
+          label="Disapproved / Rejected"
+          value={rejectedDocs.length}
+          hint="Officially closed records"
+          icon={XCircle}
+          tone={rejectedDocs.length > 0 ? 'danger' : 'neutral'}
         />
       </div>
 
@@ -131,7 +151,7 @@ export function OverviewPage() {
                 <span className="text-xs font-bold uppercase tracking-wider text-ink-500">
                   Secretary Workstation Queues
                 </span>
-                <Segmented<'toCheck' | 'ready' | 'ids'>
+                <Segmented<'toCheck' | 'ready' | 'returned' | 'rejected' | 'ids'>
                   label="Workstation Queue Tabs"
                   value={activeQueueTab}
                   onChange={setActiveQueueTab}
@@ -145,6 +165,16 @@ export function OverviewPage() {
                       value: 'ready',
                       label: 'Ready for Release',
                       count: queues.ready.length,
+                    },
+                    {
+                      value: 'returned',
+                      label: 'Returned',
+                      count: returnedDocs.length,
+                    },
+                    {
+                      value: 'rejected',
+                      label: 'Rejected',
+                      count: rejectedDocs.length,
                     },
                     {
                       value: 'ids',
@@ -225,6 +255,79 @@ export function OverviewPage() {
                   empty={
                     <div className="py-12 text-center text-sm text-ink-500">
                       No documents are currently waiting for release.
+                    </div>
+                  }
+                />
+              </div>
+            )}
+
+            {/* TAB: Returned Submissions Awaiting Correction */}
+            {activeQueueTab === 'returned' && (
+              <div>
+                <div className="border-b border-ink-100 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Submissions Returned to Requesters for Correction
+                      </h3>
+                      <p className="text-xs text-ink-500">
+                        Documents returned by the Secretary or Reviewing Offices for file or content revisions.
+                      </p>
+                    </div>
+                    <Link
+                      to="/app/documents"
+                      className="text-xs font-semibold text-brand-700 hover:underline"
+                    >
+                      View in All Documents ({returnedDocs.length})
+                    </Link>
+                  </div>
+                </div>
+
+                <DocumentList
+                  db={db}
+                  docs={returnedDocs.slice(0, 6)}
+                  audience="staff"
+                  showRequester
+                  showWaiting
+                  empty={
+                    <div className="py-12 text-center text-sm text-ink-500">
+                      No documents are currently in returned status.
+                    </div>
+                  }
+                />
+              </div>
+            )}
+
+            {/* TAB: Disapproved / Rejected Records */}
+            {activeQueueTab === 'rejected' && (
+              <div>
+                <div className="border-b border-ink-100 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Officially Disapproved & Rejected Records
+                      </h3>
+                      <p className="text-xs text-ink-500">
+                        Documents officially disapproved and closed by Reviewing Authorities.
+                      </p>
+                    </div>
+                    <Link
+                      to="/app/documents"
+                      className="text-xs font-semibold text-brand-700 hover:underline"
+                    >
+                      View in All Documents ({rejectedDocs.length})
+                    </Link>
+                  </div>
+                </div>
+
+                <DocumentList
+                  db={db}
+                  docs={rejectedDocs.slice(0, 6)}
+                  audience="staff"
+                  showRequester
+                  empty={
+                    <div className="py-12 text-center text-sm text-ink-500">
+                      No disapproved or rejected documents recorded.
                     </div>
                   }
                 />

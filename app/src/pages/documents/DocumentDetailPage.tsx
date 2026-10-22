@@ -13,6 +13,7 @@ import {
   UploadCloud,
   UserCheck,
   X,
+  XCircle,
   Lock,
 } from 'lucide-react'
 import { useState, type ChangeEvent, type FormEvent } from 'react'
@@ -181,8 +182,12 @@ export function DocumentDetailPage() {
     setIsCheckOpen(true)
   }
 
-  const handleOpenReview = () => {
-    setReviewKind(allowedReviewOpts[0]?.kind ?? 'endorse')
+  const handleOpenReview = (initialKind?: ReviewKind) => {
+    const defaultKind =
+      initialKind && allowedReviewOpts.some((o) => o.kind === initialKind)
+        ? initialKind
+        : allowedReviewOpts[0]?.kind ?? 'endorse'
+    setReviewKind(defaultKind)
     setReviewRemarks('')
     setReviewErrors({})
     setIsReviewOpen(true)
@@ -684,9 +689,43 @@ export function DocumentDetailPage() {
                 )}
 
                 {isReviewerForDoc && (
-                  <Button onClick={handleOpenReview} icon={UserCheck}>
-                    Review & Record Decision
-                  </Button>
+                  <>
+                    <Button
+                      onClick={() =>
+                        handleOpenReview(
+                          allowedReviewOpts.find(
+                            (o) =>
+                              o.kind === 'approve' ||
+                              o.kind === 'endorse' ||
+                              o.kind === 'endorse_higher',
+                          )?.kind ?? 'endorse',
+                        )
+                      }
+                      icon={UserCheck}
+                      variant="primary"
+                    >
+                      {allowedReviewOpts.some((o) => o.kind === 'approve')
+                        ? 'Approve Document'
+                        : allowedReviewOpts.some((o) => o.kind === 'endorse_higher')
+                        ? 'Endorse to Higher Office'
+                        : 'Endorse Document'}
+                    </Button>
+                    <Button
+                      onClick={() => handleOpenReview('return')}
+                      icon={RotateCcw}
+                      variant="secondary"
+                      className="border-warning-300 text-warning-800 hover:bg-warning-50 hover:text-warning-900"
+                    >
+                      Return for Correction
+                    </Button>
+                    <Button
+                      onClick={() => handleOpenReview('reject')}
+                      icon={XCircle}
+                      variant="danger-soft"
+                    >
+                      Disapprove / Reject
+                    </Button>
+                  </>
                 )}
 
                 {canSecretaryFinalize && (
@@ -1117,29 +1156,101 @@ export function DocumentDetailPage() {
             </button>
           </div>
 
-          <Field label="Action to Record" required>
-            <Select
-              value={reviewKind}
-              onChange={(e) => {
-                setReviewKind(e.target.value as ReviewKind)
-                if (reviewErrors.remarks) setReviewErrors({})
-              }}
-            >
-              {allowedReviewOpts.map((opt) => (
-                <option key={opt.kind} value={opt.kind}>
-                  {opt.kind === 'endorse'
-                    ? `Endorse Document (Forward to ${opt.next ? OFFICE_LABEL[opt.next] : 'next office'})`
-                    : opt.kind === 'endorse_higher'
-                    ? `Needs Higher Approval — Route to ${docType?.higherApproval.map((o) => OFFICE_LABEL[o]).join(' & ')}`
-                    : opt.kind === 'approve'
-                    ? 'Approve Document (Complete Office Review)'
-                    : opt.kind === 'reject'
-                    ? 'Disapprove / Reject Document (Final Disapproval)'
-                    : 'Return for Correction'}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          {/* Action to Record (Visual Segmented Card Selector - REQ-ROUTE-5..8) */}
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-500">
+              Select Decision Action <span className="text-danger-600">*</span>
+            </p>
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              {/* 1. Endorse or Approve */}
+              {allowedReviewOpts
+                .filter(
+                  (o) =>
+                    o.kind === 'endorse' ||
+                    o.kind === 'approve' ||
+                    o.kind === 'endorse_higher',
+                )
+                .map((opt) => (
+                  <button
+                    key={opt.kind}
+                    type="button"
+                    onClick={() => {
+                      setReviewKind(opt.kind)
+                      if (reviewErrors.remarks) setReviewErrors({})
+                    }}
+                    className={`flex flex-col items-start rounded-xl p-3 text-left ring-1 transition-all ${
+                      reviewKind === opt.kind
+                        ? 'bg-brand-50/90 ring-2 ring-brand-600 shadow-xs'
+                        : 'bg-white ring-ink-200 hover:bg-ink-50/70'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-brand-900">
+                      <CheckCircle2 className="size-3.5 text-brand-600" />
+                      {opt.kind === 'approve'
+                        ? 'Approve Document'
+                        : opt.kind === 'endorse_higher'
+                        ? 'Endorse Higher'
+                        : 'Endorse Document'}
+                    </span>
+                    <span className="mt-1 text-2xs text-ink-600 leading-tight">
+                      {opt.kind === 'approve'
+                        ? 'Final office approval — route to Secretary for release'
+                        : opt.kind === 'endorse_higher'
+                        ? `Route to ${docType?.higherApproval.map((o) => OFFICE_LABEL[o]).join(' & ')}`
+                        : `Forward to ${opt.next ? OFFICE_LABEL[opt.next] : 'next reviewing office'}`}
+                    </span>
+                  </button>
+                ))}
+
+              {/* 2. Return for Correction */}
+              {allowedReviewOpts.some((o) => o.kind === 'return') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewKind('return')
+                    if (reviewErrors.remarks) setReviewErrors({})
+                  }}
+                  className={`flex flex-col items-start rounded-xl p-3 text-left ring-1 transition-all ${
+                    reviewKind === 'return'
+                      ? 'bg-warning-50/90 ring-2 ring-warning-600 shadow-xs'
+                      : 'bg-white ring-ink-200 hover:bg-ink-50/70'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-warning-900">
+                    <RotateCcw className="size-3.5 text-warning-700" />
+                    Return for Correction
+                  </span>
+                  <span className="mt-1 text-2xs text-ink-600 leading-tight">
+                    Return to requester with feedback to correct missing/erroneous files
+                  </span>
+                </button>
+              )}
+
+              {/* 3. Disapprove / Reject */}
+              {allowedReviewOpts.some((o) => o.kind === 'reject') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewKind('reject')
+                    if (reviewErrors.remarks) setReviewErrors({})
+                  }}
+                  className={`flex flex-col items-start rounded-xl p-3 text-left ring-1 transition-all ${
+                    reviewKind === 'reject'
+                      ? 'bg-danger-50/90 ring-2 ring-danger-600 shadow-xs'
+                      : 'bg-white ring-ink-200 hover:bg-ink-50/70'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-danger-900">
+                    <XCircle className="size-3.5 text-danger-600" />
+                    Disapprove / Reject
+                  </span>
+                  <span className="mt-1 text-2xs text-ink-600 leading-tight">
+                    Officially disapprove and close the document request
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
 
           <Field
             label="Remarks / Comments"

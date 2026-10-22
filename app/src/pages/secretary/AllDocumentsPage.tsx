@@ -27,6 +27,7 @@ import {
   exportDocumentsCsv,
   sessionFiles,
   useDocumentFilters,
+  type Filters,
 } from '../../components/documents'
 import { Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
@@ -487,6 +488,8 @@ export function AllDocumentsPage() {
                 const toCheckCount = typeDocs.filter((d) => d.status === 'submitted').length
                 const inReviewCount = typeDocs.filter((d) => d.status === 'with_office').length
                 const readyCount = typeDocs.filter((d) => d.status === 'ready').length
+                const returnedCount = typeDocs.filter((d) => d.status === 'returned').length
+                const rejectedCount = typeDocs.filter((d) => d.status === 'rejected').length
 
                 return (
                   <Card
@@ -516,6 +519,16 @@ export function AllDocumentsPage() {
                           {readyCount > 0 && (
                             <Badge tone="success" dot={false}>
                               {readyCount} Ready
+                            </Badge>
+                          )}
+                          {returnedCount > 0 && (
+                            <Badge tone="warning" dot={false}>
+                              {returnedCount} Returned
+                            </Badge>
+                          )}
+                          {rejectedCount > 0 && (
+                            <Badge tone="danger" dot={false}>
+                              {rejectedCount} Rejected
                             </Badge>
                           )}
                           <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
@@ -572,6 +585,44 @@ export function AllDocumentsPage() {
           {/* VIEW 2: FLAT TABLE SEARCH & EXPORT */}
           {viewMode === 'table' && (
             <Card>
+              <div className="border-b border-ink-100 bg-ink-50/50 p-3.5">
+                <Segmented<string>
+                  label="Quick Status Queue"
+                  value={filters.status || 'all'}
+                  onChange={(val) => {
+                    setFilters({ ...filters, status: val === 'all' ? '' : (val as Filters['status']) })
+                  }}
+                  options={[
+                    { value: 'all', label: 'All Records', count: unitDocs.length },
+                    {
+                      value: 'submitted',
+                      label: 'Verify Content',
+                      count: unitDocs.filter((d) => d.status === 'submitted').length,
+                    },
+                    {
+                      value: 'with_office',
+                      label: 'In Review',
+                      count: unitDocs.filter((d) => d.status === 'with_office').length,
+                    },
+                    {
+                      value: 'ready',
+                      label: 'Ready for Release',
+                      count: unitDocs.filter((d) => d.status === 'ready').length,
+                    },
+                    {
+                      value: 'returned',
+                      label: 'Returned for Revision',
+                      count: unitDocs.filter((d) => d.status === 'returned').length,
+                    },
+                    {
+                      value: 'rejected',
+                      label: 'Disapproved / Rejected',
+                      count: unitDocs.filter((d) => d.status === 'rejected').length,
+                    },
+                  ]}
+                />
+              </div>
+
               <FilterBar
                 db={db}
                 filters={filters}

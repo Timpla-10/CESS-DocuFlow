@@ -123,7 +123,6 @@ export function navFor(role: Role): NavSection[] {
         },
       ]
     case 'ids_principal':
-    case 'chairperson':
     case 'dean':
       return [
         {
@@ -155,6 +154,37 @@ export function navFor(role: Role): NavSection[] {
           items: [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }, directory],
         },
       ]
+    case 'chairperson':
+      return [
+        {
+          heading: 'Review tasks',
+          items: [
+            { to: '/app/for-review', label: 'For Your Review', icon: Inbox, count: (db, u) => reviewInbox(db, u).length, countTone: 'warning' },
+            { to: '/app/reviewed', label: 'Reviewed by You', icon: History },
+          ],
+        },
+        {
+          heading: 'My documents',
+          items: [
+            {
+              to: '/app/dashboard',
+              label: 'Dashboard',
+              icon: LayoutDashboard,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.requesterId === u.id && d.status === 'returned').length,
+              countTone: 'danger',
+            },
+            {
+              to: '/app/my-documents',
+              label: 'Document Repository',
+              icon: FolderOpen,
+            },
+          ],
+        },
+        {
+          heading: 'College information',
+          items: [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }],
+        },
+      ]
     case 'ovcaa':
     case 'chancellor':
       return [
@@ -164,7 +194,6 @@ export function navFor(role: Role): NavSection[] {
             { to: '/app/reviewed', label: 'Reviewed by You', icon: History },
           ],
         },
-        { heading: 'College information', items: [directory] },
       ]
   }
 }
