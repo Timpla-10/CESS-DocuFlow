@@ -168,6 +168,8 @@ export function navFor(role: Role): NavSection[] {
         },
       ]
     case 'chairperson':
+    case 'ovcaa':
+    case 'chancellor':
       return [
         {
           items: [
@@ -186,22 +188,19 @@ export function navFor(role: Role): NavSection[] {
           ],
         },
       ]
-    case 'ovcaa':
-    case 'chancellor':
-      return [
-        {
-          items: [
-            { to: '/app/for-review', label: 'For Your Review', icon: Inbox, count: (db, u) => reviewInbox(db, u).length, countTone: 'warning' },
-            { to: '/app/reviewed', label: 'Reviewed by You', icon: History },
-          ],
-        },
-      ]
   }
 }
 
 /** Where each role lands after signing in. */
 export function homeFor(role: Role): string {
-  if (role === 'student' || role === 'faculty' || role === 'chairperson') return '/app/dashboard'
+  if (
+    role === 'student' ||
+    role === 'faculty' ||
+    role === 'chairperson' ||
+    role === 'ovcaa' ||
+    role === 'chancellor'
+  )
+    return '/app/dashboard'
   if (role === 'secretary') return '/app/overview'
   return '/app/for-review'
 }

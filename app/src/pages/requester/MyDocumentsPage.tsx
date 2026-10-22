@@ -45,13 +45,14 @@ export function MyDocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const canSubmit = ['student', 'faculty', 'ids_principal', 'dean'].includes(user.role)
+  const isReviewAuthority = ['chairperson', 'ovcaa', 'chancellor'].includes(user.role)
   const myDocs =
-    user.role === 'chairperson'
+    isReviewAuthority
       ? visibleDocuments(db, user)
       : visibleDocuments(db, user).filter((d) => d.requesterId === user.id)
   const userAudience = user.role === 'student' ? 'student' : 'faculty'
   const allowedTypes =
-    user.role === 'chairperson'
+    isReviewAuthority
       ? db.documentTypes
       : db.documentTypes.filter((t) => t.audience === userAudience)
 
@@ -360,6 +361,10 @@ export function MyDocumentsPage() {
                 ? 'Student Workspace'
                 : user.role === 'chairperson'
                 ? 'Department Workspace'
+                : user.role === 'ovcaa'
+                ? 'OVCAA Workspace'
+                : user.role === 'chancellor'
+                ? 'Chancellor Workspace'
                 : 'Requester Workspace'
             }
             title="Document Repository"

@@ -80,7 +80,7 @@ export default function App() {
               <Route
                 path="dashboard"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'dean']}>
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ovcaa', 'chancellor', 'dean']}>
                     <DashboardPage />
                   </Protected>
                 }
@@ -88,7 +88,7 @@ export default function App() {
               <Route
                 path="my-documents"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'dean', 'secretary']}>
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ovcaa', 'chancellor', 'dean', 'secretary']}>
                     <MyDocumentsPage />
                   </Protected>
                 }

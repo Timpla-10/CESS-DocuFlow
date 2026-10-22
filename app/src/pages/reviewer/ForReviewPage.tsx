@@ -15,10 +15,19 @@ export function ForReviewPage() {
   const { filters, setFilters, result, active, clear } = useDocumentFilters(db, inboxDocs, 'oldest')
   const canSubmit = user.role === 'ids_principal' || user.role === 'dean'
 
+  const eyebrow =
+    user.role === 'chairperson'
+      ? 'Department Workspace'
+      : user.role === 'ovcaa'
+      ? 'OVCAA Workspace'
+      : user.role === 'chancellor'
+      ? 'Chancellor Workspace'
+      : 'Review Inbox'
+
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={user.role === 'chairperson' ? 'Department Workspace' : 'Review Inbox'}
+        eyebrow={eyebrow}
         title={`Documents Awaiting ${officeName} Action`}
         description={`Review, endorse, approve, return for correction, or disapprove document requests assigned to your office. Requests are prioritized by date submitted (oldest first).`}
         actions={
