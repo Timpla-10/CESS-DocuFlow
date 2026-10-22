@@ -2,6 +2,7 @@ import {
   Archive,
   BookOpen,
   ClipboardCheck,
+  Files,
   FolderOpen,
   History,
   Inbox,
@@ -98,7 +99,7 @@ export function navFor(role: Role): NavSection[] {
         {
           heading: 'Records',
           items: [
-            { to: '/app/documents', label: 'Document Repository', icon: FolderOpen },
+            { to: '/app/documents', label: 'All Documents', icon: Files },
             { to: '/app/archive', label: 'Archive', icon: Archive },
             { to: '/app/email-log', label: 'Email Log', icon: Mail, count: (db) => db.notifications.filter((n) => n.result === 'failed').length, countTone: 'danger' },
           ],

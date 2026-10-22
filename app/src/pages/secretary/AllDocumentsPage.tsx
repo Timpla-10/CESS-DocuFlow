@@ -216,9 +216,9 @@ export function AllDocumentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Central Repository"
-        title="Central Document Repository"
-        description="Master registry for CESS and IDS documents. Browse folders or search records."
+        eyebrow="Active Repository & Task Management"
+        title="All Documents"
+        description="Monitor active paperwork moving through offices across CESS and IDS, track delayed files, and encode walk-in submissions."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
