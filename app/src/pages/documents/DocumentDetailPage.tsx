@@ -689,43 +689,9 @@ export function DocumentDetailPage() {
                 )}
 
                 {isReviewerForDoc && (
-                  <>
-                    <Button
-                      onClick={() =>
-                        handleOpenReview(
-                          allowedReviewOpts.find(
-                            (o) =>
-                              o.kind === 'approve' ||
-                              o.kind === 'endorse' ||
-                              o.kind === 'endorse_higher',
-                          )?.kind ?? 'endorse',
-                        )
-                      }
-                      icon={UserCheck}
-                      variant="primary"
-                    >
-                      {allowedReviewOpts.some((o) => o.kind === 'approve')
-                        ? 'Approve Document'
-                        : allowedReviewOpts.some((o) => o.kind === 'endorse_higher')
-                        ? 'Endorse to Higher Office'
-                        : 'Endorse Document'}
-                    </Button>
-                    <Button
-                      onClick={() => handleOpenReview('return')}
-                      icon={RotateCcw}
-                      variant="secondary"
-                      className="border-warning-300 text-warning-800 hover:bg-warning-50 hover:text-warning-900"
-                    >
-                      Return for Correction
-                    </Button>
-                    <Button
-                      onClick={() => handleOpenReview('reject')}
-                      icon={XCircle}
-                      variant="danger-soft"
-                    >
-                      Disapprove / Reject
-                    </Button>
-                  </>
+                  <Button onClick={() => handleOpenReview()} icon={UserCheck}>
+                    Review & Record Decision
+                  </Button>
                 )}
 
                 {canSecretaryFinalize && (
