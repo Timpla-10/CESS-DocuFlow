@@ -34,7 +34,15 @@ function load(): Database {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Database
-      if (parsed.version === DB_VERSION) return parsed
+      if (parsed.version === DB_VERSION || parsed.version === 12 || parsed.version === 11) {
+        parsed.version = DB_VERSION
+        for (const u of parsed.users) {
+          if (u.role === 'ids_principal' && !u.origin) {
+            u.origin = 'IDS'
+          }
+        }
+        return parsed
+      }
     }
   } catch {
     /* fall through to a fresh seed */

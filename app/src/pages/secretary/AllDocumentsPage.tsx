@@ -76,13 +76,20 @@ export function AllDocumentsPage() {
 
   // Walk-in encoding dialog state (REQ-REC-8)
   const requesters = db.users.filter(
-    (u) => (u.role === 'student' || u.role === 'faculty') && u.active,
+    (u) =>
+      (u.role === 'student' ||
+        u.role === 'faculty' ||
+        u.role === 'ids_principal' ||
+        u.role === 'chairperson' ||
+        u.role === 'dean') &&
+      u.active,
   )
   const [isWalkInOpen, setIsWalkInOpen] = useState(false)
   const [requesterId, setRequesterId] = useState(requesters[0]?.id ?? '')
   const selectedRequester = requesters.find((u) => u.id === requesterId)
+  const requesterAudience = selectedRequester?.role === 'student' ? 'student' : 'faculty'
   const availableTypes = db.documentTypes.filter(
-    (t) => !selectedRequester || t.audience === selectedRequester.role,
+    (t) => !selectedRequester || t.audience === requesterAudience,
   )
   const [typeId, setTypeId] = useState(availableTypes[0]?.id ?? '')
   const selectedType = availableTypes.find((t) => t.id === typeId) ?? availableTypes[0]
@@ -98,7 +105,8 @@ export function AllDocumentsPage() {
   const handleOpenWalkIn = (preselectedTypeId?: string) => {
     const firstReq = requesters[0]
     setRequesterId(firstReq?.id ?? '')
-    const firstTypes = db.documentTypes.filter((t) => !firstReq || t.audience === firstReq.role)
+    const firstReqAudience = firstReq?.role === 'student' ? 'student' : 'faculty'
+    const firstTypes = db.documentTypes.filter((t) => !firstReq || t.audience === firstReqAudience)
     setTypeId(preselectedTypeId ?? firstTypes[0]?.id ?? '')
     setTitle('')
     setDescription('')
@@ -110,7 +118,8 @@ export function AllDocumentsPage() {
   const handleRequesterChange = (newReqId: string) => {
     setRequesterId(newReqId)
     const req = requesters.find((u) => u.id === newReqId)
-    const nextTypes = db.documentTypes.filter((t) => !req || t.audience === req.role)
+    const reqAudience = req?.role === 'student' ? 'student' : 'faculty'
+    const nextTypes = db.documentTypes.filter((t) => !req || t.audience === reqAudience)
     setTypeId(nextTypes[0]?.id ?? '')
     setAttachedFiles([])
     setWalkInErrors({})
@@ -618,7 +627,7 @@ export function AllDocumentsPage() {
       >
         <form className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Requester (Student or Faculty)" required>
+            <Field label="Requester (Student, Faculty, or Principal)" required>
               <Select
                 value={requesterId}
                 onChange={(e) => handleRequesterChange(e.target.value)}
@@ -626,7 +635,17 @@ export function AllDocumentsPage() {
               >
                 {requesters.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.name} ({u.role === 'student' ? 'Student' : `Faculty - ${u.origin ?? 'CESS'}`})
+                    {u.name} (
+                    {u.role === 'student'
+                      ? 'Student'
+                      : u.role === 'ids_principal'
+                        ? 'IDS Principal (Faculty)'
+                        : u.role === 'chairperson'
+                          ? `Chairperson (${u.department})`
+                          : u.role === 'dean'
+                            ? 'Dean'
+                            : `Faculty - ${u.origin ?? 'CESS'}`}
+                    )
                   </option>
                 ))}
               </Select>

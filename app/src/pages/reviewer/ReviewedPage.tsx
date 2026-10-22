@@ -1,7 +1,7 @@
-import { History } from 'lucide-react'
+import { History, FilePlus2 } from 'lucide-react'
 import { useUser } from '../../app/session'
 import { DocumentList, FilterBar, useDocumentFilters } from '../../components/documents'
-import { Card, EmptyState, PageHeader } from '../../components/ui'
+import { ButtonLink, Card, EmptyState, PageHeader } from '../../components/ui'
 import { OFFICE_LABEL } from '../../content/language'
 import { reviewedBy } from '../../data/selectors'
 import { useDb } from '../../data/store'
@@ -20,6 +20,11 @@ export function ReviewedPage() {
         eyebrow="Review History"
         title={`Documents Acted On by ${officeName}`}
         description={`Track the ongoing movement and eventual outcome of documents previously endorsed, approved, or returned by your office.`}
+        actions={
+          <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+            Submit Document Request
+          </ButtonLink>
+        }
       />
 
       <Card>

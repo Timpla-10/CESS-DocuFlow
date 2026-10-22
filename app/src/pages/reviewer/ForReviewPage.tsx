@@ -1,7 +1,7 @@
-import { Inbox } from 'lucide-react'
+import { Inbox, FilePlus2 } from 'lucide-react'
 import { useUser } from '../../app/session'
 import { DocumentList, FilterBar, useDocumentFilters } from '../../components/documents'
-import { Card, EmptyState, PageHeader } from '../../components/ui'
+import { ButtonLink, Card, EmptyState, PageHeader } from '../../components/ui'
 import { OFFICE_LABEL } from '../../content/language'
 import { reviewInbox } from '../../data/selectors'
 import { useDb } from '../../data/store'
@@ -20,6 +20,11 @@ export function ForReviewPage() {
         eyebrow="Review Inbox"
         title={`Documents Awaiting ${officeName} Action`}
         description={`Review, endorse, or approve document requests assigned to your office. Requests are prioritized by date submitted (oldest first).`}
+        actions={
+          <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+            Submit Document Request
+          </ButtonLink>
+        }
       />
 
       <Card>

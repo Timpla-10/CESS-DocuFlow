@@ -134,17 +134,19 @@ export function DocumentDetailPage() {
   const docType = typeOf(db, doc)
   const requester = userById(db, doc.requesterId)
   const delayed = isDelayed(db, doc)
-  const isReqUser = isRequester(user.role)
-  const userAudience: 'requester' | 'staff' = isReqUser ? 'requester' : 'staff'
+  const isDocRequester = doc.requesterId === user.id
+  const isReqUser = isRequester(user.role) || isDocRequester
+  const userAudience: 'requester' | 'staff' = isDocRequester ? 'requester' : isReqUser ? 'requester' : 'staff'
   const message = requesterMessage(doc, delayed, db)
 
   // Action authorizations
-  const canResubmit = isReqUser && doc.requesterId === user.id && doc.status === 'returned'
+  const canResubmit = isDocRequester && doc.status === 'returned'
   const canSecretaryCheck = user.role === 'secretary' && doc.status === 'submitted'
   const currentStep = doc.route[doc.routeIndex]
   const userOffice = ROLE_OFFICE[user.role]
 
-  const allowedReviewOpts = userOffice ? reviewOptions(db, doc, userOffice) : []
+  const allowedReviewOpts =
+    userOffice && !isDocRequester ? reviewOptions(db, doc, userOffice) : []
   const isReviewerForDoc = allowedReviewOpts.length > 0
 
   const canSecretaryFinalize =

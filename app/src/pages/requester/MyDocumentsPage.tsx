@@ -44,8 +44,9 @@ export function MyDocumentsPage() {
   const db = useDb()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const myDocs = visibleDocuments(db, user)
-  const allowedTypes = db.documentTypes.filter((t) => t.audience === user.role)
+  const myDocs = visibleDocuments(db, user).filter((d) => d.requesterId === user.id)
+  const userAudience = user.role === 'student' ? 'student' : 'faculty'
+  const allowedTypes = db.documentTypes.filter((t) => t.audience === userAudience)
 
   const returnedDocs = myDocs.filter((d) => d.status === 'returned')
   const readyDocs = myDocs.filter((d) => d.status === 'ready')
@@ -138,19 +139,21 @@ export function MyDocumentsPage() {
                       Turnaround: {selectedType.processingDays[0]}–{selectedType.processingDays[1]} working days
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-700 ring-1 ring-ink-200">
-                      Routing ({user.origin === 'IDS' ? '🏫 IDS Route' : '🏛️ CESS Route'}):{' '}
+                      Routing ({user.role === 'ids_principal' ? '🏫 IDS Principal Route' : user.origin === 'IDS' ? '🏫 IDS Route' : '🏛️ CESS Route'}):{' '}
                       <strong className="font-semibold text-ink-900">
                         Secretary →{' '}
-                        {(user.origin === 'IDS'
-                          ? (selectedType.idsRoute && selectedType.idsRoute.length > 0
-                              ? selectedType.idsRoute
-                              : ['chairperson', 'ids_principal', 'dean'])
-                          : (selectedType.cessRoute && selectedType.cessRoute.length > 0
-                              ? selectedType.cessRoute
-                              : ['chairperson', 'dean'])
-                        )
-                          .map((r) => OFFICE_LABEL[r as keyof typeof OFFICE_LABEL] || r)
-                          .join(' → ')}{' '}
+                        {user.role === 'ids_principal'
+                          ? 'Department Chairperson → College Dean'
+                          : (user.origin === 'IDS'
+                              ? (selectedType.idsRoute && selectedType.idsRoute.length > 0
+                                  ? selectedType.idsRoute
+                                  : ['chairperson', 'ids_principal', 'dean'])
+                              : (selectedType.cessRoute && selectedType.cessRoute.length > 0
+                                  ? selectedType.cessRoute
+                                  : ['chairperson', 'dean'])
+                            )
+                              .map((r) => OFFICE_LABEL[r as keyof typeof OFFICE_LABEL] || r)
+                              .join(' → ')}{' '}
                         → Release
                       </strong>
                     </span>
@@ -477,9 +480,13 @@ export function MyDocumentsPage() {
                         <Clock className="size-3.5 text-brand-600" />
                         Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days
                       </span>
-                      {user.role === 'faculty' && (
+                      {(user.role === 'faculty' || user.role === 'ids_principal') && (
                         <span className="inline-flex items-center gap-1 rounded bg-brand-50 px-2 py-0.5 text-2xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200/60">
-                          {user.origin === 'IDS' ? '🏫 IDS Route' : '🏛️ CESS Route'}: Sec → Chair → {user.origin === 'IDS' ? 'Principal → ' : ''}Dean → Rel
+                          {user.role === 'ids_principal'
+                            ? '🏫 IDS Principal Route: Sec → Chair → Dean → Rel'
+                            : user.origin === 'IDS'
+                            ? '🏫 IDS Route: Sec → Chair → Principal → Dean → Rel'
+                            : '🏛️ CESS Route: Sec → Chair → Dean → Rel'}
                         </span>
                       )}
                     </div>

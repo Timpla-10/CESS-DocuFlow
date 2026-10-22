@@ -103,6 +103,9 @@ export function AccountPage() {
             <p className="text-sm text-ink-600">{user.email}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge tone="brand">{ROLE_LABEL[user.role]}</Badge>
+              {user.role === 'ids_principal' && (
+                <Badge tone="warning">🏫 IDS Principal</Badge>
+              )}
               {user.role === 'faculty' && (
                 <Badge tone={user.origin === 'IDS' ? 'warning' : 'brand'}>
                   {user.origin === 'IDS' ? '🏫 IDS Faculty' : '🏛️ CESS Faculty'}
@@ -117,7 +120,18 @@ export function AccountPage() {
             items={[
               { label: 'Full Name', value: user.name },
               { label: 'Role & Responsibilities', value: ROLE_LABEL[user.role] },
-              ...(user.role === 'faculty'
+              ...(user.role === 'ids_principal'
+                ? [
+                    {
+                      label: 'Unit Affiliation',
+                      value: 'IDS Administration & Faculty (Integrated Developmental School)',
+                    },
+                    {
+                      label: 'Document Submission Route',
+                      value: 'Direct College Review (Secretary → Chairperson → Dean → Release)',
+                    },
+                  ]
+                : user.role === 'faculty'
                 ? [
                     {
                       label: 'Faculty Unit Affiliation',

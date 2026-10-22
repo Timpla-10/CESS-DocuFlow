@@ -3,14 +3,14 @@
  * requesters see their own documents, reviewing offices see documents routed
  * to their office, and the College Secretary sees everything.
  */
-import { ROLE_OFFICE, isRequester } from '../content/language'
+import { ROLE_OFFICE } from '../content/language'
 import { daysSince, workingDaysSince } from '../lib/time'
 import { lastSubmittedAt } from './engine'
 import type { Database, DocRecord, DocumentType, User } from './types'
 
 export function canView(user: User, doc: DocRecord): boolean {
   if (user.role === 'secretary') return true
-  if (isRequester(user.role)) return doc.requesterId === user.id
+  if (doc.requesterId === user.id) return true
   const office = ROLE_OFFICE[user.role]
   return !!office && doc.route.some((s) => s.office === office)
 }
@@ -56,7 +56,13 @@ export function byNewest(a: DocRecord, b: DocRecord) {
 export function reviewInbox(db: Database, user: User): DocRecord[] {
   const office = ROLE_OFFICE[user.role]
   return db.documents
-    .filter((d) => d.status === 'with_office' && d.currentOffice === office && d.route[d.routeIndex]?.stage === 'review')
+    .filter(
+      (d) =>
+        d.status === 'with_office' &&
+        d.currentOffice === office &&
+        d.route[d.routeIndex]?.stage === 'review' &&
+        d.requesterId !== user.id,
+    )
     .sort(byOldest)
 }
 

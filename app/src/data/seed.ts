@@ -24,7 +24,7 @@ import {
 } from './engine'
 import type { Database, DocumentType, ExternalOfficeItem, User } from './types'
 
-export const DB_VERSION = 12
+export const DB_VERSION = 13
 export const DEMO_PASSWORD = 'cess2026'
 
 
@@ -36,7 +36,7 @@ const users: User[] = [
   { id: 'u-faculty-3', name: 'Mr. Jose Dela Cruz', email: 'jose.delacruz@msunaawan.edu.ph', role: 'faculty', origin: 'IDS', department: 'Integrated Developmental School', position: 'Teacher III', active: true, notificationPreference: 'both' },
   { id: 'u-secretary', name: 'Ms. Carmela Ortiz', email: 'cess.secretary@msunaawan.edu.ph', role: 'secretary', department: 'College of Education and Social Sciences', position: 'College Secretary', active: true, notificationPreference: 'both' },
   { id: 'u-chair', name: 'Dr. Liza Fernandez', email: 'cess.chair@msunaawan.edu.ph', role: 'chairperson', department: 'Department of Secondary and Elementary Education', position: 'Department Chairperson', active: true, notificationPreference: 'both' },
-  { id: 'u-ids', name: 'Dr. Teresa Gomez', email: 'ids.principal@msunaawan.edu.ph', role: 'ids_principal', department: 'Integrated Developmental School', position: 'IDS Principal', active: true, notificationPreference: 'both' },
+  { id: 'u-ids', name: 'Dr. Teresa Gomez', email: 'ids.principal@msunaawan.edu.ph', role: 'ids_principal', origin: 'IDS', department: 'Integrated Developmental School', position: 'IDS Principal', active: true, notificationPreference: 'both' },
   { id: 'u-dean', name: 'Dr. Ramon Villanueva', email: 'cess.dean@msunaawan.edu.ph', role: 'dean', department: 'College of Education and Social Sciences', position: 'College Dean', active: true, notificationPreference: 'both' },
   { id: 'u-ovcaa', name: 'Dr. Victor Salazar', email: 'ovcaa@msunaawan.edu.ph', role: 'ovcaa', department: 'Office of the Vice Chancellor for Academic Affairs', position: 'Vice Chancellor for Academic Affairs', active: true, notificationPreference: 'both' },
   { id: 'u-chancellor', name: 'Dr. Antonio Cabrera', email: 'chancellor@msunaawan.edu.ph', role: 'chancellor', department: 'Office of the Chancellor', position: 'Chancellor', active: true, notificationPreference: 'both' },

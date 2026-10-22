@@ -23,6 +23,7 @@ import type {
   NotificationKind,
   NotificationLog,
   OfficeId,
+  Role,
   RouteStep,
   User,
 } from './types'
@@ -84,12 +85,19 @@ function moveTo(doc: DocRecord, index: number, at: string) {
  * Uses editable `cessRoute` / `idsRoute` on DocumentType when configured,
  * and labels repeated offices (e.g. IDS Principal 1st and 2nd review, REQ-ROUTE-3).
  */
-export function buildRoute(origin: DocRecord['origin'], type?: DocumentType): RouteStep[] {
+export function buildRoute(origin: DocRecord['origin'], type?: DocumentType, requesterRole?: Role): RouteStep[] {
   const defaultReviewOffices: OfficeId[] =
     origin === 'IDS' ? ['chairperson', 'ids_principal', 'dean'] : ['chairperson', 'dean']
 
   const configured = origin === 'IDS' ? type?.idsRoute : type?.cessRoute
-  const reviewOffices = configured && configured.length > 0 ? configured : defaultReviewOffices
+  let reviewOffices = configured && configured.length > 0 ? [...configured] : defaultReviewOffices
+
+  // If the requester is the IDS Principal herself, she doesn't review her own document;
+  // her request is reviewed by the Chairperson and College Dean
+  if (requesterRole === 'ids_principal') {
+    reviewOffices = reviewOffices.filter((o) => o !== 'ids_principal')
+    if (reviewOffices.length === 0) reviewOffices = ['chairperson', 'dean']
+  }
 
   // Count occurrences to label 1st / 2nd reviews when an office appears twice (REQ-ROUTE-3)
   const totals = new Map<OfficeId, number>()
@@ -193,9 +201,10 @@ export function submitRequest(
   at: string,
 ): DocRecord {
   const type = getType(db, input.typeId)
-  if (type.audience !== user.role) throw new FriendlyError('This document type isn’t available for the selected requester role.')
+  const userAudience = user.role === 'student' ? 'student' : 'faculty'
+  if (type.audience !== userAudience) throw new FriendlyError('This document type isn’t available for the selected requester role.')
   validateFiles(type, input.files)
-  const origin = user.origin ?? 'CESS'
+  const origin = user.origin ?? (user.role === 'ids_principal' || user.department.includes('Integrated Developmental School') ? 'IDS' : 'CESS')
   const id = nextId(db, 'd')
   const seq = db.documents.length + 1
   const year = new Date(at).getFullYear()
@@ -406,7 +415,8 @@ export function checkRequirements(
     },
     db,
   )
-  doc.route = buildRoute(doc.origin, type)
+  const requester = db.users.find((u) => u.id === doc.requesterId)
+  doc.route = buildRoute(doc.origin, type, requester?.role)
   moveTo(doc, 1, at)
   doc.status = 'with_office'
   const firstReviewStep = doc.route[1]

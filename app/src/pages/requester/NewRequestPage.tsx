@@ -39,7 +39,8 @@ export function NewRequestPage() {
   const [searchParams] = useSearchParams()
 
   // Allowed document types for this user's role (REQ-SUB-1)
-  const types = db.documentTypes.filter((t) => t.audience === user.role)
+  const userAudience = user.role === 'student' ? 'student' : 'faculty'
+  const types = db.documentTypes.filter((t) => t.audience === userAudience)
 
   const initialTypeFromUrl = searchParams.get('type')
   const defaultTypeId = types.find((t) => t.id === initialTypeFromUrl)?.id ?? types[0]?.id ?? ''
@@ -308,25 +309,39 @@ export function NewRequestPage() {
               </div>
             </div>
 
-            {/* Explicit Faculty Affiliation & Routing Path Notice (REQ-PM-FEEDBACK-2) */}
-            {user.role === 'faculty' && (
+            {/* Explicit Faculty / Principal Affiliation & Routing Path Notice (REQ-PM-FEEDBACK-2) */}
+            {(user.role === 'faculty' || user.role === 'ids_principal') && (
               <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-brand-950">
-                      {user.origin === 'IDS' ? '🏫 IDS Faculty' : '🏛️ CESS Faculty'}
+                      {user.role === 'ids_principal'
+                        ? '🏫 IDS Principal (Faculty Submissions)'
+                        : user.origin === 'IDS'
+                          ? '🏫 IDS Faculty'
+                          : '🏛️ CESS Faculty'}
                     </span>
                     <Badge tone={user.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
                       {user.origin === 'IDS' ? 'Integrated Developmental School' : 'College of Education and Social Sciences'}
                     </Badge>
                   </div>
                   <span className="font-mono text-2xs font-semibold text-brand-700">
-                    Routing: {user.origin === 'IDS' ? 'Secretary → Chairperson → IDS Principal → Dean → Release' : 'Secretary → Chairperson → Dean → Release'}
+                    Routing:{' '}
+                    {user.role === 'ids_principal'
+                      ? 'Secretary → Chairperson → Dean → Release'
+                      : user.origin === 'IDS'
+                        ? 'Secretary → Chairperson → IDS Principal → Dean → Release'
+                        : 'Secretary → Chairperson → Dean → Release'}
                   </span>
                 </div>
                 <div className="mt-2.5 rounded-lg bg-white p-2.5 ring-1 ring-brand-100 text-ink-700">
                   <span className="font-semibold text-ink-900">Official Routing Path: </span>
-                  {user.origin === 'IDS' ? (
+                  {user.role === 'ids_principal' ? (
+                    <span>
+                      Secretary Check → Chairperson → Dean Endorsement → Release{' '}
+                      <span className="text-brand-700 font-medium">(Self-endorsement omitted)</span>
+                    </span>
+                  ) : user.origin === 'IDS' ? (
                     <span>
                       Secretary Check → Chairperson →{' '}
                       <strong className="text-warning-800 underline decoration-warning-400">IDS Principal (Review)</strong>{' '}
@@ -336,12 +351,19 @@ export function NewRequestPage() {
                     <span>Secretary Check → Chairperson → Dean Endorsement → Release</span>
                   )}
                 </div>
-                {user.origin === 'IDS' && (
+                {user.role === 'ids_principal' ? (
+                  <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-600">
+                    <Info className="size-3.5 shrink-0 text-brand-600 mt-0.5" />
+                    <span>
+                      <strong>Note:</strong> As the IDS Principal submitting an official document request, your request proceeds to the Chairperson and Dean for endorsement without duplicate self-review.
+                    </span>
+                  </p>
+                ) : user.origin === 'IDS' ? (
                   <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-600">
                     <Info className="size-3.5 shrink-0 text-brand-600 mt-0.5" />
                     <span><strong>Note:</strong> As an IDS faculty member, your document will route through the IDS Principal before the Dean.</span>
                   </p>
-                )}
+                ) : null}
               </div>
             )}
 

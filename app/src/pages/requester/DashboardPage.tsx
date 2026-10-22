@@ -29,7 +29,7 @@ export function DashboardPage() {
   const user = useUser()
   const db = useDb()
 
-  const myDocs = visibleDocuments(db, user)
+  const myDocs = visibleDocuments(db, user).filter((d) => d.requesterId === user.id)
   const returnedDocs = myDocs.filter((d) => d.status === 'returned')
   const readyDocs = myDocs.filter((d) => d.status === 'ready')
   const inRoutingDocs = myDocs.filter(

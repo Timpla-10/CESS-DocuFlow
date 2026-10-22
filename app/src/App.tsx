@@ -76,11 +76,11 @@ export default function App() {
             >
               <Route index element={<RoleHomeRedirect />} />
 
-              {/* Requester (Students and Faculty) */}
+              {/* Requester Workspace (Students, Faculty, and Academic Administrators) */}
               <Route
                 path="dashboard"
                 element={
-                  <Protected allowedRoles={['student', 'faculty']}>
+                  <Protected allowedRoles={['student', 'faculty', 'ids_principal', 'chairperson', 'dean']}>
                     <DashboardPage />
                   </Protected>
                 }
@@ -88,7 +88,7 @@ export default function App() {
               <Route
                 path="my-documents"
                 element={
-                  <Protected allowedRoles={['student', 'faculty']}>
+                  <Protected allowedRoles={['student', 'faculty', 'ids_principal', 'chairperson', 'dean']}>
                     <MyDocumentsPage />
                   </Protected>
                 }
@@ -96,7 +96,7 @@ export default function App() {
               <Route
                 path="requests/new"
                 element={
-                  <Protected allowedRoles={['student', 'faculty']}>
+                  <Protected allowedRoles={['student', 'faculty', 'ids_principal', 'chairperson', 'dean']}>
                     <NewRequestPage />
                   </Protected>
                 }

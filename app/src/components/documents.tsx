@@ -578,7 +578,8 @@ function groupHistoryByStep(steps: RouteStep[], history: HistoryEntry[]): Map<nu
  */
 export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
   const type = db ? typeOf(db, doc) : undefined
-  const steps = doc.route.length > 1 ? doc.route : buildRoute(doc.origin, type)
+  const requester = db ? userById(db, doc.requesterId) : undefined
+  const steps = doc.route.length > 1 ? doc.route : buildRoute(doc.origin, type, requester?.role)
   const done = doc.status === 'released' || doc.status === 'ready'
   const historyByStep = useMemo(() => groupHistoryByStep(steps, doc.history), [steps, doc.history])
 
