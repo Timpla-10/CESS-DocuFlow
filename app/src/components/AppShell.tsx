@@ -410,7 +410,13 @@ function NotificationBell() {
                       type="button"
                       onClick={() => {
                         setOpen(false)
-                        navigate(n.docId ? `/app/documents/${n.docId}` : n.kind === 'notice' ? '/app/notices' : '/app')
+                        navigate(
+                          n.docId
+                            ? `/app/documents/${n.docId}`
+                            : n.kind === 'notice' && (user.role === 'secretary' || user.role === 'dean')
+                            ? '/app/notices'
+                            : '/app',
+                        )
                       }}
                       className="flex w-full gap-3 px-4 py-3 text-left hover:bg-brand-50/70"
                     >

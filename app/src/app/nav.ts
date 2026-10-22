@@ -2,7 +2,6 @@ import {
   Archive,
   BookOpen,
   ClipboardCheck,
-  Files,
   FolderOpen,
   History,
   Inbox,
@@ -83,7 +82,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }, directory],
+          items: [directory],
         },
       ]
     case 'secretary':
@@ -99,7 +98,7 @@ export function navFor(role: Role): NavSection[] {
         {
           heading: 'Records',
           items: [
-            { to: '/app/documents', label: 'All Documents', icon: Files },
+            { to: '/app/documents', label: 'Document Repository', icon: FolderOpen },
             { to: '/app/archive', label: 'Archive', icon: Archive },
             { to: '/app/email-log', label: 'Email Log', icon: Mail, count: (db) => db.notifications.filter((n) => n.result === 'failed').length, countTone: 'danger' },
           ],
@@ -123,6 +122,19 @@ export function navFor(role: Role): NavSection[] {
         },
       ]
     case 'ids_principal':
+      return [
+        {
+          heading: 'Review tasks',
+          items: [
+            { to: '/app/for-review', label: 'For Your Review', icon: Inbox, count: (db, u) => reviewInbox(db, u).length, countTone: 'warning' },
+            { to: '/app/reviewed', label: 'Reviewed by You', icon: History },
+          ],
+        },
+        {
+          heading: 'College information',
+          items: [directory],
+        },
+      ]
     case 'dean':
       return [
         {
@@ -179,10 +191,6 @@ export function navFor(role: Role): NavSection[] {
               icon: FolderOpen,
             },
           ],
-        },
-        {
-          heading: 'College information',
-          items: [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }],
         },
       ]
     case 'ovcaa':

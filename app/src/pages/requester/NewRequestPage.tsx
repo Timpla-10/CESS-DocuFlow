@@ -212,10 +212,17 @@ export function NewRequestPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <Link
-        to={selectedTypeId ? `/app/my-documents?folder=${selectedTypeId}` : '/app/my-documents'}
+        to={
+          user.role === 'ids_principal'
+            ? '/app/for-review'
+            : selectedTypeId
+            ? `/app/my-documents?folder=${selectedTypeId}`
+            : '/app/my-documents'
+        }
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"
       >
-        <ArrowLeft className="size-4" aria-hidden /> Back to Document Repository
+        <ArrowLeft className="size-4" aria-hidden />{' '}
+        {user.role === 'ids_principal' ? 'Back to Review Inbox' : 'Back to Document Repository'}
       </Link>
 
       <PageHeader
@@ -557,7 +564,10 @@ export function NewRequestPage() {
 
         {/* Form Actions */}
         <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-          <ButtonLink to="/app/my-documents" variant="secondary">
+          <ButtonLink
+            to={user.role === 'ids_principal' ? '/app/for-review' : '/app/my-documents'}
+            variant="secondary"
+          >
             Cancel
           </ButtonLink>
           <Button
