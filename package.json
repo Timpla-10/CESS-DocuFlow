@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm --prefix app run dev",
     "build": "npm --prefix app run build",
-    "preview": "npm --prefix app run preview"
+    "preview": "npm --prefix app run preview",
+    "postinstall": "npm --prefix app install"
   }
 }
