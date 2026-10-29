@@ -211,7 +211,7 @@ export function DocumentDetailPage() {
       return
     }
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a file smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a file smaller than ${MAX_FILE_MB} MB.`)
       return
     }
     setResubmitFiles((prev) => [...prev, { name: file.name, sizeKb, fileObj: file }])
@@ -230,7 +230,7 @@ export function DocumentDetailPage() {
       return
     }
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a file smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a file smaller than ${MAX_FILE_MB} MB.`)
       return
     }
     setReleaseSignedFile({ name: file.name, sizeKb, fileObj: file })

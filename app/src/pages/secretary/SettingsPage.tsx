@@ -25,8 +25,8 @@ import { OFFICE_LABEL } from '../../content/language'
 import { api, useDb } from '../../data/store'
 import type { DocumentType, ExternalOfficeItem, OfficeId, Requirement } from '../../data/types'
 
-const REVIEW_OFFICE_CHOICES: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
-const HIGHER_OFFICE_CHOICES: OfficeId[] = ['ovcaa', 'chancellor']
+const REVIEW_OFFICE_CHOICES: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
+const HIGHER_OFFICE_CHOICES: OfficeId[] = ['ovcaa', 'vcaf', 'chancellor']
 
 
 export function SettingsPage() {

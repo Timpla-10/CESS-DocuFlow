@@ -43,12 +43,13 @@ export function OverviewPage() {
   >('toCheck')
 
   // Distribution by holding office with official institutional gradients
-  const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+  const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
   const officeGradients: Record<OfficeId, [string, string]> = {
     chairperson: ['#8B5CF6', '#581C87'], // Royal Violet (DSSH): Violet-500 -> Violet-900
     ids_principal: ['#FB7185', '#BE185D'], // Official IDS Warm Rose Pink: Rose-400 -> Pink-700
     dean: ['#C084FC', '#6B21A8'], // Dean Amethyst Purple: Purple-400 -> Purple-800
     ovcaa: ['#60A5FA', '#1D4ED8'], // University Azure Blue: Blue-400 -> Blue-700
+    vcaf: ['#34D399', '#047857'], // University Emerald Green: Emerald-400 -> Emerald-700
     chancellor: ['#FBBF24', '#B45309'], // Chancellor Amber Gold: Amber-400 -> Amber-700
     secretary: ['#A78BFA', '#4C1D95'],
   }

@@ -88,7 +88,7 @@ export function MyDocumentsPage() {
       'INSTRUCTIONS FOR REQUESTER:',
       '1. Fill in all required fields on this official college form accurately.',
       '2. Obtain preliminary departmental or instructor endorsements if applicable.',
-      '3. Save or scan the completed form as PDF, JPG, or PNG (max 10 MB) and upload it in CESS DocuFlow.',
+      '3. Save or scan the completed form as PDF, JPG, or PNG (max 20 MB) and upload it in CESS DocuFlow.',
     ])
   }
 
@@ -356,6 +356,8 @@ export function MyDocumentsPage() {
                 ? 'Department Workspace'
                 : user.role === 'ovcaa'
                 ? 'OVCAA Workspace'
+                : user.role === 'vcaf'
+                ? 'VCAF Workspace'
                 : user.role === 'chancellor'
                 ? 'Chancellor Workspace'
                 : user.role === 'dean'
