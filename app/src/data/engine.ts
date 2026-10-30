@@ -187,6 +187,26 @@ function officeAccount(db: Database, office: OfficeId): User | undefined {
 /* Requester & Walk-in Submission actions                                    */
 /* ------------------------------------------------------------------------ */
 
+export function generateUniqueControlBase(db: Database, origin: 'CESS' | 'IDS', year: number): string {
+  let maxSeq = 0
+  for (const d of db.documents) {
+    const parts = d.controlBase.split('-')
+    if (parts.length >= 5) {
+      const num = parseInt(parts[3], 10)
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num
+      }
+    }
+  }
+  let nextSeq = Math.max(maxSeq + 1, db.documents.length + 1)
+  let candidate = `MSU-${origin}-COM-${String(nextSeq).padStart(4, '0')}-${year}`
+  while (db.documents.some((d) => d.controlBase === candidate)) {
+    nextSeq += 1
+    candidate = `MSU-${origin}-COM-${String(nextSeq).padStart(4, '0')}-${year}`
+  }
+  return candidate
+}
+
 export function submitRequest(
   db: Database,
   user: User,
@@ -215,11 +235,11 @@ export function submitRequest(
   validateFiles(type, input.files)
   const origin = user.origin ?? (user.role === 'ids_principal' || user.department.includes('Integrated Developmental School') ? 'IDS' : 'CESS')
   const id = nextId(db, 'd')
-  const seq = db.documents.length + 1
   const year = new Date(at).getFullYear()
+  const controlBase = generateUniqueControlBase(db, origin, year)
   const doc: DocRecord = {
     id,
-    controlBase: `MSU-${origin}-COM-${String(seq).padStart(4, '0')}-${year}`,
+    controlBase,
     revision: 0,
     typeId: type.id,
     title: input.title.trim(),

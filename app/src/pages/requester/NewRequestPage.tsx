@@ -1,8 +1,10 @@
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Clock,
+  Copy,
   Download,
   FileCheck2,
   FileText,
@@ -15,15 +17,16 @@ import {
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
+import { Dialog } from '../../components/Dialog'
 import { sessionFiles } from '../../components/documents'
 import { Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
 import { Badge, Button, ButtonLink, Card, CardHeader, PageHeader } from '../../components/ui'
-import { downloadGeneratedPdf, formatRoleTitle } from '../../content/language'
+import { controlNumber, downloadGeneratedPdf, formatRoleTitle } from '../../content/language'
 import { formatDateTime } from '../../lib/time'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
 import { api, useDb } from '../../data/store'
-import type { DocumentType, Origin, Requirement } from '../../data/types'
+import type { DocRecord, DocumentType, Origin, Requirement } from '../../data/types'
 
 interface SelectedFileItem {
   requirementId?: string
@@ -78,6 +81,8 @@ export function NewRequestPage() {
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({})
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submittedDoc, setSubmittedDoc] = useState<DocRecord | null>(null)
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
 
   // Handle switching document type
   const handleTypeChange = (newTypeId: string) => {
@@ -305,11 +310,12 @@ export function NewRequestPage() {
         }
       })
 
+      setSubmittedDoc(doc)
+      setIsConfirmModalOpen(true)
       toast.success(
         'Request Submitted Successfully',
-        'Automatic completeness check passed! Your request is now with the College Secretary for content verification.',
+        `Assigned Control Number: ${controlNumber(doc)}. Your request is saved with status Submitted.`,
       )
-      navigate(`/app/documents/${doc.id}`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'We could not submit your request. Please try again.'
       toast.error('Submission Unsuccessful', msg)
@@ -858,6 +864,164 @@ export function NewRequestPage() {
           </div>
         </div>
       </form>
+      {/* Submission Confirmation Modal (REQ-SUB-5, REQ-SUB-6, REQ-REC-1, REQ-REC-2) */}
+      {submittedDoc && (
+        <Dialog
+          open={isConfirmModalOpen}
+          onClose={() => {
+            setIsConfirmModalOpen(false)
+            navigate(`/app/documents/${submittedDoc.id}?submitted=true`)
+          }}
+          size="lg"
+          title={
+            <div className="flex items-center gap-2.5 text-success-800">
+              <div className="flex size-9 items-center justify-center rounded-xl bg-success-100 text-success-700">
+                <CheckCircle2 className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-ink-950">Document Request Submitted</h3>
+                <p className="text-xs font-normal text-ink-500">Official submission confirmation & assigned tracking credentials</p>
+              </div>
+            </div>
+          }
+          footer={
+            <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setIsConfirmModalOpen(false)
+                  navigate(`/app/my-documents?folder=${selectedTypeId}`)
+                }}
+              >
+                Go to Document Repository
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setIsConfirmModalOpen(false)
+                    setTitle('')
+                    setDescription('')
+                    setAttachedFiles([])
+                    setErrors({})
+                    setFileErrors({})
+                    setHasAttemptedSubmit(false)
+                    setSubmittedDoc(null)
+                  }}
+                >
+                  Submit Another Request
+                </Button>
+                <Button
+                  onClick={() => {
+                    setIsConfirmModalOpen(false)
+                    navigate(`/app/documents/${submittedDoc.id}?submitted=true`)
+                  }}
+                  iconRight={ArrowRight}
+                >
+                  Track Document & View Details
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            {/* Control Number Hero Card */}
+            <div className="rounded-2xl border-2 border-brand-200 bg-gradient-to-br from-brand-50/70 via-white to-brand-50/30 p-5 text-center">
+              <span className="text-2xs font-extrabold uppercase tracking-wider text-brand-700">
+                Assigned Official Control Number (REQ-REC-2)
+              </span>
+              <div className="mt-1.5 flex flex-wrap items-center justify-center gap-2.5">
+                <span className="font-mono text-2xl sm:text-3xl font-black tracking-tight text-brand-950 selection:bg-brand-200">
+                  {controlNumber(submittedDoc)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(controlNumber(submittedDoc))
+                    toast.success('Control Number Copied', `Copied ${controlNumber(submittedDoc)} to clipboard.`)
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-brand-200 hover:bg-brand-50 transition-colors"
+                  title="Copy Control Number"
+                >
+                  <Copy className="size-3.5" />
+                  <span>Copy</span>
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-ink-600">
+                This unique Control Number has been registered in the CESS repository. Use it to follow up with the College Secretary or track progress.
+              </p>
+            </div>
+
+            {/* Official Confirmation Summary Grid (REQ-SUB-5, REQ-SUB-6, REQ-REC-1) */}
+            <div className="rounded-xl border border-ink-200 bg-ink-50/50 p-4">
+              <h4 className="text-2xs font-bold uppercase tracking-wider text-ink-500 mb-3">
+                Official Submission Record Summary
+              </h4>
+              <div className="grid gap-3 sm:grid-cols-2 text-xs">
+                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100">
+                  <span className="text-ink-500 font-medium block">Initial Status</span>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <Badge tone="brand" dot={false}>Submitted</Badge>
+                    <span className="text-2xs text-ink-500">Awaiting Secretary verification</span>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100">
+                  <span className="text-ink-500 font-medium block">Derived Institutional Origin</span>
+                  <div className="mt-1 flex items-center gap-1.5 font-bold text-ink-900">
+                    <Badge tone={submittedDoc.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                      {submittedDoc.origin}
+                    </Badge>
+                    <span className="text-2xs font-normal text-ink-500">
+                      Derived from {user.department}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100">
+                  <span className="text-ink-500 font-medium block">Automatic Timestamp</span>
+                  <span className="mt-1 font-semibold text-ink-900 block font-mono text-2xs">
+                    {formatDateTime(submittedDoc.submittedAt)}
+                  </span>
+                </div>
+
+                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100">
+                  <span className="text-ink-500 font-medium block">Revision Number</span>
+                  <span className="mt-1 font-mono font-semibold text-ink-900 block">
+                    Revision {String(submittedDoc.revision).padStart(2, '0')} (Initial Submission)
+                  </span>
+                </div>
+
+                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100 sm:col-span-2">
+                  <span className="text-ink-500 font-medium block">Document Type & Title</span>
+                  <p className="mt-0.5 font-bold text-ink-900">
+                    {selectedType?.name}: <span className="font-semibold text-ink-700">“{submittedDoc.title}”</span>
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100 sm:col-span-2">
+                  <span className="text-ink-500 font-medium block">Attached Digital Copies</span>
+                  <p className="mt-0.5 text-ink-700">
+                    <strong>{submittedDoc.attachments.length}</strong> digital file(s) linked and access-controlled in repository.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Informative Guidance */}
+            <div className="rounded-xl bg-brand-50/70 p-3.5 text-xs text-brand-900 ring-1 ring-inset ring-brand-100 flex items-start gap-2.5">
+              <Info className="size-4 shrink-0 text-brand-600 mt-0.5" />
+              <div>
+                <p className="font-semibold">Next Step: Content Verification</p>
+                <p className="mt-0.5 text-ink-600 text-2xs leading-relaxed">
+                  The College Secretary will verify the information inside your attachments. Once verified, your request will automatically proceed along the{' '}
+                  <strong>{submittedDoc.origin}</strong> routing path. You can find this request anytime in your Document Repository under <strong>{selectedType?.name}</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   )
 }

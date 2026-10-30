@@ -17,7 +17,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { useState, type ChangeEvent, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import {
@@ -60,6 +60,7 @@ import { formatDate, formatDateTime, plural } from '../../lib/time'
 
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
   const user = useUser()
   const db = useDb()
   const toast = useToast()
@@ -468,6 +469,36 @@ export function DocumentDetailPage() {
         <span className="text-xs text-ink-500 font-mono">Control Ref: {controlNumber(doc)}</span>
       </div>
 
+      {/* Submission Confirmation Banner (REQ-SUB-5, REQ-SUB-6, REQ-REC-1, REQ-REC-2) */}
+      {searchParams.get('submitted') === 'true' && (
+        <div className="rounded-2xl border-2 border-success-200 bg-gradient-to-r from-success-50/90 to-emerald-50/50 p-5 shadow-xs">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-success-600 text-white shadow-xs">
+                <CheckCircle2 className="size-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-extrabold text-success-950">
+                    Request Submission Confirmed
+                  </h3>
+                  <Badge tone="success" dot={false}>Saved & Active</Badge>
+                  <Badge tone="brand" dot={false}>Status: Submitted</Badge>
+                </div>
+                <p className="text-xs text-ink-700 leading-relaxed">
+                  Your document request was successfully recorded under unique Control Number{' '}
+                  <strong className="font-mono text-success-900 bg-white/80 px-1.5 py-0.5 rounded border border-success-200">
+                    {controlNumber(doc)}
+                  </strong>
+                  . Origin has been established as <strong>{doc.origin}</strong> from your account affiliation, and timestamp{' '}
+                  <strong>{formatDateTime(doc.submittedAt)}</strong> has been officially sealed.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Document Summary Card */}
       <Card className="overflow-hidden">
         <div className="border-b border-ink-100 bg-brand-50/50 p-6">
@@ -729,16 +760,32 @@ export function DocumentDetailPage() {
             </div>
           )}
 
-          {/* Document Metadata Grid (REQ-REC-1, REQ-TRK-2) */}
+          {/* Document Metadata Grid (REQ-REC-1, REQ-REC-2, REQ-TRK-2) */}
           <div className="mt-6 border-t border-ink-100 pt-6">
             <DefinitionList
               items={[
                 {
-                  label: 'Control Number & Revision',
+                  label: 'Control Number & Revision (REQ-REC-2)',
                   value: <span className="font-mono font-bold text-brand-900">{controlNumber(doc)}</span>,
-                  hint: doc.encodedBySecretary
-                    ? 'Walk-in document encoded by the College Secretary'
-                    : `Origin: ${doc.origin}`,
+                  hint: `Revision ${String(doc.revision).padStart(2, '0')}${doc.encodedBySecretary ? ' · Walk-in encoded by College Secretary' : ''}`,
+                },
+                {
+                  label: 'Document Type',
+                  value: docType?.name ?? '—',
+                  hint: `Audience: ${docType?.audience === 'student' ? 'Students' : 'Faculty'}`,
+                },
+                {
+                  label: 'Document Title',
+                  value: <span className="font-semibold text-ink-900">{doc.title}</span>,
+                },
+                {
+                  label: 'Institutional Origin (REQ-SUB-6)',
+                  value: (
+                    <Badge tone={doc.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                      {doc.origin === 'IDS' ? 'IDS (Integrated Developmental School)' : 'CESS (College of Education and Social Sciences)'}
+                    </Badge>
+                  ),
+                  hint: 'Derived from account and affiliation',
                 },
                 {
                   label: 'Requester',
@@ -746,17 +793,23 @@ export function DocumentDetailPage() {
                   hint: requester?.email,
                 },
                 {
-                  label: 'Date & Time Submitted',
-                  value: formatDateTime(doc.submittedAt),
-                },
-                {
-                  label: 'Last Updated Time',
-                  value: formatDateTime(doc.updatedAt),
+                  label: 'Current Status',
+                  value: <StatusBadge doc={doc} audience={isReqUser ? 'requester' : 'staff'} db={db} />,
+                  hint: doc.status === 'submitted' ? 'Awaiting College Secretary content verification' : undefined,
                 },
                 {
                   label: 'Current Office Location',
                   value: isReqUser ? locationLabel(doc, db) : locationLabelForStaff(doc, db),
                   hint: `Arrived on ${formatDate(doc.officeSince)} (${plural(doc.routeIndex, 'step')} completed)`,
+                },
+                {
+                  label: 'Date & Time Received',
+                  value: formatDateTime(doc.submittedAt),
+                  hint: 'Sealed automatic timestamp (REQ-REC-1)',
+                },
+                {
+                  label: 'Last Updated Time',
+                  value: formatDateTime(doc.updatedAt),
                 },
                 {
                   label: 'Standard Processing Time',
