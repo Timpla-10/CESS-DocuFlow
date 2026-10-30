@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  Download,
   Eye,
   FileCheck2,
   FileText,
@@ -45,6 +46,7 @@ import {
   OFFICE_LABEL,
   ROLE_OFFICE,
   controlNumber,
+  downloadGeneratedPdf,
   externalOfficeLabel,
   isRequester,
   locationLabel,
@@ -670,14 +672,60 @@ export function DocumentDetailPage() {
                 </p>
                 <p className="mt-0.5 text-ink-600">
                   {doc.contentVerification
-                    ? `${doc.contentVerification.verifiedBy} · ${formatDateTime(doc.contentVerification.at)}${
-                        doc.contentVerification.remarks ? ` — “${doc.contentVerification.remarks}”` : ''
-                      }`
+                    ? `${doc.contentVerification.verifiedBy} · ${formatDateTime(doc.contentVerification.at)}`
                     : 'Awaiting content check before routing.'}
                 </p>
               </div>
             </div>
           </div>
+
+          {/* Detailed Content Verification Record (REQ-REQT-4) */}
+          {doc.contentVerification && (
+            <div className="mt-3 rounded-xl border border-ink-200 bg-white p-3.5 shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2
+                    className={`size-4 ${
+                      doc.contentVerification.result === 'complete' ? 'text-success-600' : 'text-danger-600'
+                    }`}
+                  />
+                  <span className="text-xs font-bold uppercase tracking-wider text-ink-900">
+                    Content Verification Record (REQ-REQT-4)
+                  </span>
+                </div>
+                <Badge
+                  tone={doc.contentVerification.result === 'complete' ? 'success' : 'danger'}
+                  dot={false}
+                >
+                  {doc.contentVerification.result === 'complete' ? 'Verified Complete' : 'Returned for Corrections'}
+                </Badge>
+              </div>
+              <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3 text-xs">
+                <div>
+                  <span className="text-ink-500 font-medium block">Verified By</span>
+                  <span className="font-semibold text-ink-900">{doc.contentVerification.verifiedBy}</span>
+                </div>
+                <div>
+                  <span className="text-ink-500 font-medium block">Date & Time</span>
+                  <span className="font-semibold text-ink-900">{formatDateTime(doc.contentVerification.at)}</span>
+                </div>
+                <div>
+                  <span className="text-ink-500 font-medium block">Recorded Result</span>
+                  <span className="font-semibold text-ink-900">
+                    {doc.contentVerification.result === 'complete'
+                      ? 'Complete — Logged & Routed'
+                      : 'Returned with Feedback'}
+                  </span>
+                </div>
+              </div>
+              {doc.contentVerification.remarks && (
+                <div className="mt-2.5 rounded-lg bg-ink-50 p-2.5 text-xs text-ink-700 border border-ink-100">
+                  <span className="font-semibold text-ink-900">Remarks: </span>
+                  <span>{doc.contentVerification.remarks}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Toolbar for Authorized Roles */}
           {(canResubmit ||
@@ -1080,17 +1128,39 @@ export function DocumentDetailPage() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPreviewAttachmentId(a.id)
-                        setIsPreviewModalOpen(true)
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
-                      title="Inspect and read document content before deciding"
-                    >
-                      <Eye className="size-3.5 text-brand-600" /> Preview Content
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewAttachmentId(a.id)
+                          setIsPreviewModalOpen(true)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
+                        title="Inspect and read document content before deciding"
+                      >
+                        <Eye className="size-3.5 text-brand-600" /> Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const req = docType?.requirements.find((r) => r.id === a.requirementId)
+                          downloadGeneratedPdf(a.name, `Secretary Content Inspection: ${a.name}`, [
+                            `Control Number: ${controlNumber(doc)}`,
+                            `Document Title: ${doc.title}`,
+                            `Attachment Category: ${req?.label ?? 'Supporting Attachment'}`,
+                            `Uploaded By: ${a.uploadedBy}`,
+                            `Size: ${formatSize(a.sizeKb)}`,
+                            ``,
+                            `This file is being reviewed for content accuracy by the College Secretary.`,
+                            `(Prototype: actual file content would appear here in production.)`,
+                          ])
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-ink-50 px-3 py-1.5 text-xs font-semibold text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 transition-colors"
+                        title="Download file for offline inspection"
+                      >
+                        <Download className="size-3.5" /> Download
+                      </button>
+                    </div>
                   </li>
                 )
               })}
