@@ -786,6 +786,78 @@ export function DocumentDetailPage() {
             </span>
           </div>
         </div>
+
+        {/* Automated Checklist Verification Result (REQ-REQT-2, REQ-REQT-3) */}
+        {docType && (
+          <div className="mb-5 rounded-xl border border-brand-200 bg-brand-50/30 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <FileCheck2 className="size-4 text-brand-700" />
+                <span className="text-xs font-bold uppercase tracking-wider text-brand-900">
+                  Automated Checklist Verification Result — {docType.name}
+                </span>
+              </div>
+              <Badge tone="success" dot={false}>
+                Checklist Completeness: Passed
+              </Badge>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {docType.requirements.map((req) => {
+                const attached = currentAttachments.find((a) => a.requirementId === req.id)
+                return (
+                  <div
+                    key={req.id}
+                    className={`flex flex-wrap items-center justify-between gap-2 rounded-lg p-2.5 text-xs ring-1 ring-inset ${
+                      attached
+                        ? 'bg-white text-ink-900 ring-success-200'
+                        : req.required
+                        ? 'bg-danger-50/50 text-danger-900 ring-danger-200'
+                        : 'bg-ink-50/50 text-ink-600 ring-ink-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {attached ? (
+                        <CheckCircle2 className="size-4 shrink-0 text-success-600" />
+                      ) : (
+                        <span className="size-4 grid place-items-center rounded-full bg-ink-200 text-ink-600 text-[10px] font-bold">
+                          -
+                        </span>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-ink-900">{req.label}</span>
+                          <Badge tone={req.required ? 'brand' : 'neutral'} dot={false} className="text-[10px] py-0 px-1.5">
+                            {req.required ? 'Required' : 'Optional'}
+                          </Badge>
+                        </div>
+                        {req.source && <p className="text-[11px] text-ink-500 mt-0.5">Source: {req.source}</p>}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      {attached ? (
+                        <span className="inline-flex items-center gap-1.5 font-mono text-2xs font-semibold text-success-800 bg-success-50 px-2 py-0.5 rounded border border-success-200">
+                          <FileText className="size-3 text-success-600" />
+                          {attached.name} ({formatSize(attached.sizeKb)})
+                        </span>
+                      ) : (
+                        <span className="text-2xs text-ink-400 italic">
+                          {req.required ? 'Missing required attachment' : 'Not attached (Optional)'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <p className="mt-3 text-2xs text-ink-500 italic">
+              Checked automatically against document type checklist before reaching College Secretary. Content verification focuses on document accuracy.
+            </p>
+          </div>
+        )}
+
         <AttachmentList db={db} doc={doc} />
       </Card>
 

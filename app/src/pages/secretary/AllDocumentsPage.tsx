@@ -188,7 +188,7 @@ export function AllDocumentsPage() {
         requesterId: selectedRequester.id,
         typeId: selectedType.id,
         title: title.trim(),
-        description: description.trim(),
+        description: description.trim() || 'Walk-in physical document packet encoded by the College Secretary.',
         files: payloadFiles,
       })
 

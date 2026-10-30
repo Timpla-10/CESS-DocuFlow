@@ -76,6 +76,7 @@ export function NewRequestPage() {
   const [attachedFiles, setAttachedFiles] = useState<SelectedFileItem[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({})
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Handle switching document type
@@ -84,6 +85,7 @@ export function NewRequestPage() {
     setAttachedFiles([])
     setErrors({})
     setFileErrors({})
+    setHasAttemptedSubmit(false)
   }
 
   // REQ-REQT-9: Download blank official form template for the chosen document type
@@ -225,8 +227,30 @@ export function NewRequestPage() {
   const attachedRequiredCount = requiredList.filter((r) => attachedFiles.some((f) => f.requirementId === r.id)).length
   const allRequiredAttached = requiredList.length > 0 && attachedRequiredCount === requiredList.length
 
+  const mandatoryMissing = selectedType
+    ? selectedType.requirements.filter((r) => r.required && !attachedFiles.some((f) => f.requirementId === r.id))
+    : []
+
+  const isTitleValid = title.trim().length >= 3
+  const isDescriptionValid = description.trim().length > 0
+  const isFormComplete = isTitleValid && isDescriptionValid && allRequiredAttached
+
+  const missingItemsSummary: string[] = []
+  if (!title.trim()) {
+    missingItemsSummary.push('Title or Subject (required, min 3 characters)')
+  } else if (title.trim().length < 3) {
+    missingItemsSummary.push('Title or Subject (must be at least 3 characters)')
+  }
+  if (!description.trim()) {
+    missingItemsSummary.push('Description or Purpose of Request (required)')
+  }
+  mandatoryMissing.forEach((m) => {
+    missingItemsSummary.push(`Required form: ${m.label}`)
+  })
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    setHasAttemptedSubmit(true)
     if (!selectedTypeId || !selectedType) {
       setErrors({ typeId: 'Please select a document type.' })
       toast.error('Submission Incomplete', 'Please select a document type.')
@@ -246,21 +270,15 @@ export function NewRequestPage() {
     }
 
     // Automatic completeness check before submission reaches the College Secretary (REQ-REQT-3)
-    const mandatoryMissing = selectedType.requirements.filter(
-      (r) => r.required && !attachedFiles.some((f) => f.requirementId === r.id),
-    )
-
     if (mandatoryMissing.length > 0) {
-      newErrors.attachments = `Automatic completeness check: Please attach all required forms before submitting (${mandatoryMissing.map((m) => m.label).join(', ')}).`
+      newErrors.attachments = `Automatic completeness check failed: ${mandatoryMissing.length} required form(s) missing (${mandatoryMissing.map((m) => m.label).join(', ')}). Incomplete requests cannot advance.`
     }
 
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) {
       toast.error(
-        'Submission Incomplete',
-        newErrors.title && newErrors.attachments
-          ? 'Please enter a title and attach all required forms.'
-          : newErrors.title || newErrors.description || newErrors.attachments || 'Please resolve all required fields.',
+        'Submission Incomplete — Cannot Advance',
+        `Missing ${missingItemsSummary.length} required item(s). Please attach all required forms and fill in required fields.`,
       )
       return
     }
@@ -556,30 +574,80 @@ export function NewRequestPage() {
 
             {/* Live Automatic Completeness Indicator (REQ-REQT-3) */}
             <div
-              className={`mt-4 flex items-center justify-between gap-3 rounded-xl p-3.5 text-xs ring-1 ring-inset ${
+              className={`mt-4 rounded-xl p-4 text-xs ring-1 ring-inset transition-all ${
                 allRequiredAttached
-                  ? 'bg-success-50 text-success-700 ring-success-100'
-                  : 'bg-brand-50/60 text-brand-800 ring-brand-100'
+                  ? 'bg-success-50 text-success-800 ring-success-200'
+                  : 'bg-amber-50/70 text-amber-900 ring-amber-200'
               }`}
             >
-              <div className="flex items-center gap-2.5">
-                <FileCheck2 className="size-4 shrink-0" aria-hidden />
-                <span className="font-semibold">
-                  {allRequiredAttached
-                    ? `Automatic Completeness Check Passed — all ${requiredList.length} required form(s) are attached.`
-                    : `Automatic Completeness Check: ${attachedRequiredCount} of ${requiredList.length} required form(s) attached.`}
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <FileCheck2 className={`size-4.5 shrink-0 ${allRequiredAttached ? 'text-success-600' : 'text-amber-600'}`} aria-hidden />
+                  <div>
+                    <p className="font-bold text-sm">
+                      {allRequiredAttached
+                        ? `Automatic Completeness Check: Passed (${attachedRequiredCount} of ${requiredList.length} Required Forms Attached)`
+                        : `Automatic Completeness Check: Incomplete (${attachedRequiredCount} of ${requiredList.length} Required Forms Attached)`}
+                    </p>
+                    <p className="mt-0.5 text-xs">
+                      {allRequiredAttached
+                        ? 'All required forms for this document type have been uploaded. Complete result is verified.'
+                        : `Missing required attachments detected. Incomplete requests cannot advance to the College Secretary.`}
+                    </p>
+                  </div>
+                </div>
+                <Badge tone={allRequiredAttached ? 'success' : 'warning'} dot={false}>
+                  {allRequiredAttached ? 'Complete Result: Ready' : 'Incomplete: Cannot Advance'}
+                </Badge>
               </div>
-              <Badge tone={allRequiredAttached ? 'success' : 'brand'} dot={false}>
-                {allRequiredAttached ? 'Ready to Submit' : 'Attachments Needed'}
-              </Badge>
+
+              {/* Complete Result Summary Breakdown */}
+              {allRequiredAttached && (
+                <div className="mt-3 rounded-lg bg-white p-3 ring-1 ring-success-200 text-ink-800">
+                  <p className="font-semibold text-success-800 flex items-center gap-1.5 text-2xs uppercase tracking-wider">
+                    <CheckCircle2 className="size-3.5 text-success-600" />
+                    Verified Required Checklist Items:
+                  </p>
+                  <ul className="mt-1.5 space-y-1 text-xs">
+                    {requiredList.map((r) => {
+                      const attached = attachedFiles.find((f) => f.requirementId === r.id)
+                      return (
+                        <li key={r.id} className="flex items-center justify-between gap-2 text-ink-700">
+                          <span className="font-medium">• {r.label}</span>
+                          <span className="font-mono text-2xs text-success-700 bg-success-50 px-2 py-0.5 rounded border border-success-200">
+                            ✓ {attached?.name} ({attached ? (attached.sizeKb >= 1024 ? `${(attached.sizeKb / 1024).toFixed(1)} MB` : `${attached.sizeKb} KB`) : ''})
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {errors.attachments && (
-              <div className="mt-4 rounded-xl bg-danger-50 p-4 text-sm font-medium text-danger-700 ring-1 ring-inset ring-danger-100">
-                <div className="flex items-start gap-2">
+            {/* Missing items listed explicitly when attempted or missing (Acceptance Criteria: missing items are listed) */}
+            {(hasAttemptedSubmit || mandatoryMissing.length > 0) && missingItemsSummary.length > 0 && (
+              <div className="mt-4 rounded-xl bg-danger-50 p-4 text-xs font-medium text-danger-900 ring-1 ring-inset ring-danger-200" role="alert">
+                <div className="flex items-start gap-2.5">
                   <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger-600" aria-hidden />
-                  <p>{errors.attachments}</p>
+                  <div className="flex-1 space-y-2">
+                    <div>
+                      <p className="font-bold text-sm text-danger-900">Missing Required Items Detected</p>
+                      <p className="text-danger-700 text-xs">
+                        The system checks required fields and files against <strong>{selectedType.name}</strong> before submission. The following items must be provided before your request can advance:
+                      </p>
+                    </div>
+                    <ul className="list-inside list-disc space-y-1 rounded-lg bg-white/80 p-2.5 text-xs text-danger-800 border border-danger-200">
+                      {missingItemsSummary.map((item, idx) => (
+                        <li key={idx} className="font-medium">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-2xs text-danger-700 italic">
+                      Incomplete requests cannot advance to the College Secretary until all items are attached.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -756,22 +824,38 @@ export function NewRequestPage() {
         </div>
 
         {/* Form Actions */}
-        <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-          <ButtonLink
-            to={user.role === 'ids_principal' ? '/app/for-review' : '/app/my-documents'}
-            variant="secondary"
-          >
-            Cancel
-          </ButtonLink>
-          <Button
-            type="submit"
-            size="lg"
-            loading={isSubmitting}
-            loadingText="Submitting Request…"
-            iconRight={Send}
-          >
-            Submit Document Request
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <div>
+            {!isFormComplete ? (
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                <AlertCircle className="size-3.5 shrink-0 text-amber-600" />
+                <span>Incomplete: {missingItemsSummary.length} required item(s) needed before submission can advance</span>
+              </p>
+            ) : (
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-success-700 bg-success-50 px-3 py-1.5 rounded-lg border border-success-200">
+                <CheckCircle2 className="size-3.5 shrink-0 text-success-600" />
+                <span>Completeness check passed: Ready to advance to College Secretary</span>
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <ButtonLink
+              to={user.role === 'ids_principal' ? '/app/for-review' : '/app/my-documents'}
+              variant="secondary"
+            >
+              Cancel
+            </ButtonLink>
+            <Button
+              type="submit"
+              size="lg"
+              loading={isSubmitting}
+              loadingText="Submitting Request…"
+              iconRight={Send}
+            >
+              Submit Document Request
+            </Button>
+          </div>
         </div>
       </form>
     </div>
