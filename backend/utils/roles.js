@@ -171,7 +171,8 @@ function canPerformAction(user, action, doc = null) {
       return REQUESTER_ROLES.includes(user.role);
 
     case 'resubmit_document': {
-      if (!doc) return false;
+      if (!REQUESTER_ROLES.includes(user.role)) return false;
+      if (!doc) return true;
       const requesterId = doc.requester_id || doc.requesterId;
       return REQUESTER_ROLES.includes(user.role) && requesterId === user.id;
     }

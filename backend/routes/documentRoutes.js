@@ -31,4 +31,10 @@ router.post('/:id/check', requireAction('check_requirements'), DocumentControlle
 // PB-02: Review decision (Reviewers only: Chairperson, IDS Principal, Dean, OVCAA, VCAF, Chancellor)
 router.post('/:id/review', DocumentController.reviewDocument);
 
+// PB-18 / REQ-SUB-7: Prevent editing while in process; edit allowed only when Returned
+router.put('/:id', DocumentController.editDocument);
+
+// PB-18 / REQ-SUB-8: Resubmit returned document with new revision
+router.post('/:id/resubmit', requireAction('resubmit_document'), DocumentController.resubmitDocument);
+
 module.exports = router;

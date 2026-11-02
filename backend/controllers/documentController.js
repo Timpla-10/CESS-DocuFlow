@@ -190,6 +190,41 @@ const DocumentController = {
       next(err);
     }
   },
+
+  /**
+   * PUT /api/documents/:id
+   * PB-18 / REQ-SUB-7: Prevent editing while request is in process.
+   * Only allowed when current_status === 'Returned'.
+   */
+  async editDocument(req, res, next) {
+    try {
+      const updated = await AccessControlService.editDocument(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({ document: updated });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/documents/:id/resubmit
+   * PB-18 / REQ-SUB-8: Resubmit returned document with new revision and corrected files.
+   */
+  async resubmitDocument(req, res, next) {
+    try {
+      const resubmitted = await AccessControlService.resubmitDocument(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({ document: resubmitted });
+    } catch (err) {
+      next(err);
+    }
+  },
 };
 
 module.exports = DocumentController;

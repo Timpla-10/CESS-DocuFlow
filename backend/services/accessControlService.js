@@ -212,6 +212,113 @@ const AccessControlService = {
 
     return DocumentModel.findById(docId);
   },
+
+  /**
+   * PB-18 / REQ-SUB-7: Prevent editing while request is in process.
+   * Only documents in 'Returned' status can be modified by the requester.
+   */
+  async editDocument(user, docId, updates = {}) {
+    const doc = await DocumentModel.findById(docId);
+    if (!doc) {
+      const err = new Error('Document not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    const requesterId = doc.requester_id || doc.requesterId;
+    if (requesterId !== user.id) {
+      const err = new Error(
+        `Forbidden: Only the document requester can edit this request.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    // REQ-SUB-7: The system shall not allow a requester to change a submitted request unless it has been returned.
+    if (doc.current_status !== 'Returned') {
+      const err = new Error(
+        `Forbidden: Document '${doc.control_number}' is currently '${doc.current_status}' and cannot be edited. Edits are only permitted when a document is returned for corrections.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    const allowedUpdates = {};
+    if (updates.title) allowedUpdates.title = updates.title.trim();
+    if (updates.description !== undefined) allowedUpdates.description = updates.description.trim();
+
+    const updated = await DocumentModel.update(docId, allowedUpdates);
+    return updated;
+  },
+
+  /**
+   * PB-18 & REQ-SUB-8: Resubmit a returned document under the same Control Number
+   * with an incremented Revision Number, keeping earlier files and history.
+   */
+  async resubmitDocument(user, docId, input = {}) {
+    const doc = await DocumentModel.findById(docId);
+    if (!doc) {
+      const err = new Error('Document not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    const requesterId = doc.requester_id || doc.requesterId;
+    if (requesterId !== user.id) {
+      const err = new Error(
+        `Forbidden: Only the document requester can resubmit this request.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    if (doc.current_status !== 'Returned') {
+      const err = new Error(
+        `Forbidden: Document '${doc.control_number}' is not waiting for corrections (status: '${doc.current_status}'). Only returned documents can be resubmitted.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    const newRevisionNo = (doc.current_revision_no || 1) + 1;
+    const secOfficeId = await UserModel.getOfficeIdByName('College Secretary');
+
+    const updatePayload = {
+      current_status: 'Submitted',
+      current_revision_no: newRevisionNo,
+      current_office_id: secOfficeId,
+    };
+    if (input.title) updatePayload.title = input.title.trim();
+    if (input.description !== undefined) updatePayload.description = input.description.trim();
+
+    await DocumentModel.update(docId, updatePayload);
+
+    // If corrected files attached, persist them under the new revision
+    if (Array.isArray(input.files) && input.files.length > 0) {
+      for (const f of input.files) {
+        await DocumentModel.addAttachment({
+          document_id: docId,
+          form_id: f.form_id || f.formId || null,
+          revision_no: newRevisionNo,
+          file_name: f.file_name || f.name || 'Corrected_Attachment.pdf',
+          file_url: f.file_url || f.url || `/uploads/${docId}_rev${newRevisionNo}_${Date.now()}.pdf`,
+          file_type: f.file_type || f.type || 'application/pdf',
+          file_size_kb: f.file_size_kb || f.sizeKb || 100,
+        });
+      }
+    }
+
+    await DocumentModel.addHistory({
+      document_id: docId,
+      revision_no: newRevisionNo,
+      action_by_user_id: user.id,
+      action_office_id: secOfficeId,
+      action_type: 'Submitted',
+      action_remarks: input.remarks || input.note || `Resubmitted with corrections (Revision ${newRevisionNo}).`,
+    });
+
+    return DocumentModel.findById(docId);
+  },
 };
 
 module.exports = AccessControlService;

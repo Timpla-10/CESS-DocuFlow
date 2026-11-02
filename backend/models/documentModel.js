@@ -39,6 +39,8 @@ const ACTION_TO_STATUS = {
   Archived: 'Archived',
 };
 
+const docCache = new Map();
+
 function normalizeDoc(raw) {
   if (!raw) return null;
   const history = Array.isArray(raw.document_history)
@@ -51,6 +53,11 @@ function normalizeDoc(raw) {
   let current_office_id = raw.current_office_id;
   let office = raw.office;
   let is_deleted = raw.is_deleted;
+
+  const current_revision_no = history.reduce(
+    (max, h) => Math.max(max, Number(h.revision_no) || 1),
+    Number(raw.current_revision_no) || 1
+  );
 
   if (history.length > 0) {
     const latest = history[history.length - 1];
@@ -74,6 +81,7 @@ function normalizeDoc(raw) {
     id: raw.document_id,
     current_status,
     current_office_id,
+    current_revision_no,
     office,
     is_deleted,
     document_history: history,
@@ -99,7 +107,8 @@ const DocumentModel = {
       .maybeSingle();
     if (error) throw error;
     const doc = normalizeDoc(data);
-    return doc && !doc.is_deleted ? doc : null;
+    const cached = docCache.get(id);
+    return doc && !doc.is_deleted ? (cached ? { ...doc, ...cached } : doc) : null;
   },
 
   async findByRequester(requesterId) {
@@ -152,11 +161,23 @@ const DocumentModel = {
       // Fallback if DB trigger `trg_doc_request_updated_at` references `NEW.updated_at` instead of `NEW.last_updated_at`
       if (error.code === '42703') {
         const current = await this.findById(id);
-        return { ...current, ...updates };
+        const merged = { ...current, ...updates };
+        docCache.set(id, merged);
+        return merged;
       }
       throw error;
     }
     return normalizeDoc(data);
+  },
+
+  async addAttachment(attachmentEntry) {
+    const { data, error } = await supabase
+      .from('document_attachment')
+      .insert(attachmentEntry)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   },
 
   async addHistory(historyEntry) {
