@@ -22,6 +22,7 @@ app.get('/', (req, res) => {
       whitelist: 'GET /api/auth/whitelist',
       pending: 'GET /api/auth/pending',
       documents: 'GET /api/documents',
+      documentTypes: 'GET /api/document-types',
     },
   });
 });

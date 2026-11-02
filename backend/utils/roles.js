@@ -160,6 +160,7 @@ function canPerformAction(user, action, doc = null) {
     case 'manage_whitelist':
     case 'verify_registration':
     case 'check_requirements':
+    case 'manage_requirements':
     case 'send_external':
     case 'mark_ready':
     case 'release_document':

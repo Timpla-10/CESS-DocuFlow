@@ -1,4 +1,5 @@
 const DocumentModel = require('../models/documentModel');
+const DocumentTypeModel = require('../models/documentTypeModel');
 const UserModel = require('../models/userModel');
 const {
   ROLES,
@@ -49,7 +50,8 @@ const AccessControlService = {
   },
 
   /**
-   * PB-02: Submit a new document request (Requesters only: Student, CESS Faculty, IDS Faculty)
+   * PB-02 & PB-10: Submit a new document request
+   * Validates requester action & verifies that the document type is eligible for the user's role.
    */
   async submitDocument(user, input) {
     if (!canPerformAction(user, 'submit_document')) {
@@ -61,7 +63,28 @@ const AccessControlService = {
     }
 
     const origin = user.origin || input.origin || 'CESS';
-    const docTypeId = input.docTypeId || (await DocumentModel.getDefaultDocTypeId(origin));
+    let docTypeId = input.docTypeId;
+
+    if (!docTypeId && input.typeId) {
+      const resolved = await DocumentTypeModel.findById(input.typeId);
+      if (resolved && resolved.audience === user.role) {
+        docTypeId = resolved.doc_type_id;
+      }
+    }
+
+    if (!docTypeId) {
+      const eligibleList = await DocumentTypeModel.findEligibleForRole(user.role, origin);
+      docTypeId = eligibleList[0]?.doc_type_id || (await DocumentModel.getDefaultDocTypeId(origin));
+    }
+
+    // PB-10 Acceptance Criterion: Server-side eligibility enforcement
+    const eligibility = await DocumentTypeModel.isRoleEligible(docTypeId, user.role, origin);
+    if (!eligibility.eligible) {
+      const err = new Error(`Forbidden: ${eligibility.reason}`);
+      err.status = 403;
+      throw err;
+    }
+
     const targetOfficeName = input.targetOfficeName || 'College Secretary';
     const currentOfficeId = await UserModel.getOfficeIdByName(targetOfficeName);
 

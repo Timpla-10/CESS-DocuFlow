@@ -7,7 +7,10 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "node tests/test-pb02-rbac.js",
+    "test": "node tests/test-pb02-rbac.js && node tests/test-pb10-document-types.js && node tests/test-pb11-requirements.js",
+    "test:rbac": "node tests/test-pb02-rbac.js",
+    "test:pb10": "node tests/test-pb10-document-types.js",
+    "test:pb11": "node tests/test-pb11-requirements.js",
     "test:db": "node tests/test-db.js",
     "start": "node server.js"
   },
@@ -16,6 +19,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@supabase/server": "^1.9.2",
     "@supabase/supabase-js": "^2.118.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",

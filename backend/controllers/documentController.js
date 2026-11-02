@@ -1,6 +1,110 @@
 const AccessControlService = require('../services/accessControlService');
+const DocumentTypeModel = require('../models/documentTypeModel');
 
 const DocumentController = {
+  /**
+   * GET /api/documents/types or GET /api/document-types
+   * PB-10: Browse available document types filtered by authenticated user's role and origin
+   */
+  async listDocumentTypes(req, res, next) {
+    try {
+      const types = await DocumentTypeModel.findEligibleForRole(req.user.role, req.user.origin);
+      res.json({
+        role: req.user.role,
+        origin: req.user.origin,
+        roleLabel: req.user.roleLabel,
+        count: types.length,
+        documentTypes: types,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/types/:id
+   * PB-10: Single document type details with required forms and templates (PB-11, PB-12)
+   */
+  async getDocumentType(req, res, next) {
+    try {
+      const docType = await DocumentTypeModel.findById(req.params.id);
+      if (!docType) {
+        return res.status(404).json({ error: 'Document type not found.' });
+      }
+      res.json({ documentType: docType });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/document-types/:id/requirements or GET /api/documents/types/:id/requirements
+   * PB-11: Shows required forms, attachments, and source office
+   */
+  async getDocumentTypeRequirements(req, res, next) {
+    try {
+      const requirements = await DocumentTypeModel.getRequirementsByDocTypeId(req.params.id);
+      if (!requirements) {
+        return res.status(404).json({ error: 'Document type not found.' });
+      }
+      res.json({
+        docTypeId: req.params.id,
+        count: requirements.length,
+        requirements,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/document-types/:id/requirements
+   * PB-11 / REQ-REQT-1: Secretary/Admin adds a required form
+   */
+  async createDocumentTypeRequirement(req, res, next) {
+    try {
+      const created = await DocumentTypeModel.createRequirement(req.params.id, req.body);
+      res.status(201).json({ requirement: created });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * PUT /api/document-types/:id/requirements/:formId
+   * PB-11 / REQ-REQT-1: Secretary/Admin updates a required form
+   */
+  async updateDocumentTypeRequirement(req, res, next) {
+    try {
+      const updated = await DocumentTypeModel.updateRequirement(req.params.formId, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: 'Requirement not found.' });
+      }
+      res.json({ requirement: updated });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * DELETE /api/document-types/:id/requirements/:formId
+   * PB-11 / REQ-REQT-1: Secretary/Admin removes a required form
+   */
+  async deleteDocumentTypeRequirement(req, res, next) {
+    try {
+      const deleted = await DocumentTypeModel.deleteRequirement(req.params.formId);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Requirement not found.' });
+      }
+      res.json({
+        message: 'Requirement successfully removed.',
+        requirement: deleted,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   /**
    * GET /api/documents
    * PB-02: Returns only documents visible to the authenticated user's role:
@@ -42,7 +146,7 @@ const DocumentController = {
 
   /**
    * POST /api/documents
-   * PB-02: Submit new document request (Requesters only)
+   * PB-02 & PB-10: Submit new document request with role eligibility check
    */
   async submitDocument(req, res, next) {
     try {
@@ -89,4 +193,3 @@ const DocumentController = {
 };
 
 module.exports = DocumentController;
-

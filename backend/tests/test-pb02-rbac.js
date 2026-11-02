@@ -213,7 +213,7 @@ async function runTests() {
       headers: studentHeaders,
       body: JSON.stringify({
         controlBase: `MSU-CESS-STU-${runTag}-2026`,
-        typeId: 'travel-order',
+        typeId: 'inc',
         title: 'Student Internship Endorsement',
       }),
     });
