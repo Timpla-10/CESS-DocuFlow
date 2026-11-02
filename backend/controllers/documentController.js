@@ -111,10 +111,13 @@ const DocumentController = {
    * - Student / CESS Faculty / IDS Faculty -> own requests only
    * - Reviewers (Chairperson, IDS Principal, Dean, OVCAA, VCAF, Chancellor) -> routed records only
    * - Secretary -> all records
+   * PB-20: Supports ?queue= filtering (awaiting_verification, in_review, ready_for_release, returned, rejected, ids_handoff)
    */
   async listDocuments(req, res, next) {
     try {
-      const docs = await AccessControlService.getVisibleDocumentsForUser(req.user);
+      const docs = await AccessControlService.getVisibleDocumentsForUser(req.user, {
+        queue: req.query.queue,
+      });
       res.json({
         viewer: {
           id: req.user.id,
@@ -125,6 +128,28 @@ const DocumentController = {
         },
         count: docs.length,
         documents: docs,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/queues
+   * PB-20: Returns Secretary Workstation Queues categorized into 6 agreed states with exact counts
+   */
+  async getSecretaryQueues(req, res, next) {
+    try {
+      const queuesData = await AccessControlService.getSecretaryQueues(req.user);
+      res.json({
+        viewer: {
+          id: req.user.id,
+          name: req.user.name,
+          role: req.user.role,
+          origin: req.user.origin,
+          roleLabel: req.user.roleLabel,
+        },
+        ...queuesData,
       });
     } catch (err) {
       next(err);

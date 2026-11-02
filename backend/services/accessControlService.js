@@ -15,19 +15,84 @@ const AccessControlService = {
    * - Requester (Student, CESS Faculty, IDS Faculty) sees own requests
    * - Reviewers (IDS Principal, Chairperson, Dean, OVCAA, VCAF, Chancellor) see routed records
    * - Secretary sees all
+   * PB-20: Supports queue filtering (?queue=awaiting_verification, in_review, etc.)
    */
-  async getVisibleDocumentsForUser(user) {
+  async getVisibleDocumentsForUser(user, options = {}) {
+    let docs;
     if (user.role === ROLES.STUDENT || user.role === ROLES.FACULTY) {
-      return DocumentModel.findByRequester(user.id);
+      docs = await DocumentModel.findByRequester(user.id);
+    } else {
+      const allDocs = await DocumentModel.findAll();
+      docs = user.role === ROLES.SECRETARY ? allDocs : allDocs.filter((doc) => canViewDocument(user, doc));
+    }
+
+    if (options.queue) {
+      const q = String(options.queue).toLowerCase();
+      if (q === 'awaiting_verification' || q === 'submitted') {
+        docs = docs.filter((d) => d.current_status === 'Submitted');
+      } else if (q === 'in_review' || q === 'under_review') {
+        docs = docs.filter((d) => d.current_status === 'Under_Review');
+      } else if (q === 'ready_for_release' || q === 'ready') {
+        docs = docs.filter((d) => d.current_status === 'Ready_for_Release');
+      } else if (q === 'returned') {
+        docs = docs.filter((d) => d.current_status === 'Returned');
+      } else if (q === 'rejected') {
+        docs = docs.filter((d) => d.current_status === 'Rejected');
+      } else if (q === 'ids_handoff' || q === 'ids') {
+        docs = docs.filter((d) => d.origin === 'IDS');
+      }
+    }
+
+    return docs;
+  },
+
+  /**
+   * PB-20: Secretary Verification Queue & Workstation
+   * Separates documents into 6 agreed states:
+   * 1. awaiting_verification: 'Submitted'
+   * 2. in_review: 'Under_Review'
+   * 3. ready_for_release: 'Ready_for_Release'
+   * 4. returned: 'Returned'
+   * 5. rejected: 'Rejected'
+   * 6. ids_handoff: origin === 'IDS'
+   */
+  async getSecretaryQueues(user) {
+    if (user.role !== ROLES.SECRETARY) {
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not authorized to access the Secretary Workstation.`
+      );
+      err.status = 403;
+      throw err;
     }
 
     const allDocs = await DocumentModel.findAll();
 
-    if (user.role === ROLES.SECRETARY) {
-      return allDocs;
-    }
+    const awaiting_verification = allDocs.filter((d) => d.current_status === 'Submitted');
+    const in_review = allDocs.filter((d) => d.current_status === 'Under_Review');
+    const ready_for_release = allDocs.filter((d) => d.current_status === 'Ready_for_Release');
+    const returned = allDocs.filter((d) => d.current_status === 'Returned');
+    const rejected = allDocs.filter((d) => d.current_status === 'Rejected');
+    const ids_handoff = allDocs.filter((d) => d.origin === 'IDS');
 
-    return allDocs.filter((doc) => canViewDocument(user, doc));
+    return {
+      counts: {
+        awaiting_verification: awaiting_verification.length,
+        in_review: in_review.length,
+        ready_for_release: ready_for_release.length,
+        returned: returned.length,
+        rejected: rejected.length,
+        ids_handoff: ids_handoff.length,
+        total: allDocs.length,
+      },
+      queues: {
+        awaiting_verification,
+        in_review,
+        ready_for_release,
+        returned,
+        rejected,
+        ids_handoff,
+      },
+    };
   },
 
   async getDocumentByIdForUser(user, docId) {

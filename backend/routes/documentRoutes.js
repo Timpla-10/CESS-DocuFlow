@@ -19,6 +19,9 @@ router.delete('/types/:id/requirements/:formId', requireAction('manage_requireme
 // PB-02: Role-filtered document listing (Requester -> own, Reviewer -> routed, Secretary -> all)
 router.get('/', DocumentController.listDocuments);
 
+// PB-20 / SRS 3.11: Secretary Verification Queue & Workstation (Agreed states & exact counts)
+router.get('/queues', DocumentController.getSecretaryQueues);
+
 // PB-02: Role-verified single document retrieval
 router.get('/:id', DocumentController.getDocument);
 
