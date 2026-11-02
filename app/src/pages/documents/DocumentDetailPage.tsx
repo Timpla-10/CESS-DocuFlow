@@ -1008,6 +1008,19 @@ export function DocumentDetailPage() {
         }
       >
         <form className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2.5 text-xs text-ink-700 border border-slate-200">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-ink-900">Control Number:</span>
+              <span className="font-mono font-medium text-brand-700">{controlNumber(doc)}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-ink-900">Revision:</span>
+              <span className="rounded bg-brand-100 px-2 py-0.5 font-bold text-brand-800">
+                Rev {doc.revision} → Rev {doc.revision + 1}
+              </span>
+            </div>
+          </div>
+
           <Field label="Document Title" required error={resubmitErrors.title}>
             <Input
               type="text"
@@ -1064,6 +1077,22 @@ export function DocumentDetailPage() {
                   </li>
                 ))}
               </ul>
+            )}
+            {currentAttachments.length > 0 && (
+              <div className="mt-3 rounded-lg bg-ink-50/70 p-2.5 text-xs border border-ink-100">
+                <span className="font-semibold text-ink-800">Files on Record (Revision {doc.revision}):</span>
+                <ul className="mt-1.5 space-y-1 text-ink-600">
+                  {currentAttachments.map((a) => (
+                    <li key={a.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <FileText className="size-3.5 text-ink-400 shrink-0" />
+                        <span className="truncate">{a.name}</span>
+                      </div>
+                      <span className="text-ink-400 text-[11px] shrink-0 ml-2">({formatSize(a.sizeKb)})</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </form>

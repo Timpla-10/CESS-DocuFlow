@@ -339,8 +339,27 @@ export const api = {
       )
     }),
 
-  resubmit: (user: User, docId: string, input: { title: string; description: string; files: engine.NewFile[]; note: string }) =>
-    mutate((d, at) => engine.resubmit(d, user, docId, input, at)),
+  resubmit: async (user: User, docId: string, input: { title: string; description: string; files: engine.NewFile[]; note: string }) => {
+    // PB-18 / PB-19: Sync live backend if connected
+    try {
+      await fetch(`/api/documents/${docId}/resubmit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': user.email,
+        },
+        body: JSON.stringify({
+          title: input.title,
+          description: input.description,
+          notes: input.note,
+          files: input.files,
+        }),
+      })
+    } catch {
+      // Fallback gracefully to client store
+    }
+    return mutate((d, at) => engine.resubmit(d, user, docId, input, at))
+  },
 
   checkRequirements: (user: User, docId: string, input: { decision?: 'complete' | 'return' | 'reject'; missing: string[]; reasons: string }) =>
     mutate((d, at) => engine.checkRequirements(d, user, docId, input, at)),
