@@ -113,11 +113,94 @@ async function mutate<T>(fn: (draft: Database, at: string) => T): Promise<T> {
 
 export const api = {
   async signIn(email: string, password: string): Promise<User> {
-    await wait(500)
     const cleanEmail = email.trim().toLowerCase()
     if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
       throw new FriendlyError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
     }
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.user) {
+          const liveUser: User = {
+            id: data.user.id || data.user.user_id,
+            name: data.user.name,
+            email: data.user.email,
+            role: data.user.role,
+            origin: data.user.origin,
+            department: data.user.department,
+            position: data.user.position,
+            active: data.user.active ?? true,
+          }
+          const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail)
+          if (existingIdx >= 0) {
+            db.users[existingIdx] = { ...db.users[existingIdx], ...liveUser }
+          } else {
+            db.users.push(liveUser)
+          }
+          // PB-10 & PB-11: Sync live document types and requirement checklists from backend
+          try {
+            const dtRes = await fetch('/api/document-types', {
+              headers: { 'x-user-email': liveUser.email },
+            })
+            if (dtRes.ok) {
+              const dtData = await dtRes.json()
+              if (Array.isArray(dtData.documentTypes) && dtData.documentTypes.length > 0) {
+                for (const lt of dtData.documentTypes) {
+                  const existingIdx = db.documentTypes.findIndex(
+                    (t) => t.name.toLowerCase() === lt.name.toLowerCase() || t.id === String(lt.id)
+                  )
+                  const mappedReqs = (lt.requirements || []).map((r: any) => ({
+                    id: String(r.id || r.form_id),
+                    label: r.label || r.form_name,
+                    required: r.required !== undefined ? r.required : r.is_required,
+                    source: r.source || r.source_office,
+                    why: `Where to get it: ${r.source || r.source_office}`,
+                    templateUrl: r.template_url || r.templateUrl,
+                  }))
+                  const mappedType: DocumentType = {
+                    id: String(lt.id),
+                    name: lt.name,
+                    audience: lt.audience,
+                    summary: lt.summary,
+                    processingDays: [lt.standard_processing_days || 3, (lt.standard_processing_days || 3) + 2],
+                    cessRoute: ['chairperson', 'dean'],
+                    idsRoute: ['chairperson', 'ids_principal', 'dean'],
+                    higherApproval: lt.audience === 'faculty' ? ['ovcaa', 'chancellor'] : [],
+                    requirements: mappedReqs,
+                  }
+                  if (existingIdx >= 0) {
+                    db.documentTypes[existingIdx] = { ...db.documentTypes[existingIdx], ...mappedType }
+                  } else {
+                    db.documentTypes.push(mappedType)
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Backend sync for document types skipped:', e)
+          }
+
+          commit({ ...db })
+          return liveUser
+        }
+      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+        const errJson = await res.json().catch(() => null)
+        if (errJson?.error) {
+          throw new FriendlyError(errJson.error)
+        }
+      }
+    } catch (err) {
+      if (err instanceof FriendlyError) throw err
+      // Fallback to prototype mock if backend is offline
+    }
+
+    await wait(300)
     const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
     if (!user || password !== DEMO_PASSWORD) {
       throw new FriendlyError(MESSAGES.signInFailed)
@@ -127,11 +210,94 @@ export const api = {
   },
 
   async signInWithUniversityGoogle(email: string): Promise<User> {
-    await wait(500)
     const cleanEmail = email.trim().toLowerCase()
     if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
       throw new FriendlyError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
     }
+
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.user) {
+          const liveUser: User = {
+            id: data.user.id || data.user.user_id,
+            name: data.user.name,
+            email: data.user.email,
+            role: data.user.role,
+            origin: data.user.origin,
+            department: data.user.department,
+            position: data.user.position,
+            active: data.user.active ?? true,
+          }
+          const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail)
+          if (existingIdx >= 0) {
+            db.users[existingIdx] = { ...db.users[existingIdx], ...liveUser }
+          } else {
+            db.users.push(liveUser)
+          }
+          // PB-10 & PB-11: Sync live document types and requirement checklists from backend
+          try {
+            const dtRes = await fetch('/api/document-types', {
+              headers: { 'x-user-email': liveUser.email },
+            })
+            if (dtRes.ok) {
+              const dtData = await dtRes.json()
+              if (Array.isArray(dtData.documentTypes) && dtData.documentTypes.length > 0) {
+                for (const lt of dtData.documentTypes) {
+                  const existingIdx = db.documentTypes.findIndex(
+                    (t) => t.name.toLowerCase() === lt.name.toLowerCase() || t.id === String(lt.id)
+                  )
+                  const mappedReqs = (lt.requirements || []).map((r: any) => ({
+                    id: String(r.id || r.form_id),
+                    label: r.label || r.form_name,
+                    required: r.required !== undefined ? r.required : r.is_required,
+                    source: r.source || r.source_office,
+                    why: `Where to get it: ${r.source || r.source_office}`,
+                    templateUrl: r.template_url || r.templateUrl,
+                  }))
+                  const mappedType: DocumentType = {
+                    id: String(lt.id),
+                    name: lt.name,
+                    audience: lt.audience,
+                    summary: lt.summary,
+                    processingDays: [lt.standard_processing_days || 3, (lt.standard_processing_days || 3) + 2],
+                    cessRoute: ['chairperson', 'dean'],
+                    idsRoute: ['chairperson', 'ids_principal', 'dean'],
+                    higherApproval: lt.audience === 'faculty' ? ['ovcaa', 'chancellor'] : [],
+                    requirements: mappedReqs,
+                  }
+                  if (existingIdx >= 0) {
+                    db.documentTypes[existingIdx] = { ...db.documentTypes[existingIdx], ...mappedType }
+                  } else {
+                    db.documentTypes.push(mappedType)
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Backend sync for document types skipped:', e)
+          }
+
+          commit({ ...db })
+          return liveUser
+        }
+      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+        const errJson = await res.json().catch(() => null)
+        if (errJson?.error) {
+          throw new FriendlyError(errJson.error)
+        }
+      }
+    } catch (err) {
+      if (err instanceof FriendlyError) throw err
+      // Fallback to prototype mock if backend is offline
+    }
+
+    await wait(300)
     const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
     if (!user) {
       throw new FriendlyError('No active university account was found for this Gmail address. Please register or contact the College Secretary.')
