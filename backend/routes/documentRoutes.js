@@ -22,6 +22,9 @@ router.get('/', DocumentController.listDocuments);
 // PB-02: Role-verified single document retrieval
 router.get('/:id', DocumentController.getDocument);
 
+// PB-19 / SRS 3.6: Processing history & versioned attachments
+router.get('/:id/history', DocumentController.getDocumentHistory);
+
 // PB-02 & PB-10: Submit document (Requesters only: Student, CESS Faculty, IDS Faculty)
 router.post('/', requireAction('submit_document'), DocumentController.submitDocument);
 

@@ -112,7 +112,28 @@ const AccessControlService = {
       action_remarks: 'Submitted document request.',
     });
 
-    return created;
+    // PB-19 / SRS 3.2: Persist initial Revision 1 attachments
+    const initialFiles = Array.isArray(input.attachments)
+      ? input.attachments
+      : Array.isArray(input.files)
+      ? input.files
+      : [];
+
+    if (initialFiles.length > 0) {
+      for (const f of initialFiles) {
+        await DocumentModel.addAttachment({
+          document_id: created.document_id,
+          form_id: f.form_id || f.formId || null,
+          revision_no: 1,
+          file_name: f.file_name || f.name || 'Initial_Attachment.pdf',
+          file_url: f.file_url || f.url || `/uploads/${created.document_id}_rev1_${Date.now()}.pdf`,
+          file_type: f.file_type || f.type || 'application/pdf',
+          file_size_kb: f.file_size_kb || f.sizeKb || 100,
+        });
+      }
+    }
+
+    return DocumentModel.findById(created.document_id);
   },
 
   /**
@@ -294,8 +315,14 @@ const AccessControlService = {
     await DocumentModel.update(docId, updatePayload);
 
     // If corrected files attached, persist them under the new revision
-    if (Array.isArray(input.files) && input.files.length > 0) {
-      for (const f of input.files) {
+    const incomingFiles = Array.isArray(input.files)
+      ? input.files
+      : Array.isArray(input.attachments)
+      ? input.attachments
+      : [];
+
+    if (incomingFiles.length > 0) {
+      for (const f of incomingFiles) {
         await DocumentModel.addAttachment({
           document_id: docId,
           form_id: f.form_id || f.formId || null,
@@ -314,10 +341,27 @@ const AccessControlService = {
       action_by_user_id: user.id,
       action_office_id: secOfficeId,
       action_type: 'Submitted',
-      action_remarks: input.remarks || input.note || `Resubmitted with corrections (Revision ${newRevisionNo}).`,
+      action_remarks: input.remarks || input.note || input.notes || `Resubmitted with corrections (Revision ${newRevisionNo}).`,
     });
 
     return DocumentModel.findById(docId);
+  },
+
+  /**
+   * PB-19 / SRS 3.6: Get complete processing history & versioned attachments
+   */
+  async getDocumentHistory(user, docId) {
+    const doc = await this.getDocumentByIdForUser(user, docId);
+    if (!doc) return null;
+
+    return {
+      documentId: doc.document_id,
+      controlNumber: doc.control_number,
+      currentRevision: doc.current_revision_no,
+      status: doc.current_status,
+      history: doc.document_history || [],
+      attachments: doc.document_attachment || doc.attachments || [],
+    };
   },
 };
 

@@ -85,6 +85,8 @@ function normalizeDoc(raw) {
     office,
     is_deleted,
     document_history: history,
+    document_attachment: raw.document_attachment || [],
+    attachments: raw.document_attachment || [],
   };
 }
 
@@ -108,7 +110,17 @@ const DocumentModel = {
     if (error) throw error;
     const doc = normalizeDoc(data);
     const cached = docCache.get(id);
-    return doc && !doc.is_deleted ? (cached ? { ...doc, ...cached } : doc) : null;
+    if (!doc || doc.is_deleted) return null;
+    if (cached) {
+      return {
+        ...doc,
+        ...cached,
+        document_attachment: doc.document_attachment,
+        document_history: doc.document_history,
+        attachments: doc.attachments,
+      };
+    }
+    return doc;
   },
 
   async findByRequester(requesterId) {

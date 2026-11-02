@@ -225,6 +225,25 @@ const DocumentController = {
       next(err);
     }
   },
+
+  /**
+   * GET /api/documents/:id/history
+   * PB-19 / SRS 3.6: Get complete processing history & versioned attachments
+   */
+  async getDocumentHistory(req, res, next) {
+    try {
+      const historyData = await AccessControlService.getDocumentHistory(
+        req.user,
+        req.params.id
+      );
+      if (!historyData) {
+        return res.status(404).json({ error: 'Document not found or access denied.' });
+      }
+      res.json(historyData);
+    } catch (err) {
+      next(err);
+    }
+  },
 };
 
 module.exports = DocumentController;
