@@ -39,7 +39,7 @@ export function OverviewPage() {
   const rejectedDocs = allDocs.filter((d) => d.status === 'rejected')
 
   const [activeQueueTab, setActiveQueueTab] = useState<
-    'toCheck' | 'ready' | 'returned' | 'rejected' | 'ids'
+    'toCheck' | 'inReview' | 'ready' | 'returned' | 'rejected' | 'ids'
   >('toCheck')
 
   // Distribution by holding office with official institutional gradients
@@ -152,7 +152,7 @@ export function OverviewPage() {
                 <span className="text-xs font-bold uppercase tracking-wider text-ink-500">
                   Secretary Workstation Queues
                 </span>
-                <Segmented<'toCheck' | 'ready' | 'returned' | 'rejected' | 'ids'>
+                <Segmented<'toCheck' | 'inReview' | 'ready' | 'returned' | 'rejected' | 'ids'>
                   label="Workstation Queue Tabs"
                   value={activeQueueTab}
                   onChange={setActiveQueueTab}
@@ -161,6 +161,11 @@ export function OverviewPage() {
                       value: 'toCheck',
                       label: 'Verify Content',
                       count: queues.toCheck.length,
+                    },
+                    {
+                      value: 'inReview',
+                      label: 'In Review',
+                      count: queues.inReview.length,
                     },
                     {
                       value: 'ready',
@@ -219,6 +224,43 @@ export function OverviewPage() {
                     <div className="flex items-center justify-center gap-2 py-12 text-center text-sm text-ink-500">
                       <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
                       <span>All submitted documents have been checked and routed.</span>
+                    </div>
+                  }
+                />
+              </div>
+            )}
+
+            {/* TAB: In Review Across Offices */}
+            {activeQueueTab === 'inReview' && (
+              <div>
+                <div className="border-b border-ink-100 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Documents Under Office Review
+                      </h3>
+                      <p className="text-xs text-ink-500">
+                        Circulating among reviewing authorities (Chairperson, Dean, OVCAA, VCAF, Chancellor).
+                      </p>
+                    </div>
+                    <Link
+                      to="/app/documents"
+                      className="text-xs font-semibold text-brand-700 hover:underline"
+                    >
+                      View in All Documents ({queues.inReview.length})
+                    </Link>
+                  </div>
+                </div>
+
+                <DocumentList
+                  db={db}
+                  docs={queues.inReview.slice(0, 6)}
+                  audience="staff"
+                  showRequester
+                  showWaiting
+                  empty={
+                    <div className="py-12 text-center text-sm text-ink-500">
+                      No documents are currently undergoing office review.
                     </div>
                   }
                 />
