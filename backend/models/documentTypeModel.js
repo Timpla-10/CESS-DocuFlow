@@ -14,6 +14,12 @@ const TYPE_DESCRIPTIONS = {
 };
 
 /**
+ * In-memory runtime stores for custom audiences and template URLs
+ */
+const TYPE_AUDIENCES = {};
+const TYPE_TEMPLATES = {};
+
+/**
  * Standard checklist requirements for document types (REQ-REQT-1,2,7)
  */
 const DEFAULT_REQUIREMENTS = {
@@ -90,12 +96,16 @@ function normalizeRequirement(f, defaultDocTypeId = null) {
 function normalizeDocType(raw) {
   if (!raw) return null;
   const docTypeId = raw.doc_type_id;
-  const audience = raw.audience || getAudienceForType(raw.type_name);
-  const summary = raw.summary || TYPE_DESCRIPTIONS[docTypeId] || `${raw.type_name} document processing.`;
+  const customAudience = TYPE_AUDIENCES[docTypeId];
+  const audience = raw.audience || customAudience || getAudienceForType(raw.type_name);
+  const summary = raw.summary || raw.description || TYPE_DESCRIPTIONS[docTypeId] || `${raw.type_name} document processing.`;
 
   const dbForms = Array.isArray(raw.required_form) && raw.required_form.length > 0 ? raw.required_form : [];
   const rawRequirements = dbForms.length > 0 ? dbForms : DEFAULT_REQUIREMENTS[docTypeId] || [];
   const requirements = rawRequirements.map((f) => normalizeRequirement(f, docTypeId));
+
+  const customTemplate = TYPE_TEMPLATES[docTypeId];
+  const primaryTemplate = customTemplate || raw.template_url || (requirements.find((r) => r.template_url)?.template_url) || null;
 
   return {
     id: docTypeId,
@@ -108,6 +118,8 @@ function normalizeDocType(raw) {
     standardProcessingDays: raw.standard_processing_days,
     summary,
     description: summary,
+    template_url: primaryTemplate,
+    templateUrl: primaryTemplate,
     is_active: raw.is_active ?? true,
     requirements,
     required_forms: requirements,
@@ -117,38 +129,48 @@ function normalizeDocType(raw) {
 
 const DocumentTypeModel = {
   /**
-   * Fetches all active document types with requirements joined
+   * Fetches all document types with requirements joined
+   * Defaults to active-only unless options.includeInactive is true
    */
-  async findAll() {
-    const { data, error } = await supabase
+  async findAll(options = {}) {
+    let query = supabase
       .from('document_type')
       .select('*, required_form (*)')
-      .eq('is_active', true)
       .order('doc_type_id', { ascending: true });
+
+    if (!options.includeInactive) {
+      query = query.eq('is_active', true);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
     return (data || []).map(normalizeDocType);
   },
 
   /**
-   * PB-10: Returns document types eligible for the caller's role and origin
+   * PB-10 & PB-44: Returns document types eligible for the caller's role and origin
    */
-  async findEligibleForRole(role, origin = 'CESS') {
-    const all = await this.findAll();
+  async findEligibleForRole(role, origin = 'CESS', options = {}) {
+    const all = await this.findAll(options);
 
     if (role === ROLES.SECRETARY) {
       return all;
     }
 
+    let filtered = all.filter((t) => t.is_active);
+
     if (role === ROLES.STUDENT) {
-      return all.filter((t) => t.audience === 'student');
+      filtered = filtered.filter((t) => t.audience === 'student');
+    } else if (role === ROLES.FACULTY) {
+      filtered = filtered.filter((t) => t.audience === 'faculty');
     }
 
-    if (role === ROLES.FACULTY) {
-      return all.filter((t) => t.audience === 'faculty');
+    if (origin && origin !== 'ALL') {
+      filtered = filtered.filter((t) => !t.origin || t.origin === 'ALL' || t.origin === origin);
     }
 
-    return all;
+    return filtered;
   },
 
   /**
@@ -182,7 +204,7 @@ const DocumentTypeModel = {
   },
 
   /**
-   * PB-10 Acceptance Criterion: Server-side eligibility validation before submission
+   * PB-10 & PB-44 Acceptance Criterion: Server-side eligibility validation before submission
    */
   async isRoleEligible(docTypeIdOrSlug, role, origin = 'CESS') {
     const docType = await this.findById(docTypeIdOrSlug);
@@ -206,10 +228,7 @@ const DocumentTypeModel = {
           reason: `Document type '${docType.name}' is reserved for faculty and cannot be submitted by a Student.`,
         };
       }
-      return { eligible: true, docType };
-    }
-
-    if (role === ROLES.FACULTY) {
+    } else if (role === ROLES.FACULTY) {
       if (docType.audience !== 'faculty') {
         return {
           eligible: false,
@@ -217,14 +236,26 @@ const DocumentTypeModel = {
           reason: `Document type '${docType.name}' is reserved for students and cannot be submitted by Faculty.`,
         };
       }
-      return { eligible: true, docType };
+    } else {
+      return {
+        eligible: false,
+        docType,
+        reason: `Role '${role}' is not authorized to submit document requests.`,
+      };
     }
 
-    return {
-      eligible: false,
-      docType,
-      reason: `Role '${role}' is not authorized to submit document requests.`,
-    };
+    // Origin check (CESS vs IDS)
+    if (origin && docType.origin && docType.origin !== 'ALL' && origin !== 'ALL') {
+      if (docType.origin !== origin) {
+        return {
+          eligible: false,
+          docType,
+          reason: `Document type '${docType.name}' is designated for ${docType.origin} and cannot be submitted under ${origin}.`,
+        };
+      }
+    }
+
+    return { eligible: true, docType };
   },
 
   /**
@@ -353,6 +384,154 @@ const DocumentTypeModel = {
 
     if (error) throw error;
     return data ? normalizeRequirement(data, data.doc_type_id) : null;
+  },
+
+  /**
+   * PB-44 / REQ-REQT-1: Secretary / Admin creates a new document type
+   */
+  async createDocumentType(payload) {
+    const typeName = (payload.type_name || payload.name || '').trim();
+    if (!typeName) {
+      throw new Error('Document type name is required.');
+    }
+
+    const origin = (payload.origin || 'CESS').toUpperCase();
+    const processingDays = Number(payload.standard_processing_days || payload.standardProcessingDays || 3);
+    const isActive = payload.is_active !== undefined ? Boolean(payload.is_active) : true;
+
+    const { data, error } = await supabase
+      .from('document_type')
+      .insert({
+        type_name: typeName,
+        origin,
+        standard_processing_days: processingDays,
+        is_active: isActive,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    const newId = data.doc_type_id;
+
+    if (payload.audience) {
+      TYPE_AUDIENCES[newId] = payload.audience;
+    }
+    if (payload.description || payload.summary) {
+      TYPE_DESCRIPTIONS[newId] = payload.description || payload.summary;
+    }
+    if (payload.template_url || payload.templateUrl) {
+      TYPE_TEMPLATES[newId] = payload.template_url || payload.templateUrl;
+    }
+
+    const rawReqs = payload.requirements || payload.required_forms || [];
+    if (Array.isArray(rawReqs) && rawReqs.length > 0) {
+      for (const r of rawReqs) {
+        if (r && (r.form_name || r.label)) {
+          await this.createRequirement(newId, {
+            form_name: r.form_name || r.label,
+            is_required: r.is_required !== undefined ? Boolean(r.is_required) : Boolean(r.required ?? true),
+            source_office: r.source_office || r.source || 'Not specified',
+            template_url: r.template_url || r.templateUrl || null,
+          });
+        }
+      }
+    }
+
+    return await this.findById(newId);
+  },
+
+  /**
+   * PB-44 / REQ-REQT-1: Secretary / Admin updates an existing document type
+   */
+  async updateDocumentType(docTypeIdOrSlug, payload) {
+    const numericId = await this.resolveNumericId(docTypeIdOrSlug);
+    if (!numericId) {
+      throw new Error('Document type not found.');
+    }
+
+    const updates = {};
+    if (payload.type_name !== undefined || payload.name !== undefined) {
+      updates.type_name = (payload.type_name || payload.name).trim();
+    }
+    if (payload.origin !== undefined) {
+      updates.origin = payload.origin.toUpperCase();
+    }
+    if (payload.standard_processing_days !== undefined || payload.standardProcessingDays !== undefined) {
+      updates.standard_processing_days = Number(payload.standard_processing_days || payload.standardProcessingDays);
+    }
+    if (payload.is_active !== undefined) {
+      updates.is_active = Boolean(payload.is_active);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase
+        .from('document_type')
+        .update(updates)
+        .eq('doc_type_id', numericId);
+
+      if (error) throw error;
+    }
+
+    if (payload.audience !== undefined) {
+      TYPE_AUDIENCES[numericId] = payload.audience;
+    }
+    if (payload.description !== undefined || payload.summary !== undefined) {
+      TYPE_DESCRIPTIONS[numericId] = payload.description || payload.summary;
+    }
+    if (payload.template_url !== undefined || payload.templateUrl !== undefined) {
+      TYPE_TEMPLATES[numericId] = payload.template_url || payload.templateUrl;
+    }
+
+    return await this.findById(numericId);
+  },
+
+  /**
+   * PB-44 / REQ-REQT-1: Secretary / Admin toggles active status of document type
+   */
+  async setDocumentTypeActive(docTypeIdOrSlug, isActive) {
+    const numericId = await this.resolveNumericId(docTypeIdOrSlug);
+    if (!numericId) {
+      throw new Error('Document type not found.');
+    }
+
+    const { error } = await supabase
+      .from('document_type')
+      .update({ is_active: Boolean(isActive) })
+      .eq('doc_type_id', numericId);
+
+    if (error) throw error;
+    return await this.findById(numericId);
+  },
+
+  /**
+   * PB-44 / REQ-REQT-1: Secretary / Admin soft-deletes/disables a document type
+   * Keeps existing requests and historical records 100% intact
+   */
+  async deleteDocumentType(docTypeIdOrSlug) {
+    return await this.setDocumentTypeActive(docTypeIdOrSlug, false);
+  },
+
+  /**
+   * PB-44 / REQ-REQT-9,10: Secretary / Admin replaces document blank template
+   */
+  async replaceTemplate(docTypeIdOrSlug, templateUrl, formId = null) {
+    const numericId = await this.resolveNumericId(docTypeIdOrSlug);
+    if (!numericId) {
+      throw new Error('Document type not found.');
+    }
+
+    TYPE_TEMPLATES[numericId] = templateUrl;
+
+    if (formId) {
+      await this.updateRequirement(formId, { template_url: templateUrl });
+    } else {
+      const forms = await this.getRequirementsByDocTypeId(numericId);
+      if (forms && forms.length > 0) {
+        await this.updateRequirement(forms[0].id, { template_url: templateUrl });
+      }
+    }
+
+    return await this.findById(numericId);
   },
 };
 

@@ -4,17 +4,114 @@ const DocumentTypeModel = require('../models/documentTypeModel');
 const DocumentController = {
   /**
    * GET /api/documents/types or GET /api/document-types
-   * PB-10: Browse available document types filtered by authenticated user's role and origin
+   * PB-10 & PB-44: Browse available document types filtered by authenticated user's role and origin
    */
   async listDocumentTypes(req, res, next) {
     try {
-      const types = await DocumentTypeModel.findEligibleForRole(req.user.role, req.user.origin);
+      const includeInactive = req.query.includeInactive === 'true' || req.query.all === 'true';
+      const types = await DocumentTypeModel.findEligibleForRole(req.user.role, req.user.origin, { includeInactive });
       res.json({
         role: req.user.role,
         origin: req.user.origin,
         roleLabel: req.user.roleLabel,
         count: types.length,
         documentTypes: types,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/documents/types or POST /api/document-types
+   * PB-44 / REQ-REQT-1: Admin (College Secretary) adds a new document type
+   */
+  async createDocumentType(req, res, next) {
+    try {
+      const created = await DocumentTypeModel.createDocumentType(req.body);
+      res.status(201).json({
+        message: 'Document type created successfully.',
+        documentType: created,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * PUT /api/documents/types/:id or PUT /api/document-types/:id
+   * PB-44 / REQ-REQT-1: Admin (College Secretary) updates an existing document type
+   */
+  async updateDocumentType(req, res, next) {
+    try {
+      const updated = await DocumentTypeModel.updateDocumentType(req.params.id, req.body);
+      if (!updated) {
+        return res.status(404).json({ error: 'Document type not found.' });
+      }
+      res.json({
+        message: 'Document type updated successfully.',
+        documentType: updated,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * DELETE /api/documents/types/:id or DELETE /api/document-types/:id
+   * PB-44 / REQ-REQT-1: Admin (College Secretary) disables/deactivates a document type
+   * Soft-deactivates so existing requests remain intact
+   */
+  async deleteDocumentType(req, res, next) {
+    try {
+      const deactivated = await DocumentTypeModel.deleteDocumentType(req.params.id);
+      if (!deactivated) {
+        return res.status(404).json({ error: 'Document type not found.' });
+      }
+      res.json({
+        message: 'Document type successfully deactivated. Existing requests remain intact.',
+        documentType: deactivated,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * PUT /api/documents/types/:id/template or PUT /api/document-types/:id/template
+   * PB-44 / REQ-REQT-10: Admin replaces downloadable form template
+   */
+  async replaceDocumentTypeTemplate(req, res, next) {
+    try {
+      const templateUrl = req.body.template_url || req.body.templateUrl;
+      if (!templateUrl) {
+        return res.status(400).json({ error: 'template_url is required.' });
+      }
+      const updated = await DocumentTypeModel.replaceTemplate(req.params.id, templateUrl, req.body.formId);
+      res.json({
+        message: 'Document template updated successfully.',
+        documentType: updated,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/types/:id/template or GET /api/document-types/:id/template
+   * PB-44 / REQ-REQT-9: Retrieve or download active blank template
+   */
+  async getDocumentTypeTemplate(req, res, next) {
+    try {
+      const docType = await DocumentTypeModel.findById(req.params.id);
+      if (!docType) {
+        return res.status(404).json({ error: 'Document type not found.' });
+      }
+      res.json({
+        docTypeId: docType.doc_type_id,
+        name: docType.name,
+        templateUrl: docType.template_url,
+        template_url: docType.template_url,
       });
     } catch (err) {
       next(err);

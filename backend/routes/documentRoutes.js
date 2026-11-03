@@ -6,9 +6,16 @@ const { verifyUser, requireAction } = require('../middleware/authMiddleware');
 // All document routes require role verification
 router.use(verifyUser);
 
-// PB-10: Browse available document types (Role-filtered)
+// PB-10 & PB-44: Browse and manage document types (Role-filtered / Admin-managed)
 router.get('/types', DocumentController.listDocumentTypes);
+router.post('/types', requireAction('manage_requirements'), DocumentController.createDocumentType);
 router.get('/types/:id', DocumentController.getDocumentType);
+router.put('/types/:id', requireAction('manage_requirements'), DocumentController.updateDocumentType);
+router.delete('/types/:id', requireAction('manage_requirements'), DocumentController.deleteDocumentType);
+
+// PB-44 / REQ-REQT-9,10: Document Type Template management
+router.get('/types/:id/template', DocumentController.getDocumentTypeTemplate);
+router.put('/types/:id/template', requireAction('manage_requirements'), DocumentController.replaceDocumentTypeTemplate);
 
 // PB-11: Show required forms, attachments, and source office
 router.get('/types/:id/requirements', DocumentController.getDocumentTypeRequirements);

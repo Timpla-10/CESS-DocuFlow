@@ -13,9 +13,14 @@ router.get('/health', (req, res) => {
   });
 });
 
-// PB-10 & PB-11: Alias /api/document-types for direct client access
+// PB-10, PB-11 & PB-44: Alias /api/document-types for direct client access
 router.get('/document-types', verifyUser, DocumentController.listDocumentTypes);
+router.post('/document-types', verifyUser, requireAction('manage_requirements'), DocumentController.createDocumentType);
 router.get('/document-types/:id', verifyUser, DocumentController.getDocumentType);
+router.put('/document-types/:id', verifyUser, requireAction('manage_requirements'), DocumentController.updateDocumentType);
+router.delete('/document-types/:id', verifyUser, requireAction('manage_requirements'), DocumentController.deleteDocumentType);
+router.get('/document-types/:id/template', verifyUser, DocumentController.getDocumentTypeTemplate);
+router.put('/document-types/:id/template', verifyUser, requireAction('manage_requirements'), DocumentController.replaceDocumentTypeTemplate);
 router.get('/document-types/:id/requirements', verifyUser, DocumentController.getDocumentTypeRequirements);
 router.post('/document-types/:id/requirements', verifyUser, requireAction('manage_requirements'), DocumentController.createDocumentTypeRequirement);
 router.put('/document-types/:id/requirements/:formId', verifyUser, requireAction('manage_requirements'), DocumentController.updateDocumentTypeRequirement);
