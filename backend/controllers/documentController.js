@@ -157,6 +157,51 @@ const DocumentController = {
   },
 
   /**
+   * GET /api/documents/preferences
+   * PB-22 & PB-05: Get current user's notification preferences
+   */
+  async getNotificationPreference(req, res, next) {
+    try {
+      const pref = await AccessControlService.getNotificationPreference(req.user);
+      res.json({ preference: pref });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * PUT /api/documents/preferences
+   * PB-22 & PB-05: Update current user's notification preferences
+   */
+  async updateNotificationPreference(req, res, next) {
+    try {
+      const pref = await AccessControlService.updateNotificationPreference(req.user, req.body);
+      res.json({ preference: pref });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/notifications
+   * PB-22 & PB-06: List notifications for current user
+   */
+  async getNotifications(req, res, next) {
+    try {
+      const notifications = await AccessControlService.getNotifications(
+        req.user,
+        req.query.documentId || null
+      );
+      res.json({
+        count: notifications.length,
+        notifications,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
    * GET /api/documents/:id
    * PB-02: Enforces role-based view permission on single document record
    */
@@ -184,7 +229,7 @@ const DocumentController = {
 
   /**
    * POST /api/documents/:id/check
-   * PB-02: Completeness check (Secretary only)
+   * PB-02 & PB-22: Completeness check (Secretary only)
    */
   async checkRequirements(req, res, next) {
     try {
@@ -193,7 +238,10 @@ const DocumentController = {
         req.params.id,
         req.body
       );
-      res.json({ document: updated });
+      res.json({
+        document: updated,
+        notification: updated?.notification || null,
+      });
     } catch (err) {
       next(err);
     }
@@ -201,7 +249,7 @@ const DocumentController = {
 
   /**
    * POST /api/documents/:id/review
-   * PB-02: Review decision — endorse/approve/return/reject (Assigned Reviewer only)
+   * PB-02 & PB-22: Review decision — endorse/approve/return/reject (Assigned Reviewer only)
    */
   async reviewDocument(req, res, next) {
     try {
@@ -210,7 +258,30 @@ const DocumentController = {
         req.params.id,
         req.body
       );
-      res.json({ document: updated });
+      res.json({
+        document: updated,
+        notification: updated?.notification || null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/documents/:id/return
+   * PB-22: Return a request with required reason (Assigned Reviewer or Secretary)
+   */
+  async returnDocument(req, res, next) {
+    try {
+      const updated = await AccessControlService.returnDocument(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({
+        document: updated,
+        notification: updated?.notification || null,
+      });
     } catch (err) {
       next(err);
     }
@@ -253,7 +324,7 @@ const DocumentController = {
 
   /**
    * GET /api/documents/:id/history
-   * PB-19 / SRS 3.6: Get complete processing history & versioned attachments
+   * PB-19 / PB-22 / SRS 3.6: Get complete processing history, return reason & versioned attachments
    */
   async getDocumentHistory(req, res, next) {
     try {
