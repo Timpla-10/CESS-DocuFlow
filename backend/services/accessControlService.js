@@ -3,6 +3,7 @@ const DocumentTypeModel = require('../models/documentTypeModel');
 const UserModel = require('../models/userModel');
 const {
   ROLES,
+  REVIEWER_ROLES,
   ROLE_TO_OFFICE_NAME,
   canViewDocument,
   canPerformAction,
@@ -202,8 +203,9 @@ const AccessControlService = {
   },
 
   /**
-   * PB-02 & PB-22: Completeness check (Secretary only)
-   * Enforces required reason when returning a request and dispatches notification per preference.
+   * PB-02, PB-22 & PB-23: Completeness check (Secretary only)
+   * Enforces stage eligibility, required reason when returning or rejecting a request,
+   * stops normal routing on rejection, and dispatches notification per preference.
    */
   async checkRequirements(user, docId, payload = {}) {
     if (!canPerformAction(user, 'check_requirements')) {
@@ -221,8 +223,31 @@ const AccessControlService = {
       throw err;
     }
 
+    // PB-23 Acceptance Criterion: Normal routing stops when a request is rejected unless reopened
+    if (doc.current_status === 'Rejected') {
+      const err = new Error(
+        `Forbidden: Document '${doc.control_number}' has been rejected/disapproved. Normal routing has stopped unless reopened through an approved reopen path.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    // PB-23 Acceptance Criterion: Only permitted roles can reject/act at their stage (Secretary stage is 'Submitted')
+    if (doc.current_status !== 'Submitted') {
+      const err = new Error(
+        `Forbidden: The College Secretary can only verify, return, or reject a request while it is in 'Submitted' status at the completeness verification stage (current status: '${doc.current_status}').`
+      );
+      err.status = 403;
+      throw err;
+    }
+
     const decision = String(payload.decision || payload.action || 'complete').toLowerCase();
     const isReturn = decision === 'return' || decision === 'returned';
+    const isReject =
+      decision === 'reject' ||
+      decision === 'rejected' ||
+      decision === 'disapprove' ||
+      decision === 'disapproved';
     const rawRemarks = payload.reason ?? payload.remarks ?? payload.reasons ?? '';
     const cleanRemarks = String(rawRemarks).trim();
 
@@ -235,12 +260,22 @@ const AccessControlService = {
       throw err;
     }
 
+    // PB-23 Acceptance Criterion: Reason is required when rejecting/disapproving a document
+    if (isReject && !cleanRemarks) {
+      const err = new Error(
+        'Reason is required when disapproving or rejecting a document. Please record why the request is being rejected.'
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const isTerminalOrReturn = isReturn || isReject;
     const targetOffice = payload.nextOfficeName || 'Department Chairperson';
-    const nextOfficeId = isReturn ? null : await UserModel.getOfficeIdByName(targetOffice);
+    const nextOfficeId = isTerminalOrReturn ? null : await UserModel.getOfficeIdByName(targetOffice);
     const secOfficeId = await UserModel.getOfficeIdByName('College Secretary');
 
     await DocumentModel.update(docId, {
-      current_status: isReturn ? 'Returned' : 'Under_Review',
+      current_status: isReject ? 'Rejected' : isReturn ? 'Returned' : 'Under_Review',
       current_office_id: nextOfficeId,
     });
 
@@ -248,30 +283,36 @@ const AccessControlService = {
       document_id: docId,
       revision_no: doc.current_revision_no,
       action_by_user_id: user.id,
-      action_office_id: isReturn ? secOfficeId : nextOfficeId,
-      action_type: isReturn ? 'Returned' : 'Routed',
-      action_remarks: isReturn
+      action_office_id: isTerminalOrReturn ? secOfficeId : nextOfficeId,
+      action_type: isReject ? 'Rejected' : isReturn ? 'Returned' : 'Routed',
+      action_remarks: isTerminalOrReturn
         ? cleanRemarks
         : cleanRemarks || 'Requirements verified complete and routed.',
     });
 
     let notification = null;
-    if (isReturn) {
+    if (isReturn || isReject) {
       const pref = await DocumentModel.getNotificationPreference(doc.requester_id);
       const rawNotif = await DocumentModel.createNotification({
         recipientId: doc.requester_id,
         documentId: docId,
-        notificationType: 'Return_Alert',
+        notificationType: isReturn ? 'Return_Alert' : 'Reject_Alert',
         deliveryMethod: pref.deliveryMethod,
-        title: `Action needed: ${doc.title} was returned for revision`,
-        message: `Your request (${doc.control_number}) was returned for revision by the College Secretary. Reason: ${cleanRemarks}`,
+        title: isReturn
+          ? `Action needed: ${doc.title} was returned for revision`
+          : `Update: ${doc.title} was rejected / disapproved`,
+        message: isReturn
+          ? `Your request (${doc.control_number}) was returned for revision by the College Secretary. Reason: ${cleanRemarks}`
+          : `Your request (${doc.control_number}) was rejected by the College Secretary. Reason: ${cleanRemarks}`,
       });
       notification = {
         ...rawNotif,
         preference: pref.preference,
         channels: pref.channels,
         reason: cleanRemarks,
-        returnedByOffice: 'College Secretary',
+        ...(isReturn
+          ? { returnedByOffice: 'College Secretary' }
+          : { rejectedByOffice: 'College Secretary' }),
       };
     }
 
@@ -280,12 +321,13 @@ const AccessControlService = {
   },
 
   /**
-   * PB-02 & PB-22: Review decision — Endorse / Approve / Return / Reject (Reviewers only)
-   * PB-22 Acceptance Criteria:
-   * - Reason is required when returning a request for correction
-   * - Status changes to Returned for Revision ('Returned' / statusLabel: 'Returned for Revision')
-   * - Reason appears to requester and in history
-   * - Notification follows requester's preference
+   * PB-02, PB-22 & PB-23: Review decision — Endorse / Approve / Return / Reject (Reviewers only)
+   * PB-23 Acceptance Criteria:
+   * - Only permitted roles can reject at their stage
+   * - Reason required
+   * - Status/action recorded ('Rejected', action_type: 'Rejected')
+   * - Requester can see outcome (rejectionReason, rejectionInfo, Reject_Alert notification)
+   * - Normal routing stops unless approved reopen path exists
    */
   async reviewDocument(user, docId, payload = {}) {
     const doc = await DocumentModel.findById(docId);
@@ -295,9 +337,30 @@ const AccessControlService = {
       throw err;
     }
 
-    if (!canPerformAction(user, 'review_document', doc)) {
+    // PB-23 Acceptance Criterion: Normal routing stops when a document is rejected
+    if (doc.current_status === 'Rejected') {
       const err = new Error(
-        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not permitted to review this document.`
+        `Forbidden: Document '${doc.control_number}' has been rejected/disapproved. Normal routing has stopped unless reopened through an approved reopen path.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    // PB-23 Acceptance Criterion: Only permitted reviewing roles can act, and never on their own request
+    const requesterId = doc.requester_id || doc.requesterId;
+    if (!REVIEWER_ROLES.includes(user.role) || requesterId === user.id) {
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not permitted to review or reject this document.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    // PB-23 Acceptance Criterion: Only permitted roles can reject/review at their stage
+    if (doc.current_status !== 'Under_Review' || !canPerformAction(user, 'review_document', doc)) {
+      const currentStageLabel = doc.office?.office_name || doc.current_status;
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' cannot act on document '${doc.control_number}' because it is not currently at their review stage (current stage: '${currentStageLabel}').`
       );
       err.status = 403;
       throw err;
@@ -307,7 +370,10 @@ const AccessControlService = {
     const dbAction =
       rawAction === 'return' || rawAction === 'returned'
         ? 'Returned'
-        : rawAction === 'reject' || rawAction === 'rejected'
+        : rawAction === 'reject' ||
+          rawAction === 'rejected' ||
+          rawAction === 'disapprove' ||
+          rawAction === 'disapproved'
         ? 'Rejected'
         : rawAction === 'approve' || rawAction === 'approved'
         ? 'Approved'
@@ -316,7 +382,7 @@ const AccessControlService = {
     const rawRemarks = payload.reason ?? payload.remarks ?? payload.reasons ?? '';
     const cleanRemarks = String(rawRemarks).trim();
 
-    // PB-22 Acceptance Criterion: Reason is required when returning (or rejecting) a request
+    // PB-22 Acceptance Criterion: Reason is required when returning a request
     if (dbAction === 'Returned' && !cleanRemarks) {
       const err = new Error(
         'Reason is required when returning a document for revision. Please explain what needs to be corrected.'
@@ -325,9 +391,10 @@ const AccessControlService = {
       throw err;
     }
 
+    // PB-23 Acceptance Criterion: Reason is required when rejecting/disapproving a request
     if (dbAction === 'Rejected' && !cleanRemarks) {
       const err = new Error(
-        'Reason is required when disapproving or rejecting a document.'
+        'Reason is required when disapproving or rejecting a document. Please record why the request is being rejected.'
       );
       err.status = 400;
       throw err;
@@ -373,7 +440,7 @@ const AccessControlService = {
         deliveryMethod: pref.deliveryMethod,
         title: isReturned
           ? `Action needed: ${doc.title} was returned for revision`
-          : `Update: ${doc.title} was rejected`,
+          : `Update: ${doc.title} was rejected / disapproved`,
         message: isReturned
           ? `Your request (${doc.control_number}) was returned for revision by ${actorOfficeName}. Reason: ${cleanRemarks}`
           : `Your request (${doc.control_number}) was rejected by ${actorOfficeName}. Reason: ${cleanRemarks}`,
@@ -384,7 +451,9 @@ const AccessControlService = {
         preference: pref.preference,
         channels: pref.channels,
         reason: cleanRemarks,
-        returnedByOffice: actorOfficeName,
+        ...(isReturned
+          ? { returnedByOffice: actorOfficeName }
+          : { rejectedByOffice: actorOfficeName }),
       };
     }
 
@@ -403,7 +472,74 @@ const AccessControlService = {
   },
 
   /**
-   * PB-18 / REQ-SUB-7: Prevent editing while request is in process.
+   * PB-23: Dedicated method for rejecting/disapproving a document with a required reason
+   */
+  async rejectDocument(user, docId, payload = {}) {
+    if (user.role === ROLES.SECRETARY) {
+      return this.checkRequirements(user, docId, { ...payload, decision: 'reject' });
+    }
+    return this.reviewDocument(user, docId, { ...payload, action: 'rejected' });
+  },
+
+  /**
+   * PB-23: Approved reopen path for a rejected document (College Secretary or College Dean only).
+   * Without invoking this approved reopen path, normal routing remains stopped on rejected requests.
+   */
+  async reopenDocument(user, docId, payload = {}) {
+    if (user.role !== ROLES.SECRETARY && user.role !== ROLES.DEAN) {
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not authorized to reopen a rejected document. Only the College Secretary or College Dean may approve reopening.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    const doc = await DocumentModel.findById(docId);
+    if (!doc) {
+      const err = new Error('Document not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    if (doc.current_status !== 'Rejected') {
+      const err = new Error(
+        `Bad Request: Only rejected documents can be reopened (current status: '${doc.current_status}').`
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const rawReason = payload.reason ?? payload.remarks ?? payload.reasons ?? '';
+    const cleanReason = String(rawReason).trim();
+    if (!cleanReason) {
+      const err = new Error(
+        'Reason is required when reopening a rejected document.'
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const secOfficeId = await UserModel.getOfficeIdByName('College Secretary');
+
+    await DocumentModel.update(docId, {
+      current_status: 'Returned',
+      current_office_id: null,
+    });
+
+    await DocumentModel.addHistory({
+      document_id: docId,
+      revision_no: doc.current_revision_no,
+      action_by_user_id: user.id,
+      action_office_id: secOfficeId,
+      action_type: 'Returned',
+      action_remarks: `Approved Reopen (${getRoleLabel(user.role, user.origin)}): ${cleanReason}`,
+    });
+
+    return DocumentModel.findById(docId);
+  },
+
+  /**
+   * PB-18 / REQ-SUB-7 & PB-23: Prevent editing while request is in process or rejected.
    * Only documents in 'Returned' status can be modified by the requester.
    */
   async editDocument(user, docId, updates = {}) {
@@ -418,6 +554,14 @@ const AccessControlService = {
     if (requesterId !== user.id) {
       const err = new Error(
         `Forbidden: Only the document requester can edit this request.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    if (doc.current_status === 'Rejected') {
+      const err = new Error(
+        `Forbidden: Document '${doc.control_number}' was rejected/disapproved and normal routing has stopped. Rejected requests cannot be edited unless reopened through an approved reopen path.`
       );
       err.status = 403;
       throw err;
@@ -441,8 +585,9 @@ const AccessControlService = {
   },
 
   /**
-   * PB-18 & REQ-SUB-8: Resubmit a returned document under the same Control Number
+   * PB-18, REQ-SUB-8 & PB-23: Resubmit a returned document under the same Control Number
    * with an incremented Revision Number, keeping earlier files and history.
+   * Rejected documents cannot be resubmitted unless reopened through an approved reopen path.
    */
   async resubmitDocument(user, docId, input = {}) {
     const doc = await DocumentModel.findById(docId);
@@ -456,6 +601,14 @@ const AccessControlService = {
     if (requesterId !== user.id) {
       const err = new Error(
         `Forbidden: Only the document requester can resubmit this request.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    if (doc.current_status === 'Rejected') {
+      const err = new Error(
+        `Forbidden: Document '${doc.control_number}' was rejected/disapproved and normal routing has stopped. Rejected documents cannot be resubmitted unless reopened through an approved reopen path.`
       );
       err.status = 403;
       throw err;
@@ -532,6 +685,8 @@ const AccessControlService = {
       statusLabel: doc.statusLabel,
       returnReason: doc.returnReason,
       returnInfo: doc.returnInfo,
+      rejectionReason: doc.rejectionReason,
+      rejectionInfo: doc.rejectionInfo,
       history: doc.document_history || [],
       attachments: doc.document_attachment || doc.attachments || [],
       notifications,

@@ -73,6 +73,8 @@ function normalizeDoc(raw) {
 
   let returnReason = null;
   let returnInfo = null;
+  let rejectionReason = null;
+  let rejectionInfo = null;
 
   if (history.length > 0) {
     const latest = history[history.length - 1];
@@ -105,6 +107,22 @@ function normalizeDoc(raw) {
         };
       }
     }
+
+    if (current_status === 'Rejected') {
+      const latestReject = [...history].reverse().find((h) => h.action_type === 'Rejected');
+      if (latestReject) {
+        rejectionReason = latestReject.action_remarks || null;
+        rejectionInfo = {
+          reason: latestReject.action_remarks || '',
+          reasons: latestReject.action_remarks || '',
+          office: latestReject.office?.office_name || 'Reviewing Office',
+          officeId: latestReject.action_office_id || null,
+          byUserId: latestReject.action_by_user_id || null,
+          at: latestReject.action_timestamp,
+          revisionNo: latestReject.revision_no,
+        };
+      }
+    }
   }
 
   const statusLabel = STATUS_LABELS[current_status] || current_status;
@@ -120,6 +138,8 @@ function normalizeDoc(raw) {
     is_deleted,
     returnReason,
     returnInfo,
+    rejectionReason,
+    rejectionInfo,
     document_history: history,
     document_attachment: raw.document_attachment || [],
     attachments: raw.document_attachment || [],
@@ -181,6 +201,8 @@ const DocumentModel = {
         statusLabel: STATUS_LABELS[doc.current_status] || doc.statusLabel,
         returnReason: doc.returnReason,
         returnInfo: doc.returnInfo,
+        rejectionReason: doc.rejectionReason,
+        rejectionInfo: doc.rejectionInfo,
         document_attachment: doc.document_attachment,
         document_history: doc.document_history,
         attachments: doc.attachments,

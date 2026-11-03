@@ -45,6 +45,12 @@ router.post('/:id/review', DocumentController.reviewDocument);
 // PB-22: Dedicated return endpoint with required reason (Assigned Reviewer or Secretary)
 router.post('/:id/return', DocumentController.returnDocument);
 
+// PB-23: Dedicated reject/disapprove endpoint with required reason (Permitted Reviewer or Secretary at their stage)
+router.post('/:id/reject', DocumentController.rejectDocument);
+
+// PB-23: Approved reopen path for rejected documents (College Secretary or College Dean only)
+router.post('/:id/reopen', DocumentController.reopenDocument);
+
 // PB-18 / REQ-SUB-7: Prevent editing while in process; edit allowed only when Returned
 router.put('/:id', DocumentController.editDocument);
 

@@ -288,6 +288,43 @@ const DocumentController = {
   },
 
   /**
+   * POST /api/documents/:id/reject
+   * PB-23: Reject/disapprove a request with required reason (Permitted Reviewer or Secretary at their stage)
+   */
+  async rejectDocument(req, res, next) {
+    try {
+      const updated = await AccessControlService.rejectDocument(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({
+        document: updated,
+        notification: updated?.notification || null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/documents/:id/reopen
+   * PB-23: Approved reopen path for a rejected document (College Secretary or College Dean only)
+   */
+  async reopenDocument(req, res, next) {
+    try {
+      const reopened = await AccessControlService.reopenDocument(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({ document: reopened });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
    * PUT /api/documents/:id
    * PB-18 / REQ-SUB-7: Prevent editing while request is in process.
    * Only allowed when current_status === 'Returned'.
