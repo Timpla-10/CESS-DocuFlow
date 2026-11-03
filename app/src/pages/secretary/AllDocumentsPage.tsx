@@ -139,7 +139,7 @@ export function AllDocumentsPage() {
       return
     }
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a file smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a file smaller than ${MAX_FILE_MB} MB.`)
       e.target.value = ''
       return
     }
@@ -188,7 +188,7 @@ export function AllDocumentsPage() {
         requesterId: selectedRequester.id,
         typeId: selectedType.id,
         title: title.trim(),
-        description: description.trim(),
+        description: description.trim() || 'Walk-in physical document packet encoded by the College Secretary.',
         files: payloadFiles,
       })
 
@@ -243,7 +243,7 @@ export function AllDocumentsPage() {
     if (!file) return
     const sizeKb = Math.round(file.size / 1024)
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a template smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a template smaller than ${MAX_FILE_MB} MB.`)
       return
     }
     try {

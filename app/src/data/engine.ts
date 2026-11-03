@@ -11,7 +11,7 @@
  * Every function mutates the given `db` draft and returns it. Callers are
  * responsible for cloning (the mock API does this before each action).
  */
-import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel } from '../content/language'
+import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel, isRequester } from '../content/language'
 import { daysSince, plural } from '../lib/time'
 import type {
   Attachment,
@@ -28,7 +28,7 @@ import type {
   User,
 } from './types'
 
-export const MAX_FILE_MB = 10
+export const MAX_FILE_MB = 20
 export const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png']
 export const ACCEPTED_EXT = ['.pdf', '.jpg', '.jpeg', '.png']
 
@@ -201,8 +201,17 @@ export function submitRequest(
   at: string,
 ): DocRecord {
   const type = getType(db, input.typeId)
+  if (!isRequester(user.role)) {
+    throw new FriendlyError('Only students and faculty members can submit document requests.')
+  }
   const userAudience = user.role === 'student' ? 'student' : 'faculty'
   if (type.audience !== userAudience) throw new FriendlyError('This document type isn’t available for the selected requester role.')
+  if (!input.title || !input.title.trim()) {
+    throw new FriendlyError('Please enter a title or subject for your document request.')
+  }
+  if (!input.description || !input.description.trim()) {
+    throw new FriendlyError('Please enter a description or purpose for your document request.')
+  }
   validateFiles(type, input.files)
   const origin = user.origin ?? (user.role === 'ids_principal' || user.department.includes('Integrated Developmental School') ? 'IDS' : 'CESS')
   const id = nextId(db, 'd')
@@ -305,7 +314,7 @@ function toAttachment(db: Database, f: NewFile, revision: number, by: string, at
 
 export function validateFiles(type: DocumentType, files: NewFile[]) {
   for (const f of files) {
-    if (f.sizeKb > MAX_FILE_MB * 1024) throw new FriendlyError(MESSAGES.fileTooLarge(f.name))
+    if (f.sizeKb > MAX_FILE_MB * 1024) throw new FriendlyError(MESSAGES.fileTooLarge(f.name, MAX_FILE_MB))
     const lower = f.name.toLowerCase()
     if (!ACCEPTED_EXT.some((e) => lower.endsWith(e))) throw new FriendlyError(MESSAGES.fileWrongType(f.name))
   }

@@ -24,7 +24,7 @@ import { api, useDb } from '../../data/store'
 import type { Origin, PendingRegistration, Role, User, WhitelistEntry } from '../../data/types'
 import { formatDate } from '../../lib/time'
 
-const ALL_ROLES: Role[] = ['student', 'faculty', 'secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+const ALL_ROLES: Role[] = ['student', 'faculty', 'secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
 
 interface ParsedRow {
   idNumber: string

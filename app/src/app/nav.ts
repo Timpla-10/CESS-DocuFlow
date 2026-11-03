@@ -168,6 +168,7 @@ export function navFor(role: Role): NavSection[] {
       ]
     case 'chairperson':
     case 'ovcaa':
+    case 'vcaf':
     case 'chancellor':
       return [
         {
@@ -198,6 +199,7 @@ export function homeFor(role: Role): string {
     role === 'chairperson' ||
     role === 'ids_principal' ||
     role === 'ovcaa' ||
+    role === 'vcaf' ||
     role === 'chancellor' ||
     role === 'dean'
   )

@@ -19,6 +19,8 @@ export function ForReviewPage() {
       ? 'Department Workspace'
       : user.role === 'ovcaa'
       ? 'OVCAA Workspace'
+      : user.role === 'vcaf'
+      ? 'VCAF Workspace'
       : user.role === 'chancellor'
       ? 'Chancellor Workspace'
       : user.role === 'dean'

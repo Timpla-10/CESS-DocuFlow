@@ -1,6 +1,7 @@
 import {
   Bell,
   Building2,
+  CheckSquare,
   Clock,
   Edit3,
   FileText,
@@ -20,13 +21,13 @@ import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Badge, Button, Card, CardHeader, PageHeader } from '../../components/ui'
+import { Badge, Button, Card, CardHeader, PageHeader, cn } from '../../components/ui'
 import { OFFICE_LABEL } from '../../content/language'
 import { api, useDb } from '../../data/store'
 import type { DocumentType, ExternalOfficeItem, OfficeId, Requirement } from '../../data/types'
 
-const REVIEW_OFFICE_CHOICES: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
-const HIGHER_OFFICE_CHOICES: OfficeId[] = ['ovcaa', 'chancellor']
+const REVIEW_OFFICE_CHOICES: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
+const HIGHER_OFFICE_CHOICES: OfficeId[] = ['ovcaa', 'vcaf', 'chancellor']
 
 
 export function SettingsPage() {
@@ -241,11 +242,23 @@ export function SettingsPage() {
                       </p>
                     </td>
                     <td className="px-5 py-4 capitalize text-ink-600 font-medium">{t.audience}</td>
-                    <td className="max-w-[320px] px-5 py-4 text-xs text-ink-600">
-                      <div className="font-semibold text-ink-800">
-                        {t.requirements.filter((r) => r.required).length} required · {t.requirements.filter((r) => !r.required).length} optional
+                    <td className="max-w-[340px] px-5 py-4 text-xs text-ink-600">
+                      <div className="flex items-center gap-1.5 font-bold text-ink-900">
+                        <CheckSquare className="size-3.5 text-brand-600 shrink-0" />
+                        <span>Checklist: {t.requirements.filter((r) => r.required).length} required, {t.requirements.filter((r) => !r.required).length} optional</span>
                       </div>
-                      <div className="mt-1 truncate" title={`CESS: ${cessSteps}`}>
+                      <ul className="mt-1 space-y-0.5 text-2xs text-ink-600">
+                        {t.requirements.map((r) => (
+                          <li key={r.id} className="flex items-center gap-1.5 truncate" title={`${r.label} (${r.required ? 'Required' : 'Optional'})`}>
+                            <span className={cn('size-1.5 rounded-full shrink-0', r.required ? 'bg-brand-600' : 'bg-ink-300')} />
+                            <span className="truncate font-medium">{r.label}</span>
+                            <span className={cn('text-[10px] font-semibold px-1 rounded', r.required ? 'bg-brand-50 text-brand-700' : 'bg-ink-100 text-ink-500')}>
+                              {r.required ? 'Required' : 'Optional'}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-2 pt-1.5 border-t border-ink-100 truncate" title={`CESS: ${cessSteps}`}>
                         <span className="font-semibold text-brand-700">CESS:</span> {cessSteps}
                       </div>
                       <div className="mt-0.5 truncate" title={`IDS: ${idsSteps}`}>
@@ -786,6 +799,17 @@ export function SettingsPage() {
                     }}
                     placeholder="Where to get it (REQ-REQT-7), e.g., Registrar's Office, HRMO, or Download template above"
                     className="h-8 text-xs"
+                  />
+                  <Input
+                    type="text"
+                    value={req.why ?? ''}
+                    onChange={(e) => {
+                      const next = [...dtDraft.requirements]
+                      next[idx] = { ...req, why: e.target.value }
+                      setDtDraft({ ...dtDraft, requirements: next })
+                    }}
+                    placeholder="Purpose / Why it's needed (e.g. Official request approving offices sign)"
+                    className="h-8 text-xs text-ink-600"
                   />
                 </div>
               ))}

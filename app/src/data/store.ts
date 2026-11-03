@@ -34,12 +34,17 @@ function load(): Database {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Database
-      if (parsed.version === DB_VERSION || parsed.version === 12 || parsed.version === 11) {
+      if (parsed.version === DB_VERSION || parsed.version === 14 || parsed.version === 13 || parsed.version === 12 || parsed.version === 11) {
         parsed.version = DB_VERSION
         for (const u of parsed.users) {
           if (u.role === 'ids_principal' && !u.origin) {
             u.origin = 'IDS'
           }
+        }
+        if (!parsed.users.some((u) => u.role === 'vcaf')) {
+          const fresh = createSeed()
+          const vcafUser = fresh.users.find((u) => u.role === 'vcaf')
+          if (vcafUser) parsed.users.push(vcafUser)
         }
         return parsed
       }
@@ -107,14 +112,30 @@ async function mutate<T>(fn: (draft: Database, at: string) => T): Promise<T> {
 }
 
 export const api = {
-  async signIn(email: string, password: string, role?: Role): Promise<User> {
+  async signIn(email: string, password: string): Promise<User> {
     await wait(500)
     const cleanEmail = email.trim().toLowerCase()
-    let user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
-    if (role && (!user || user.role !== role)) {
-      user = db.users.find((u) => u.role === role && u.active) ?? user
+    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+      throw new FriendlyError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
     }
-    if (!user || password !== DEMO_PASSWORD) throw new FriendlyError(MESSAGES.signInFailed)
+    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
+    if (!user || password !== DEMO_PASSWORD) {
+      throw new FriendlyError(MESSAGES.signInFailed)
+    }
+    if (!user.active) throw new FriendlyError(MESSAGES.accountInactive)
+    return user
+  },
+
+  async signInWithUniversityGoogle(email: string): Promise<User> {
+    await wait(500)
+    const cleanEmail = email.trim().toLowerCase()
+    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+      throw new FriendlyError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
+    }
+    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
+    if (!user) {
+      throw new FriendlyError('No active university account was found for this Gmail address. Please register or contact the College Secretary.')
+    }
     if (!user.active) throw new FriendlyError(MESSAGES.accountInactive)
     return user
   },
@@ -122,7 +143,7 @@ export const api = {
   async requestPasswordReset(email: string): Promise<void> {
     await wait(600)
     if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(email.trim()))
-      throw new FriendlyError('Please enter your MSU at Naawan email address (it ends with @msunaawan.edu.ph).')
+      throw new FriendlyError('Please enter your official university Gmail address (ending with @msunaawan.edu.ph).')
   },
 
   submitRequest: (user: User, input: { typeId: string; title: string; description: string; files: engine.NewFile[] }) =>

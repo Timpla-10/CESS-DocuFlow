@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { navFor } from '../app/nav'
 import { useSession, useUser } from '../app/session'
-import { ROLE_LABEL } from '../content/language'
+import { ROLE_LABEL, formatRoleTitle } from '../content/language'
 import { myNotifications, unreadCount } from '../data/selectors'
 import { api, useDb } from '../data/store'
 import { timeAgo } from '../lib/time'
@@ -165,7 +165,7 @@ function Sidebar({
         {isExpanded ? (
           <div className="mx-4 mb-2 mt-2 rounded-xl bg-white/[0.09] p-3 ring-1 ring-inset ring-white/15">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-200/90">Signed in as</p>
-            <p className="mt-0.5 truncate text-sm font-bold">{ROLE_LABEL[user.role]}</p>
+            <p className="mt-0.5 truncate text-sm font-bold">{formatRoleTitle(user)}</p>
             <p className="truncate text-xs text-brand-200/80">{user.department}</p>
           </div>
         ) : (

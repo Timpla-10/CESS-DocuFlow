@@ -31,6 +31,7 @@ export function DashboardPage() {
   if (
     user.role === 'chairperson' ||
     user.role === 'ovcaa' ||
+    user.role === 'vcaf' ||
     user.role === 'chancellor' ||
     user.role === 'dean' ||
     user.role === 'ids_principal'
