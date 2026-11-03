@@ -20,6 +20,12 @@ const DOC_SELECT = `
       office_id,
       office_name,
       office_type
+    ),
+    user:action_by_user_id (
+      user_id,
+      first_name,
+      last_name,
+      university_email
     )
   )
 `;
@@ -195,6 +201,44 @@ function normalizeDoc(raw) {
 
   const statusLabel = STATUS_LABELS[current_status] || current_status;
 
+  // PB-26 / REQ-REC-4: Normalize each history milestone with actor, office, action, remarks, timestamp
+  const normalizedHistory = history.map((h) => {
+    const actorName = h.user
+      ? `${h.user.first_name || ''} ${h.user.last_name || ''}`.trim() || h.user.university_email
+      : null;
+    const officeName = h.office?.office_name || officeLookupById[h.action_office_id]?.office_name || null;
+    return {
+      history_id: h.history_id,
+      id: h.history_id,
+      document_id: h.document_id,
+      revision_no: Number(h.revision_no) || 1,
+      action_type: h.action_type,
+      action: h.action_type,
+      action_remarks: h.action_remarks || '',
+      remarks: h.action_remarks || '',
+      action_timestamp: h.action_timestamp,
+      timestamp: h.action_timestamp,
+      action_by_user_id: h.action_by_user_id,
+      actor_id: h.action_by_user_id,
+      actor_name: actorName,
+      actor: actorName,
+      actor_email: h.user?.university_email || null,
+      action_office_id: h.action_office_id,
+      office_id: h.action_office_id,
+      office_name: officeName,
+      office: officeName,
+    };
+  });
+
+  // PB-26 / REQ-TRK-2: Calculate office arrival timestamp (officeSince) & waiting duration (timeWaitingMs)
+  let officeSince = raw.submitted_at || null;
+  if (history.length > 0) {
+    const latestAction = history[history.length - 1];
+    officeSince = latestAction.action_timestamp || raw.submitted_at;
+  }
+  const officeSinceDate = officeSince ? new Date(officeSince) : new Date();
+  const timeWaitingMs = Math.max(0, Date.now() - officeSinceDate.getTime());
+
   return {
     ...raw,
     id: raw.document_id,
@@ -203,13 +247,17 @@ function normalizeDoc(raw) {
     current_office_id,
     current_revision_no,
     office,
+    officeSince,
+    timeWaitingMs,
     is_deleted,
     returnReason,
     returnInfo,
     rejectionReason,
     rejectionInfo,
     lastDecision,
-    document_history: history,
+    document_history: normalizedHistory,
+    history: normalizedHistory,
+    timeline: normalizedHistory,
     document_attachment: raw.document_attachment || [],
     attachments: raw.document_attachment || [],
   };
@@ -271,6 +319,8 @@ const DocumentModel = {
         ...cached,
         office: doc.office,
         current_office_id: doc.current_office_id,
+        officeSince: doc.officeSince,
+        timeWaitingMs: doc.timeWaitingMs,
         statusLabel: STATUS_LABELS[doc.current_status] || doc.statusLabel,
         returnReason: doc.returnReason,
         returnInfo: doc.returnInfo,
@@ -279,6 +329,8 @@ const DocumentModel = {
         lastDecision: doc.lastDecision,
         document_attachment: doc.document_attachment,
         document_history: doc.document_history,
+        history: doc.history,
+        timeline: doc.timeline,
         attachments: doc.attachments,
       };
     }
@@ -356,6 +408,9 @@ const DocumentModel = {
   },
 
   async addHistory(historyEntry) {
+    if (historyEntry.document_id) {
+      docCache.delete(historyEntry.document_id);
+    }
     const { data, error } = await supabase
       .from('document_history')
       .insert(historyEntry)

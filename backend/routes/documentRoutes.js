@@ -33,8 +33,21 @@ router.get('/:id', DocumentController.getDocument);
 // PB-24: Retrieve permitted actions for caller's office at current stage
 router.get('/:id/actions', DocumentController.getPermittedActions);
 
-// PB-19 / PB-22 / SRS 3.6: Processing history, return reason & versioned attachments
+// PB-19 / PB-22 / PB-26 / SRS 3.4 REQ-REC-4 & SRS 3.6: Processing history, return reason & versioned attachments
 router.get('/:id/history', DocumentController.getDocumentHistory);
+
+// PB-26 / SRS 3.4 REQ-REC-4: Processing history is immutable; ordinary users cannot edit or delete history
+router.all('/:id/history', (req, res, next) => {
+  if (req.method === 'GET') return next();
+  return res.status(405).json({
+    error: 'Method Not Allowed: Document processing history is immutable and cannot be edited or deleted.',
+  });
+});
+router.all('/:id/history/:historyId', (req, res) => {
+  return res.status(405).json({
+    error: 'Method Not Allowed: Document processing history is immutable and cannot be edited or deleted.',
+  });
+});
 
 // PB-25 / SRS 3.5: Inspect configured route, current step, and completed step history based on origin
 router.get('/:id/route', DocumentController.getDocumentRoute);

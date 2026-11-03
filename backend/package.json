@@ -7,7 +7,7 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "node tests/test-pb02-rbac.js && node tests/test-pb10-document-types.js && node tests/test-pb11-requirements.js && node tests/test-pb18-prevent-editing.js && node tests/test-pb19-resubmit-history.js && node tests/test-pb20-secretary-queue.js && node tests/test-pb22-return-request.js && node tests/test-pb23-reject-request.js && node tests/test-pb24-office-decision.js && node tests/test-pb25-cess-vs-ids-routes.js",
+    "test": "node tests/test-pb02-rbac.js && node tests/test-pb10-document-types.js && node tests/test-pb11-requirements.js && node tests/test-pb18-prevent-editing.js && node tests/test-pb19-resubmit-history.js && node tests/test-pb20-secretary-queue.js && node tests/test-pb22-return-request.js && node tests/test-pb23-reject-request.js && node tests/test-pb24-office-decision.js && node tests/test-pb25-cess-vs-ids-routes.js && node tests/test-pb26-timeline-history.js",
     "test:rbac": "node tests/test-pb02-rbac.js",
     "test:pb10": "node tests/test-pb10-document-types.js",
     "test:pb11": "node tests/test-pb11-requirements.js",
@@ -18,6 +18,7 @@
     "test:pb23": "node tests/test-pb23-reject-request.js",
     "test:pb24": "node tests/test-pb24-office-decision.js",
     "test:pb25": "node tests/test-pb25-cess-vs-ids-routes.js",
+    "test:pb26": "node tests/test-pb26-timeline-history.js",
     "test:db": "node tests/test-db.js",
     "start": "node server.js"
   },
