@@ -4,10 +4,13 @@ const UserModel = require('../models/userModel');
 const {
   ROLES,
   REVIEWER_ROLES,
+  FINAL_APPROVAL_ROLES,
   ROLE_TO_OFFICE_NAME,
   canViewDocument,
   canPerformAction,
   getRoleLabel,
+  getDefaultNextOfficeForEndorsement,
+  getPermittedActions,
 } = require('../utils/roles');
 
 const AccessControlService = {
@@ -112,7 +115,38 @@ const AccessControlService = {
       throw err;
     }
 
-    return doc;
+    const permitted = getPermittedActions(user, doc);
+    return {
+      ...doc,
+      permittedActions: permitted.actions,
+      permittedOptions: permitted.options,
+    };
+  },
+
+  /**
+   * PB-24: Retrieve only the permitted actions for the caller's office on a document
+   */
+  async getPermittedActionsForDocument(user, docId) {
+    const doc = await DocumentModel.findById(docId);
+    if (!doc) {
+      const err = new Error('Document record not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    const permitted = getPermittedActions(user, doc);
+    return {
+      documentId: doc.document_id,
+      controlNumber: doc.control_number,
+      status: doc.current_status,
+      statusLabel: doc.statusLabel,
+      currentOffice: doc.office?.office_name || null,
+      actorRole: user.role,
+      actorOffice: ROLE_TO_OFFICE_NAME[user.role] || getRoleLabel(user.role, user.origin),
+      isFinalAuthority: FINAL_APPROVAL_ROLES.includes(user.role),
+      permittedActions: permitted.actions,
+      options: permitted.options,
+    };
   },
 
   /**
@@ -321,19 +355,37 @@ const AccessControlService = {
   },
 
   /**
-   * PB-02, PB-22 & PB-23: Review decision — Endorse / Approve / Return / Reject (Reviewers only)
-   * PB-23 Acceptance Criteria:
-   * - Only permitted roles can reject at their stage
-   * - Reason required
-   * - Status/action recorded ('Rejected', action_type: 'Rejected')
-   * - Requester can see outcome (rejectionReason, rejectionInfo, Reject_Alert notification)
-   * - Normal routing stops unless approved reopen path exists
+   * PB-02, PB-22, PB-23 & PB-24: Review decision — Endorse / Approve / Return / Reject (Reviewers only)
+   * PB-24 Acceptance Criteria:
+   * - Only permitted actions appear and can be recorded by the reviewer's office
+   * - Action, remarks, actor and timestamp are saved in Document_History
+   * - System does not make decisions automatically (explicit human decision required)
+   * - Final authority remains with designated personnel (College Dean / Chancellor)
    */
   async reviewDocument(user, docId, payload = {}) {
     const doc = await DocumentModel.findById(docId);
     if (!doc) {
       const err = new Error('Document not found.');
       err.status = 404;
+      throw err;
+    }
+
+    // PB-24 Acceptance Criterion: System does not make decisions automatically
+    if (payload.auto === true || payload.automated === true || payload.systemGenerated === true) {
+      const err = new Error(
+        'Forbidden: The system does not make review decisions automatically. Decisions must be explicitly recorded by designated personnel.'
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    const providedAction = payload.action ?? payload.kind ?? payload.decision ?? '';
+    const rawAction = String(providedAction).trim().toLowerCase();
+    if (!rawAction) {
+      const err = new Error(
+        'Explicit office decision (endorse, approve, return, or reject) is required. The system does not make decisions automatically.'
+      );
+      err.status = 400;
       throw err;
     }
 
@@ -346,17 +398,17 @@ const AccessControlService = {
       throw err;
     }
 
-    // PB-23 Acceptance Criterion: Only permitted reviewing roles can act, and never on their own request
+    // PB-23 & PB-24 Acceptance Criterion: Only permitted reviewing roles can act, and never on their own request
     const requesterId = doc.requester_id || doc.requesterId;
     if (!REVIEWER_ROLES.includes(user.role) || requesterId === user.id) {
       const err = new Error(
-        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not permitted to review or reject this document.`
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not permitted to review or record office decisions on this document.`
       );
       err.status = 403;
       throw err;
     }
 
-    // PB-23 Acceptance Criterion: Only permitted roles can reject/review at their stage
+    // PB-23 & PB-24 Acceptance Criterion: Only permitted roles can act at their stage
     if (doc.current_status !== 'Under_Review' || !canPerformAction(user, 'review_document', doc)) {
       const currentStageLabel = doc.office?.office_name || doc.current_status;
       const err = new Error(
@@ -366,18 +418,57 @@ const AccessControlService = {
       throw err;
     }
 
-    const rawAction = String(payload.action || payload.kind || payload.decision || 'endorsed').toLowerCase();
-    const dbAction =
-      rawAction === 'return' || rawAction === 'returned'
-        ? 'Returned'
-        : rawAction === 'reject' ||
-          rawAction === 'rejected' ||
-          rawAction === 'disapprove' ||
-          rawAction === 'disapproved'
-        ? 'Rejected'
-        : rawAction === 'approve' || rawAction === 'approved'
-        ? 'Approved'
-        : 'Endorsed';
+    const actorOfficeName = ROLE_TO_OFFICE_NAME[user.role] || getRoleLabel(user.role, user.origin);
+    const permitted = getPermittedActions(user, doc);
+
+    let canonicalAction = null;
+    let dbAction = null;
+
+    if (rawAction === 'return' || rawAction === 'returned') {
+      canonicalAction = 'return';
+      dbAction = 'Returned';
+    } else if (
+      rawAction === 'reject' ||
+      rawAction === 'rejected' ||
+      rawAction === 'disapprove' ||
+      rawAction === 'disapproved'
+    ) {
+      canonicalAction = 'reject';
+      dbAction = 'Rejected';
+    } else if (rawAction === 'approve' || rawAction === 'approved') {
+      canonicalAction = 'approve';
+      dbAction = 'Approved';
+    } else if (rawAction === 'endorse_higher') {
+      canonicalAction = 'endorse_higher';
+      dbAction = 'Endorsed';
+    } else if (rawAction === 'endorse' || rawAction === 'endorsed') {
+      canonicalAction = 'endorse';
+      dbAction = 'Endorsed';
+    } else {
+      const err = new Error(
+        `Invalid office decision '${rawAction}'. Permitted actions for ${actorOfficeName}: ${permitted.actions.join(', ')}.`
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    // PB-24 Acceptance Criterion: Final authority remains with designated personnel (College Dean / Chancellor)
+    if (canonicalAction === 'approve' && !FINAL_APPROVAL_ROLES.includes(user.role)) {
+      const err = new Error(
+        `Forbidden: Office '${actorOfficeName}' (${getRoleLabel(user.role, user.origin)}) is an endorsing office and cannot record final approval. Final authority remains with designated personnel (College Dean or Chancellor).`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    // PB-24 Acceptance Criterion: Only permitted actions for this office are allowed
+    if (!permitted.actions.includes(canonicalAction)) {
+      const err = new Error(
+        `Forbidden: Action '${canonicalAction}' is not permitted for '${actorOfficeName}' at this stage. Permitted actions: ${permitted.actions.join(', ')}.`
+      );
+      err.status = 403;
+      throw err;
+    }
 
     const rawRemarks = payload.reason ?? payload.remarks ?? payload.reasons ?? '';
     const cleanRemarks = String(rawRemarks).trim();
@@ -400,9 +491,12 @@ const AccessControlService = {
       throw err;
     }
 
-    const targetOffice = payload.nextOfficeName || 'College Dean';
+    const defaultNextOffice =
+      dbAction === 'Approved'
+        ? 'College Secretary'
+        : getDefaultNextOfficeForEndorsement(user.role, doc.origin);
+    const targetOffice = payload.nextOfficeName || defaultNextOffice;
     const nextOfficeId = await UserModel.getOfficeIdByName(targetOffice);
-    const actorOfficeName = ROLE_TO_OFFICE_NAME[user.role] || getRoleLabel(user.role, user.origin);
     const actorOfficeId = await UserModel.getOfficeIdByName(actorOfficeName);
 
     const isTerminalOrReturn = dbAction === 'Returned' || dbAction === 'Rejected';
@@ -418,16 +512,32 @@ const AccessControlService = {
     });
 
     const finalRemarks =
-      cleanRemarks || `Reviewed by ${getRoleLabel(user.role, user.origin)}.`;
+      cleanRemarks ||
+      `${dbAction} by ${getRoleLabel(user.role, user.origin)} (${actorOfficeName}).`;
 
-    await DocumentModel.addHistory({
+    // PB-24 Acceptance Criterion: Action, remarks, actor and timestamp are saved in Document_History
+    const historyEntry = await DocumentModel.addHistory({
       document_id: docId,
       revision_no: doc.current_revision_no,
       action_by_user_id: user.id,
-      action_office_id: isTerminalOrReturn ? actorOfficeId : nextOfficeId,
+      action_office_id: actorOfficeId,
       action_type: dbAction,
       action_remarks: finalRemarks,
     });
+
+    const recordedDecision = {
+      historyId: historyEntry.history_id,
+      action: dbAction,
+      remarks: finalRemarks,
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      officeId: actorOfficeId,
+      office: actorOfficeName,
+      timestamp: historyEntry.action_timestamp,
+      revisionNo: doc.current_revision_no,
+      nextOffice: isTerminalOrReturn ? null : targetOffice,
+    };
 
     let notification = null;
     if (dbAction === 'Returned' || dbAction === 'Rejected') {
@@ -458,7 +568,14 @@ const AccessControlService = {
     }
 
     const updatedDoc = await DocumentModel.findById(docId);
-    return notification ? { ...updatedDoc, notification } : updatedDoc;
+    const nextPermitted = getPermittedActions(user, updatedDoc);
+    return {
+      ...updatedDoc,
+      permittedActions: nextPermitted.actions,
+      permittedOptions: nextPermitted.options,
+      recordedDecision,
+      ...(notification ? { notification } : {}),
+    };
   },
 
   /**

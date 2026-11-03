@@ -203,12 +203,32 @@ const DocumentController = {
 
   /**
    * GET /api/documents/:id
-   * PB-02: Enforces role-based view permission on single document record
+   * PB-02 & PB-24: Enforces role-based view permission and includes office-permitted actions
    */
   async getDocument(req, res, next) {
     try {
       const doc = await AccessControlService.getDocumentByIdForUser(req.user, req.params.id);
-      res.json({ document: doc });
+      res.json({
+        document: doc,
+        permittedActions: doc.permittedActions || [],
+        permittedOptions: doc.permittedOptions || [],
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/:id/actions
+   * PB-24: Returns only the permitted actions for the caller's office on this document
+   */
+  async getPermittedActions(req, res, next) {
+    try {
+      const result = await AccessControlService.getPermittedActionsForDocument(
+        req.user,
+        req.params.id
+      );
+      res.json(result);
     } catch (err) {
       next(err);
     }
@@ -248,8 +268,8 @@ const DocumentController = {
   },
 
   /**
-   * POST /api/documents/:id/review
-   * PB-02 & PB-22: Review decision — endorse/approve/return/reject (Assigned Reviewer only)
+   * POST /api/documents/:id/review & POST /api/documents/:id/decision
+   * PB-02, PB-22, PB-23 & PB-24: Record endorsement, approval, and office decision (Assigned Reviewer only)
    */
   async reviewDocument(req, res, next) {
     try {
@@ -260,6 +280,7 @@ const DocumentController = {
       );
       res.json({
         document: updated,
+        decision: updated?.recordedDecision || updated?.lastDecision || null,
         notification: updated?.notification || null,
       });
     } catch (err) {

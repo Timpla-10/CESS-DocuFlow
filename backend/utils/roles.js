@@ -1,6 +1,6 @@
 /**
- * PB-02: Role definitions, DB enum mappings (matching supabase/supabase_schema.sql),
- * office mappings, and role-based access rules.
+ * PB-02 & PB-24: Role definitions, DB enum mappings (matching supabase/supabase_schema.sql),
+ * office mappings, role-based access rules, and office-permitted actions.
  */
 
 const ROLES = {
@@ -24,6 +24,19 @@ const REVIEWER_ROLES = [
   ROLES.OVCAA,
   ROLES.VCAF,
   ROLES.CHANCELLOR,
+];
+
+/**
+ * PB-24: Final approval authority remains strictly with designated personnel
+ * (College Dean for college-level requests, Chancellor for higher university-level requests).
+ * Intermediate reviewers (Chairperson, IDS Principal, OVCAA, VCAF) may only endorse, return, or reject.
+ */
+const FINAL_APPROVAL_ROLES = [ROLES.DEAN, ROLES.CHANCELLOR];
+const ENDORSE_ONLY_REVIEWER_ROLES = [
+  ROLES.CHAIRPERSON,
+  ROLES.IDS_PRINCIPAL,
+  ROLES.OVCAA,
+  ROLES.VCAF,
 ];
 
 /** Maps app role + origin to supabase_schema.sql `user_role_name` enum */
@@ -190,11 +203,142 @@ function canPerformAction(user, action, doc = null) {
   }
 }
 
+/**
+ * PB-24: Resolves the default next office in the routing chain when an office endorses a document.
+ */
+function getDefaultNextOfficeForEndorsement(role, origin = 'CESS') {
+  switch (role) {
+    case ROLES.CHAIRPERSON:
+      return origin === 'IDS' ? 'IDS Principal' : 'College Dean';
+    case ROLES.IDS_PRINCIPAL:
+      return 'College Dean';
+    case ROLES.DEAN:
+      return 'OVCAA';
+    case ROLES.OVCAA:
+    case ROLES.VCAF:
+      return 'Office of the Chancellor';
+    default:
+      return 'College Secretary';
+  }
+}
+
+/**
+ * PB-24 Acceptance Criteria:
+ * - Only permitted actions appear for the reviewer's office at the current stage
+ * - Final authority remains with designated personnel (College Dean / Chancellor)
+ */
+function getPermittedActions(user, doc) {
+  if (!user || !user.active || !doc) {
+    return { actions: [], options: [] };
+  }
+
+  const status = doc.current_status;
+  const requesterId = doc.requester_id || doc.requesterId;
+
+  // Requester actions when document is Returned
+  if (REQUESTER_ROLES.includes(user.role) && requesterId === user.id) {
+    if (status === 'Returned') {
+      return {
+        actions: ['edit', 'resubmit'],
+        options: [
+          { action: 'edit', label: 'Edit Returned Request', requiresRemarks: false },
+          { action: 'resubmit', label: 'Resubmit Corrected Request', requiresRemarks: false },
+        ],
+      };
+    }
+    return { actions: [], options: [] };
+  }
+
+  // College Secretary actions
+  if (user.role === ROLES.SECRETARY) {
+    if (status === 'Submitted') {
+      const firstOffice = 'Department Chairperson';
+      return {
+        actions: ['complete', 'return', 'reject'],
+        options: [
+          { action: 'complete', label: 'Verify Complete & Route', nextOffice: firstOffice, requiresRemarks: false },
+          { action: 'return', label: 'Return for Revision', nextOffice: null, requiresRemarks: true },
+          { action: 'reject', label: 'Reject / Disapprove', nextOffice: null, requiresRemarks: true },
+        ],
+      };
+    }
+    if (status === 'Under_Review' && doc.office?.office_name === 'College Secretary') {
+      return {
+        actions: ['send_external', 'mark_ready'],
+        options: [
+          { action: 'send_external', label: 'Forward to External Office', requiresRemarks: false },
+          { action: 'mark_ready', label: 'Mark Ready for Release', requiresRemarks: false },
+        ],
+      };
+    }
+    if (status === 'Ready_for_Release') {
+      return {
+        actions: ['release'],
+        options: [
+          { action: 'release', label: 'Record Document Release', requiresRemarks: false },
+        ],
+      };
+    }
+    return { actions: [], options: [] };
+  }
+
+  // Reviewing Officer actions — only when document is 'Under_Review' AND routed to this reviewer's office
+  if (
+    REVIEWER_ROLES.includes(user.role) &&
+    status === 'Under_Review' &&
+    requesterId !== user.id &&
+    canViewDocument(user, doc)
+  ) {
+    const nextOffice = getDefaultNextOfficeForEndorsement(user.role, doc.origin);
+
+    // Intermediate offices (Chairperson, IDS Principal, OVCAA, VCAF) can ONLY endorse, return, or reject
+    if (ENDORSE_ONLY_REVIEWER_ROLES.includes(user.role)) {
+      return {
+        actions: ['endorse', 'return', 'reject'],
+        options: [
+          { action: 'endorse', label: `Endorse to ${nextOffice}`, nextOffice, requiresRemarks: false },
+          { action: 'return', label: 'Return for Revision', nextOffice: null, requiresRemarks: true },
+          { action: 'reject', label: 'Reject / Disapprove', nextOffice: null, requiresRemarks: true },
+        ],
+      };
+    }
+
+    // College Dean: Designated college-level final authority (can approve, or endorse to higher approval OVCAA/VCAF, return, reject)
+    if (user.role === ROLES.DEAN) {
+      return {
+        actions: ['approve', 'endorse', 'endorse_higher', 'return', 'reject'],
+        options: [
+          { action: 'approve', label: 'Approve (Final College Authority)', nextOffice: 'College Secretary', requiresRemarks: false },
+          { action: 'endorse_higher', label: 'Endorse for Higher Approval (OVCAA)', nextOffice: 'OVCAA', requiresRemarks: false },
+          { action: 'return', label: 'Return for Revision', nextOffice: null, requiresRemarks: true },
+          { action: 'reject', label: 'Reject / Disapprove', nextOffice: null, requiresRemarks: true },
+        ],
+      };
+    }
+
+    // Chancellor: Designated highest university-level final authority (can approve, return, reject; no further endorsement step)
+    if (user.role === ROLES.CHANCELLOR) {
+      return {
+        actions: ['approve', 'return', 'reject'],
+        options: [
+          { action: 'approve', label: 'Approve (Final University Authority)', nextOffice: 'College Secretary', requiresRemarks: false },
+          { action: 'return', label: 'Return for Revision', nextOffice: null, requiresRemarks: true },
+          { action: 'reject', label: 'Reject / Disapprove', nextOffice: null, requiresRemarks: true },
+        ],
+      };
+    }
+  }
+
+  return { actions: [], options: [] };
+}
+
 module.exports = {
   ROLES,
   ALL_ROLES,
   REQUESTER_ROLES,
   REVIEWER_ROLES,
+  FINAL_APPROVAL_ROLES,
+  ENDORSE_ONLY_REVIEWER_ROLES,
   ROLE_OFFICE,
   ROLE_TO_OFFICE_NAME,
   toDbRoleName,
@@ -203,4 +347,6 @@ module.exports = {
   isInstitutionalEmail,
   canViewDocument,
   canPerformAction,
+  getDefaultNextOfficeForEndorsement,
+  getPermittedActions,
 };

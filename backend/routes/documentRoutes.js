@@ -27,8 +27,11 @@ router.get('/preferences', DocumentController.getNotificationPreference);
 router.put('/preferences', DocumentController.updateNotificationPreference);
 router.get('/notifications', DocumentController.getNotifications);
 
-// PB-02: Role-verified single document retrieval
+// PB-02 & PB-24: Role-verified single document retrieval with permitted office actions
 router.get('/:id', DocumentController.getDocument);
+
+// PB-24: Retrieve permitted actions for caller's office at current stage
+router.get('/:id/actions', DocumentController.getPermittedActions);
 
 // PB-19 / PB-22 / SRS 3.6: Processing history, return reason & versioned attachments
 router.get('/:id/history', DocumentController.getDocumentHistory);
@@ -39,8 +42,9 @@ router.post('/', requireAction('submit_document'), DocumentController.submitDocu
 // PB-02 & PB-22: Completeness check (Secretary only)
 router.post('/:id/check', requireAction('check_requirements'), DocumentController.checkRequirements);
 
-// PB-02 & PB-22: Review decision (Reviewers only: Chairperson, IDS Principal, Dean, OVCAA, VCAF, Chancellor)
+// PB-02, PB-22, PB-23 & PB-24: Record endorsement, approval, and office decision (Reviewers only)
 router.post('/:id/review', DocumentController.reviewDocument);
+router.post('/:id/decision', DocumentController.reviewDocument);
 
 // PB-22: Dedicated return endpoint with required reason (Assigned Reviewer or Secretary)
 router.post('/:id/return', DocumentController.returnDocument);

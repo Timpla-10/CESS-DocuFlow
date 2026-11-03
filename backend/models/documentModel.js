@@ -52,6 +52,41 @@ const STATUS_LABELS = {
 
 const docCache = new Map();
 const prefCache = new Map();
+let officeLookupByName = {};
+let officeLookupById = {};
+
+async function ensureOfficesLoaded() {
+  if (Object.keys(officeLookupByName).length > 0) return;
+  const { data } = await supabase.from('office').select('office_id, office_name, office_type');
+  if (Array.isArray(data)) {
+    for (const o of data) {
+      officeLookupByName[o.office_name] = o;
+      officeLookupById[o.office_id] = o;
+    }
+  }
+}
+
+function resolveNextOfficeFromDecision(actionType, actingOfficeName, origin = 'CESS') {
+  if (actionType === 'Approved') {
+    return officeLookupByName['College Secretary'] || null;
+  }
+  if (actionType === 'Endorsed') {
+    if (actingOfficeName === 'Department Chairperson') {
+      const targetName = origin === 'IDS' ? 'IDS Principal' : 'College Dean';
+      return officeLookupByName[targetName] || null;
+    }
+    if (actingOfficeName === 'IDS Principal') {
+      return officeLookupByName['College Dean'] || null;
+    }
+    if (actingOfficeName === 'College Dean') {
+      return officeLookupByName['OVCAA'] || null;
+    }
+    if (actingOfficeName === 'OVCAA' || actingOfficeName === 'VCAF') {
+      return officeLookupByName['Office of the Chancellor'] || null;
+    }
+  }
+  return null;
+}
 
 function normalizeDoc(raw) {
   if (!raw) return null;
@@ -75,6 +110,7 @@ function normalizeDoc(raw) {
   let returnInfo = null;
   let rejectionReason = null;
   let rejectionInfo = null;
+  let lastDecision = null;
 
   if (history.length > 0) {
     const latest = history[history.length - 1];
@@ -87,9 +123,33 @@ function normalizeDoc(raw) {
     if (latest.action_type === 'Returned' || latest.action_type === 'Rejected') {
       current_office_id = null;
       office = null;
+    } else if (latest.action_type === 'Endorsed' || latest.action_type === 'Approved') {
+      const actingName = latest.office?.office_name || officeLookupById[latest.action_office_id]?.office_name;
+      const nextOfficeObj = resolveNextOfficeFromDecision(latest.action_type, actingName, raw.origin);
+      if (nextOfficeObj) {
+        current_office_id = nextOfficeObj.office_id;
+        office = nextOfficeObj;
+      } else if (latest.action_office_id) {
+        current_office_id = latest.action_office_id;
+        office = latest.office || office;
+      }
     } else if (latest.action_office_id) {
       current_office_id = latest.action_office_id;
       office = latest.office || office;
+    }
+
+    const decisionTypes = ['Endorsed', 'Approved', 'Returned', 'Rejected'];
+    const latestDecisionEntry = [...history].reverse().find((h) => decisionTypes.includes(h.action_type));
+    if (latestDecisionEntry) {
+      lastDecision = {
+        action: latestDecisionEntry.action_type,
+        remarks: latestDecisionEntry.action_remarks || '',
+        actorId: latestDecisionEntry.action_by_user_id || null,
+        office: latestDecisionEntry.office?.office_name || officeLookupById[latestDecisionEntry.action_office_id]?.office_name || 'Reviewing Office',
+        officeId: latestDecisionEntry.action_office_id || null,
+        timestamp: latestDecisionEntry.action_timestamp,
+        revisionNo: latestDecisionEntry.revision_no,
+      };
     }
 
     if (current_status === 'Returned') {
@@ -125,6 +185,14 @@ function normalizeDoc(raw) {
     }
   }
 
+  const cached = docCache.get(raw.document_id);
+  if (cached && cached.current_office_id !== undefined && current_status === 'Under_Review') {
+    current_office_id = cached.current_office_id;
+    if (cached.current_office_id && officeLookupById[cached.current_office_id]) {
+      office = officeLookupById[cached.current_office_id];
+    }
+  }
+
   const statusLabel = STATUS_LABELS[current_status] || current_status;
 
   return {
@@ -140,6 +208,7 @@ function normalizeDoc(raw) {
     returnInfo,
     rejectionReason,
     rejectionInfo,
+    lastDecision,
     document_history: history,
     document_attachment: raw.document_attachment || [],
     attachments: raw.document_attachment || [],
@@ -175,6 +244,7 @@ function mapPreferenceRow(row) {
 
 const DocumentModel = {
   async findAll() {
+    await ensureOfficesLoaded();
     const { data, error } = await supabase
       .from('document_request')
       .select(DOC_SELECT)
@@ -185,6 +255,7 @@ const DocumentModel = {
   },
 
   async findById(id) {
+    await ensureOfficesLoaded();
     const { data, error } = await supabase
       .from('document_request')
       .select(DOC_SELECT)
@@ -198,11 +269,14 @@ const DocumentModel = {
       return {
         ...doc,
         ...cached,
+        office: doc.office,
+        current_office_id: doc.current_office_id,
         statusLabel: STATUS_LABELS[doc.current_status] || doc.statusLabel,
         returnReason: doc.returnReason,
         returnInfo: doc.returnInfo,
         rejectionReason: doc.rejectionReason,
         rejectionInfo: doc.rejectionInfo,
+        lastDecision: doc.lastDecision,
         document_attachment: doc.document_attachment,
         document_history: doc.document_history,
         attachments: doc.attachments,
@@ -212,6 +286,7 @@ const DocumentModel = {
   },
 
   async findByRequester(requesterId) {
+    await ensureOfficesLoaded();
     const { data, error } = await supabase
       .from('document_request')
       .select(DOC_SELECT)
