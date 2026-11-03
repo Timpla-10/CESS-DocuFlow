@@ -36,6 +36,9 @@ router.get('/:id/actions', DocumentController.getPermittedActions);
 // PB-19 / PB-22 / SRS 3.6: Processing history, return reason & versioned attachments
 router.get('/:id/history', DocumentController.getDocumentHistory);
 
+// PB-25 / SRS 3.5: Inspect configured route, current step, and completed step history based on origin
+router.get('/:id/route', DocumentController.getDocumentRoute);
+
 // PB-02 & PB-10: Submit document (Requesters only: Student, CESS Faculty, IDS Faculty)
 router.post('/', requireAction('submit_document'), DocumentController.submitDocument);
 

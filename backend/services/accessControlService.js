@@ -9,7 +9,9 @@ const {
   canViewDocument,
   canPerformAction,
   getRoleLabel,
+  getApprovedRoute,
   getDefaultNextOfficeForEndorsement,
+  validateRouteTransition,
   getPermittedActions,
 } = require('../utils/roles');
 
@@ -304,7 +306,16 @@ const AccessControlService = {
     }
 
     const isTerminalOrReturn = isReturn || isReject;
-    const targetOffice = payload.nextOfficeName || 'Department Chairperson';
+    if (!isTerminalOrReturn) {
+      const routeCheck = validateRouteTransition(doc, user.role, 'complete', payload.nextOfficeName);
+      if (!routeCheck.valid) {
+        const err = new Error(routeCheck.error);
+        err.status = routeCheck.status || 400;
+        throw err;
+      }
+    }
+
+    const targetOffice = isTerminalOrReturn ? null : payload.nextOfficeName || 'Department Chairperson';
     const nextOfficeId = isTerminalOrReturn ? null : await UserModel.getOfficeIdByName(targetOffice);
     const secOfficeId = await UserModel.getOfficeIdByName('College Secretary');
 
@@ -491,15 +502,32 @@ const AccessControlService = {
       throw err;
     }
 
+    // PB-25 / SRS 3.5: Fetch requester profile to handle self-submission exception
+    const requesterUser = doc.requester_id ? await UserModel.findById(doc.requester_id) : null;
+    const requesterRole = requesterUser?.role || null;
+
+    // PB-25 Acceptance Criterion: Invalid transitions are blocked (REQ-ROUTE-7) & IDS Principal required (REQ-ROUTE-3)
+    const transitionValidation = validateRouteTransition(
+      doc,
+      user.role,
+      canonicalAction,
+      payload.nextOfficeName,
+      requesterRole
+    );
+    if (!transitionValidation.valid) {
+      const err = new Error(transitionValidation.error);
+      err.status = transitionValidation.status || 400;
+      throw err;
+    }
+
+    const isTerminalOrReturn = dbAction === 'Returned' || dbAction === 'Rejected';
     const defaultNextOffice =
       dbAction === 'Approved'
         ? 'College Secretary'
-        : getDefaultNextOfficeForEndorsement(user.role, doc.origin);
-    const targetOffice = payload.nextOfficeName || defaultNextOffice;
-    const nextOfficeId = await UserModel.getOfficeIdByName(targetOffice);
+        : getDefaultNextOfficeForEndorsement(user.role, doc.origin, requesterRole, canonicalAction);
+    const targetOffice = isTerminalOrReturn ? null : (transitionValidation.targetOffice || payload.nextOfficeName || defaultNextOffice);
+    const nextOfficeId = isTerminalOrReturn ? null : await UserModel.getOfficeIdByName(targetOffice);
     const actorOfficeId = await UserModel.getOfficeIdByName(actorOfficeName);
-
-    const isTerminalOrReturn = dbAction === 'Returned' || dbAction === 'Rejected';
 
     await DocumentModel.update(docId, {
       current_status:
@@ -807,6 +835,88 @@ const AccessControlService = {
       history: doc.document_history || [],
       attachments: doc.document_attachment || doc.attachments || [],
       notifications,
+    };
+  },
+
+  /**
+   * PB-25 / SRS 3.5: Inspect configured route, current step, and completed step history based on origin
+   */
+  async getDocumentRoute(user, docId) {
+    const doc = await this.getDocumentByIdForUser(user, docId);
+    if (!doc) {
+      const err = new Error('Document not found or access denied.');
+      err.status = 404;
+      throw err;
+    }
+
+    const requesterUser = doc.requester_id ? await UserModel.findById(doc.requester_id) : null;
+    const requesterRole = requesterUser?.role || null;
+    const baseRoute = getApprovedRoute(doc.origin, doc.doc_type_id, requesterRole);
+
+    // Check if higher approval (OVCAA / Chancellor) was invoked in history
+    const history = doc.document_history || [];
+    const hasHigherApproval = history.some(
+      (h) =>
+        h.action_remarks?.toLowerCase().includes('higher approval') ||
+        h.action_remarks?.toLowerCase().includes('ovcaa') ||
+        h.office?.office_name === 'OVCAA' ||
+        h.office?.office_name === 'Office of the Chancellor'
+    );
+
+    const fullRoute = [...baseRoute];
+    if (hasHigherApproval) {
+      const releaseIdx = fullRoute.lastIndexOf('College Secretary');
+      if (releaseIdx !== -1 && !fullRoute.includes('OVCAA')) {
+        fullRoute.splice(releaseIdx, 0, 'OVCAA', 'Office of the Chancellor');
+      }
+    }
+
+    // Determine current step index
+    let currentStepIndex = 0;
+    if (doc.current_status === 'Submitted') {
+      currentStepIndex = 0; // Secretary completeness check
+    } else if (doc.current_status === 'Ready_for_Release' || doc.current_status === 'Released') {
+      currentStepIndex = fullRoute.length - 1;
+    } else if (doc.office?.office_name) {
+      const idx = fullRoute.findIndex(
+        (officeName, i) => i > 0 && officeName === doc.office.office_name
+      );
+      currentStepIndex = idx !== -1 ? idx : 1;
+    }
+
+    const steps = fullRoute.map((officeName, idx) => {
+      let stepStatus = 'pending';
+      if (idx < currentStepIndex) {
+        stepStatus = 'completed';
+      } else if (idx === currentStepIndex) {
+        stepStatus =
+          doc.current_status === 'Returned'
+            ? 'returned'
+            : doc.current_status === 'Rejected'
+            ? 'rejected'
+            : 'current';
+      }
+
+      return {
+        stepOrder: idx + 1,
+        office: officeName,
+        status: stepStatus,
+      };
+    });
+
+    return {
+      documentId: doc.document_id,
+      controlNumber: doc.control_number,
+      title: doc.title,
+      origin: doc.origin,
+      currentStatus: doc.current_status,
+      currentOffice: doc.office?.office_name || null,
+      route: fullRoute,
+      steps,
+      currentStepIndex,
+      totalSteps: fullRoute.length,
+      isIdsRoute: doc.origin === 'IDS',
+      requiresIdsPrincipal: doc.origin === 'IDS' && requesterRole !== ROLES.IDS_PRINCIPAL,
     };
   },
 

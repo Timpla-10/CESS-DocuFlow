@@ -398,6 +398,22 @@ const DocumentController = {
       next(err);
     }
   },
+
+  /**
+   * GET /api/documents/:id/route
+   * PB-25 / SRS 3.5: Inspect configured route, current step, and completed steps based on origin
+   */
+  async getDocumentRoute(req, res, next) {
+    try {
+      const routeData = await AccessControlService.getDocumentRoute(
+        req.user,
+        req.params.id
+      );
+      res.json(routeData);
+    } catch (err) {
+      next(err);
+    }
+  },
 };
 
 module.exports = DocumentController;
