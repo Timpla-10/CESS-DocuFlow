@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authRoutes = require('./authRoutes');
 const documentRoutes = require('./documentRoutes');
+const workflowRouteRoutes = require('./workflowRouteRoutes');
 const DocumentController = require('../controllers/documentController');
 const { verifyUser, requireAction } = require('../middleware/authMiddleware');
 
@@ -28,5 +29,7 @@ router.delete('/document-types/:id/requirements/:formId', verifyUser, requireAct
 
 router.use('/auth', authRoutes);
 router.use('/documents', documentRoutes);
+router.use('/workflow/routes', workflowRouteRoutes);
+router.use('/routes', workflowRouteRoutes);
 
 module.exports = router;

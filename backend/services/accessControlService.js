@@ -205,6 +205,10 @@ const AccessControlService = {
       current_office_id: currentOfficeId,
     });
 
+    // PB-45: Snapshot active workflow route onto created document for in-flight continuity
+    const WorkflowRouteModel = require('../models/workflowRouteModel');
+    WorkflowRouteModel.assignRouteToDocument(created, user.role);
+
     await DocumentModel.addHistory({
       document_id: created.document_id,
       revision_no: 1,
@@ -507,11 +511,12 @@ const AccessControlService = {
     const requesterRole = requesterUser?.role || null;
 
     // PB-25 Acceptance Criterion: Invalid transitions are blocked (REQ-ROUTE-7) & IDS Principal required (REQ-ROUTE-3)
+    const requestedTargetOffice = payload.nextOfficeName || payload.targetOfficeName || payload.targetOffice;
     const transitionValidation = validateRouteTransition(
       doc,
       user.role,
       canonicalAction,
-      payload.nextOfficeName,
+      requestedTargetOffice,
       requesterRole
     );
     if (!transitionValidation.valid) {
@@ -524,8 +529,8 @@ const AccessControlService = {
     const defaultNextOffice =
       dbAction === 'Approved'
         ? 'College Secretary'
-        : getDefaultNextOfficeForEndorsement(user.role, doc.origin, requesterRole, canonicalAction);
-    const targetOffice = isTerminalOrReturn ? null : (transitionValidation.targetOffice || payload.nextOfficeName || defaultNextOffice);
+        : getDefaultNextOfficeForEndorsement(user.role, doc.origin, requesterRole, canonicalAction, doc);
+    const targetOffice = isTerminalOrReturn ? null : (transitionValidation.targetOffice || requestedTargetOffice || defaultNextOffice);
     const nextOfficeId = isTerminalOrReturn ? null : await UserModel.getOfficeIdByName(targetOffice);
     const actorOfficeId = await UserModel.getOfficeIdByName(actorOfficeName);
 
@@ -857,7 +862,7 @@ const AccessControlService = {
 
     const requesterUser = doc.requester_id ? await UserModel.findById(doc.requester_id) : null;
     const requesterRole = requesterUser?.role || null;
-    const baseRoute = getApprovedRoute(doc.origin, doc.doc_type_id, requesterRole);
+    const baseRoute = getApprovedRoute(doc.origin, doc.doc_type_id, requesterRole, doc);
 
     // Check if higher approval (OVCAA / Chancellor) was invoked in history
     const history = doc.document_history || [];

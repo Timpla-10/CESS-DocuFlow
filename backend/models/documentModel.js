@@ -72,11 +72,29 @@ async function ensureOfficesLoaded() {
   }
 }
 
-function resolveNextOfficeFromDecision(actionType, actingOfficeName, origin = 'CESS') {
+function resolveNextOfficeFromDecision(actionType, actingOfficeName, origin = 'CESS', documentId = null) {
   if (actionType === 'Approved') {
     return officeLookupByName['College Secretary'] || null;
   }
   if (actionType === 'Endorsed') {
+    if (documentId) {
+      try {
+        const WorkflowRouteModel = require('./workflowRouteModel');
+        const route = WorkflowRouteModel.getRouteForDocument({ document_id: documentId, origin });
+        if (Array.isArray(route) && route.length > 0) {
+          const normActing = WorkflowRouteModel.normalizeOfficeName(actingOfficeName);
+          const idx = route.findIndex((o) => o === normActing);
+          if (idx !== -1 && idx < route.length - 1) {
+            const nextName = route[idx + 1];
+            if (officeLookupByName[nextName]) {
+              return officeLookupByName[nextName];
+            }
+          }
+        }
+      } catch (e) {
+        // Fallback to static sequence below
+      }
+    }
     if (actingOfficeName === 'Department Chairperson') {
       const targetName = origin === 'IDS' ? 'IDS Principal' : 'College Dean';
       return officeLookupByName[targetName] || null;
@@ -131,7 +149,7 @@ function normalizeDoc(raw) {
       office = null;
     } else if (latest.action_type === 'Endorsed' || latest.action_type === 'Approved') {
       const actingName = latest.office?.office_name || officeLookupById[latest.action_office_id]?.office_name;
-      const nextOfficeObj = resolveNextOfficeFromDecision(latest.action_type, actingName, raw.origin);
+      const nextOfficeObj = resolveNextOfficeFromDecision(latest.action_type, actingName, raw.origin, raw.document_id);
       if (nextOfficeObj) {
         current_office_id = nextOfficeObj.office_id;
         office = nextOfficeObj;
@@ -314,14 +332,17 @@ const DocumentModel = {
     const cached = docCache.get(id);
     if (!doc || doc.is_deleted) return null;
     if (cached) {
+      const officeId = cached.current_office_id !== undefined ? cached.current_office_id : doc.current_office_id;
+      const officeObj = (officeId && officeLookupById[officeId]) || cached.office || doc.office;
       return {
         ...doc,
         ...cached,
-        office: doc.office,
-        current_office_id: doc.current_office_id,
+        current_status: cached.current_status || doc.current_status,
+        statusLabel: STATUS_LABELS[cached.current_status || doc.current_status] || doc.statusLabel,
+        current_office_id: officeId,
+        office: officeObj,
         officeSince: doc.officeSince,
         timeWaitingMs: doc.timeWaitingMs,
-        statusLabel: STATUS_LABELS[doc.current_status] || doc.statusLabel,
         returnReason: doc.returnReason,
         returnInfo: doc.returnInfo,
         rejectionReason: doc.rejectionReason,
@@ -409,7 +430,12 @@ const DocumentModel = {
 
   async addHistory(historyEntry) {
     if (historyEntry.document_id) {
-      docCache.delete(historyEntry.document_id);
+      const cached = docCache.get(historyEntry.document_id);
+      if (cached) {
+        delete cached.document_history;
+        delete cached.history;
+        delete cached.timeline;
+      }
     }
     const { data, error } = await supabase
       .from('document_history')

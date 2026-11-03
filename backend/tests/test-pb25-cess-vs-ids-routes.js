@@ -157,7 +157,7 @@ async function runTests() {
       method: 'POST',
       headers: cessFacultyHeaders,
       body: JSON.stringify({
-        docTypeId: 5, // Faculty Leave
+        docTypeId: 4, // Faculty Leave (CESS)
         title: 'CESS Research Faculty Leave Request',
         description: 'Leave recommendation form for CESS faculty conference.',
         origin: 'CESS',
@@ -239,7 +239,6 @@ async function runTests() {
       body: JSON.stringify({
         docTypeId: 5, // IDS Travel Order
         title: 'IDS Regional Science Fair Travel Order',
-        description: 'Travel order request for chaperoning IDS students at science fair.',
         origin: 'IDS',
       }),
     });
@@ -328,7 +327,7 @@ async function runTests() {
       method: 'POST',
       headers: idsFacultyHeaders,
       body: JSON.stringify({
-        docTypeId: 5,
+        docTypeId: 5, // IDS Travel Order
         title: 'IDS Equipment Requisition Bypass Attempt',
         description: 'Testing bypass prevention.',
         origin: 'IDS',
@@ -375,7 +374,7 @@ async function runTests() {
       method: 'POST',
       headers: cessFacultyHeaders,
       body: JSON.stringify({
-        docTypeId: 5,
+        docTypeId: 4, // Faculty Leave (CESS)
         title: 'CESS Misrouting Test Request',
         description: 'Testing invalid routing of CESS document to IDS Principal.',
         origin: 'CESS',

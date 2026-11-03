@@ -226,11 +226,32 @@ const HIGHER_APPROVAL_OFFICES = [
   'Office of the Chancellor',
 ];
 
+let WorkflowRouteModel = null;
+function getWorkflowRouteModel() {
+  if (!WorkflowRouteModel) {
+    try {
+      WorkflowRouteModel = require('../models/workflowRouteModel');
+    } catch (e) {
+      // Lazy load fallback
+    }
+  }
+  return WorkflowRouteModel;
+}
+
 /**
  * Returns the approved route array of office names based on origin and requester role.
  * Includes the self-submission exception where IDS Principal requests bypass Principal review.
+ * PB-45: Supports document snapshot routes and dynamically configured active routes.
  */
-function getApprovedRoute(origin = 'CESS', docType = null, requesterRole = null) {
+function getApprovedRoute(origin = 'CESS', docType = null, requesterRole = null, doc = null) {
+  const model = getWorkflowRouteModel();
+  if (model) {
+    if (doc) {
+      return model.getRouteForDocument(doc, requesterRole);
+    }
+    return model.getActiveRoute(origin, docType, requesterRole);
+  }
+
   const normOrigin = String(origin || 'CESS').toUpperCase();
   if (normOrigin === 'IDS') {
     if (requesterRole === ROLES.IDS_PRINCIPAL) {
@@ -242,9 +263,25 @@ function getApprovedRoute(origin = 'CESS', docType = null, requesterRole = null)
 }
 
 /**
- * PB-24 & PB-25: Resolves the default next office in the routing chain when an office endorses a document.
+ * PB-24, PB-25 & PB-45: Resolves the default next office in the routing chain when an office endorses a document.
  */
-function getDefaultNextOfficeForEndorsement(role, origin = 'CESS', requesterRole = null, action = 'endorse') {
+function getDefaultNextOfficeForEndorsement(role, origin = 'CESS', requesterRole = null, action = 'endorse', doc = null) {
+  if (action === 'approve') {
+    return 'College Secretary';
+  }
+
+  const model = getWorkflowRouteModel();
+  if (model && doc) {
+    const route = model.getRouteForDocument(doc, requesterRole);
+    const actorOffice = ROLE_TO_OFFICE_NAME[role];
+    if (actorOffice && route && route.length > 0) {
+      const idx = route.findIndex((o) => o === actorOffice);
+      if (idx !== -1 && idx + 1 < route.length) {
+        return route[idx + 1];
+      }
+    }
+  }
+
   switch (role) {
     case ROLES.SECRETARY:
       return 'Department Chairperson';
@@ -277,6 +314,7 @@ function validateRouteTransition(doc, actorRole, action, targetOfficeName, reque
 
   const normAction = String(action || '').toLowerCase();
   const origin = String(doc.origin || 'CESS').toUpperCase();
+  const assignedRoute = getApprovedRoute(origin, doc?.doc_type_id, requesterRole, doc);
 
   // Returns and rejections halt forwarding or transition to terminal states; no next office handoff.
   if (normAction === 'return' || normAction === 'reject') {
@@ -292,7 +330,7 @@ function validateRouteTransition(doc, actorRole, action, targetOfficeName, reque
         error: 'Forbidden: Only the College Secretary can verify and route submitted requests.',
       };
     }
-    const defaultInitialOffice = 'Department Chairperson';
+    const defaultInitialOffice = (assignedRoute && assignedRoute.length > 1) ? assignedRoute[1] : 'Department Chairperson';
     if (targetOfficeName && targetOfficeName !== defaultInitialOffice) {
       return {
         valid: false,
@@ -331,18 +369,27 @@ function validateRouteTransition(doc, actorRole, action, targetOfficeName, reque
           }
           return { valid: true, targetOffice: 'College Dean' };
         } else {
-          // Mandatory intermediate review: Chairperson MUST route to IDS Principal
-          if (targetOfficeName && targetOfficeName !== 'IDS Principal') {
+          // Mandatory intermediate review: Chairperson MUST route to next in route (typically IDS Principal)
+          const chairIdx = assignedRoute.indexOf('Department Chairperson');
+          const expectedNext = (chairIdx !== -1 && chairIdx + 1 < assignedRoute.length) ? assignedRoute[chairIdx + 1] : 'IDS Principal';
+          if (targetOfficeName && targetOfficeName !== expectedNext) {
+            if (targetOfficeName === 'College Dean' && expectedNext === 'IDS Principal') {
+              return {
+                valid: false,
+                status: 400,
+                error: 'Invalid route sequence. IDS documents must be reviewed by the IDS Principal prior to College Dean review.',
+              };
+            }
             return {
               valid: false,
               status: 400,
-              error: 'Invalid route sequence. IDS documents must be reviewed by the IDS Principal prior to College Dean review.',
+              error: `Invalid route sequence. Department Chairperson endorsements for IDS documents must route to ${expectedNext} (attempted: '${targetOfficeName}').`,
             };
           }
-          return { valid: true, targetOffice: 'IDS Principal' };
+          return { valid: true, targetOffice: expectedNext };
         }
       } else {
-        // CESS origin: MUST NOT route to IDS Principal, MUST route to College Dean
+        // CESS origin: MUST NOT route to IDS Principal
         if (targetOfficeName === 'IDS Principal') {
           return {
             valid: false,
@@ -350,14 +397,16 @@ function validateRouteTransition(doc, actorRole, action, targetOfficeName, reque
             error: 'Invalid route sequence. CESS documents do not route through the IDS Principal.',
           };
         }
-        if (targetOfficeName && targetOfficeName !== 'College Dean') {
+        const chairIdx = assignedRoute.indexOf('Department Chairperson');
+        const expectedNext = (chairIdx !== -1 && chairIdx + 1 < assignedRoute.length) ? assignedRoute[chairIdx + 1] : 'College Dean';
+        if (targetOfficeName && targetOfficeName !== expectedNext) {
           return {
             valid: false,
             status: 400,
-            error: `Invalid route sequence. Department Chairperson endorsements for CESS documents must route to the College Dean (attempted: '${targetOfficeName}').`,
+            error: `Invalid route sequence. Department Chairperson endorsements for CESS documents must route to the ${expectedNext} (attempted: '${targetOfficeName}').`,
           };
         }
-        return { valid: true, targetOffice: 'College Dean' };
+        return { valid: true, targetOffice: expectedNext };
       }
     }
 
@@ -370,14 +419,16 @@ function validateRouteTransition(doc, actorRole, action, targetOfficeName, reque
           error: 'Forbidden: IDS Principal review is strictly reserved for documents originating from IDS.',
         };
       }
-      if (targetOfficeName && targetOfficeName !== 'College Dean') {
+      const prinIdx = assignedRoute.indexOf('IDS Principal');
+      const expectedNext = (prinIdx !== -1 && prinIdx + 1 < assignedRoute.length) ? assignedRoute[prinIdx + 1] : 'College Dean';
+      if (targetOfficeName && targetOfficeName !== expectedNext) {
         return {
           valid: false,
           status: 400,
-          error: `Invalid route sequence. IDS Principal endorsements must route to the College Dean (attempted: '${targetOfficeName}').`,
+          error: `Invalid route sequence. IDS Principal endorsements must route to the ${expectedNext} (attempted: '${targetOfficeName}').`,
         };
       }
-      return { valid: true, targetOffice: 'College Dean' };
+      return { valid: true, targetOffice: expectedNext };
     }
 
     // 3. College Dean
@@ -414,14 +465,17 @@ function validateRouteTransition(doc, actorRole, action, targetOfficeName, reque
 
     // 4. OVCAA / VCAF
     if (actorRole === ROLES.OVCAA || actorRole === ROLES.VCAF) {
-      if (targetOfficeName && targetOfficeName !== 'Office of the Chancellor') {
+      const actorOffice = ROLE_TO_OFFICE_NAME[actorRole];
+      const offIdx = assignedRoute.indexOf(actorOffice);
+      const expectedNext = (offIdx !== -1 && offIdx + 1 < assignedRoute.length) ? assignedRoute[offIdx + 1] : 'Office of the Chancellor';
+      if (targetOfficeName && targetOfficeName !== expectedNext) {
         return {
           valid: false,
           status: 400,
-          error: `Invalid route sequence. OVCAA endorsements must route to the Office of the Chancellor (attempted: '${targetOfficeName}').`,
+          error: `Invalid route sequence. ${actorOffice} endorsements must route to the ${expectedNext} (attempted: '${targetOfficeName}').`,
         };
       }
-      return { valid: true, targetOffice: 'Office of the Chancellor' };
+      return { valid: true, targetOffice: expectedNext };
     }
 
     // 5. Chancellor
@@ -441,6 +495,22 @@ function validateRouteTransition(doc, actorRole, action, targetOfficeName, reque
         status: 400,
         error: `Invalid action '${normAction}' for Chancellor. Permitted actions: approve, return, reject.`,
       };
+    }
+
+    // 6. Generic/Custom Configured Review Office
+    if (actorOfficeName && assignedRoute.includes(actorOfficeName)) {
+      const idx = assignedRoute.indexOf(actorOfficeName);
+      if (idx !== -1 && idx + 1 < assignedRoute.length) {
+        const expectedNext = assignedRoute[idx + 1];
+        if (targetOfficeName && targetOfficeName !== expectedNext) {
+          return {
+            valid: false,
+            status: 400,
+            error: `Invalid route sequence. Endorsement from ${actorOfficeName} must route to ${expectedNext} (attempted: '${targetOfficeName}').`,
+          };
+        }
+        return { valid: true, targetOffice: expectedNext };
+      }
     }
   }
 
