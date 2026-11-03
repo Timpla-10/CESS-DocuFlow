@@ -224,7 +224,7 @@ async function runTests() {
       headers: facultyHeaders,
       body: JSON.stringify({
         controlBase: `MSU-CESS-FAC-${runTag}-2026`,
-        typeId: 'travel-order',
+        typeId: 'leave',
         title: 'Faculty Seminar Travel Order',
       }),
     });
