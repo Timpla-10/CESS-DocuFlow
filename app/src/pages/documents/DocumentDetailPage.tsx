@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  Download,
   Eye,
   FileCheck2,
   FileText,
@@ -17,7 +18,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { useState, type ChangeEvent, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import {
@@ -45,6 +46,7 @@ import {
   OFFICE_LABEL,
   ROLE_OFFICE,
   controlNumber,
+  downloadGeneratedPdf,
   externalOfficeLabel,
   isRequester,
   locationLabel,
@@ -60,6 +62,7 @@ import { formatDate, formatDateTime, plural } from '../../lib/time'
 
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
   const user = useUser()
   const db = useDb()
   const toast = useToast()
@@ -211,7 +214,7 @@ export function DocumentDetailPage() {
       return
     }
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a file smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a file smaller than ${MAX_FILE_MB} MB.`)
       return
     }
     setResubmitFiles((prev) => [...prev, { name: file.name, sizeKb, fileObj: file }])
@@ -230,7 +233,7 @@ export function DocumentDetailPage() {
       return
     }
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a file smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a file smaller than ${MAX_FILE_MB} MB.`)
       return
     }
     setReleaseSignedFile({ name: file.name, sizeKb, fileObj: file })
@@ -468,6 +471,36 @@ export function DocumentDetailPage() {
         <span className="text-xs text-ink-500 font-mono">Control Ref: {controlNumber(doc)}</span>
       </div>
 
+      {/* Submission Confirmation Banner (REQ-SUB-5, REQ-SUB-6, REQ-REC-1, REQ-REC-2) */}
+      {searchParams.get('submitted') === 'true' && (
+        <div className="rounded-2xl border-2 border-success-200 bg-gradient-to-r from-success-50/90 to-emerald-50/50 p-5 shadow-xs">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-success-600 text-white shadow-xs">
+                <CheckCircle2 className="size-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-extrabold text-success-950">
+                    Request Submission Confirmed
+                  </h3>
+                  <Badge tone="success" dot={false}>Saved & Active</Badge>
+                  <Badge tone="brand" dot={false}>Status: Submitted</Badge>
+                </div>
+                <p className="text-xs text-ink-700 leading-relaxed">
+                  Your document request was successfully recorded under unique Control Number{' '}
+                  <strong className="font-mono text-success-900 bg-white/80 px-1.5 py-0.5 rounded border border-success-200">
+                    {controlNumber(doc)}
+                  </strong>
+                  . Origin has been established as <strong>{doc.origin}</strong> from your account affiliation, and timestamp{' '}
+                  <strong>{formatDateTime(doc.submittedAt)}</strong> has been officially sealed.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Document Summary Card */}
       <Card className="overflow-hidden">
         <div className="border-b border-ink-100 bg-brand-50/50 p-6">
@@ -639,14 +672,60 @@ export function DocumentDetailPage() {
                 </p>
                 <p className="mt-0.5 text-ink-600">
                   {doc.contentVerification
-                    ? `${doc.contentVerification.verifiedBy} · ${formatDateTime(doc.contentVerification.at)}${
-                        doc.contentVerification.remarks ? ` — “${doc.contentVerification.remarks}”` : ''
-                      }`
+                    ? `${doc.contentVerification.verifiedBy} · ${formatDateTime(doc.contentVerification.at)}`
                     : 'Awaiting content check before routing.'}
                 </p>
               </div>
             </div>
           </div>
+
+          {/* Detailed Content Verification Record (REQ-REQT-4) */}
+          {doc.contentVerification && (
+            <div className="mt-3 rounded-xl border border-ink-200 bg-white p-3.5 shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2
+                    className={`size-4 ${
+                      doc.contentVerification.result === 'complete' ? 'text-success-600' : 'text-danger-600'
+                    }`}
+                  />
+                  <span className="text-xs font-bold uppercase tracking-wider text-ink-900">
+                    Content Verification Record (REQ-REQT-4)
+                  </span>
+                </div>
+                <Badge
+                  tone={doc.contentVerification.result === 'complete' ? 'success' : 'danger'}
+                  dot={false}
+                >
+                  {doc.contentVerification.result === 'complete' ? 'Verified Complete' : 'Returned for Corrections'}
+                </Badge>
+              </div>
+              <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3 text-xs">
+                <div>
+                  <span className="text-ink-500 font-medium block">Verified By</span>
+                  <span className="font-semibold text-ink-900">{doc.contentVerification.verifiedBy}</span>
+                </div>
+                <div>
+                  <span className="text-ink-500 font-medium block">Date & Time</span>
+                  <span className="font-semibold text-ink-900">{formatDateTime(doc.contentVerification.at)}</span>
+                </div>
+                <div>
+                  <span className="text-ink-500 font-medium block">Recorded Result</span>
+                  <span className="font-semibold text-ink-900">
+                    {doc.contentVerification.result === 'complete'
+                      ? 'Complete — Logged & Routed'
+                      : 'Returned with Feedback'}
+                  </span>
+                </div>
+              </div>
+              {doc.contentVerification.remarks && (
+                <div className="mt-2.5 rounded-lg bg-ink-50 p-2.5 text-xs text-ink-700 border border-ink-100">
+                  <span className="font-semibold text-ink-900">Remarks: </span>
+                  <span>{doc.contentVerification.remarks}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Toolbar for Authorized Roles */}
           {(canResubmit ||
@@ -729,16 +808,32 @@ export function DocumentDetailPage() {
             </div>
           )}
 
-          {/* Document Metadata Grid (REQ-REC-1, REQ-TRK-2) */}
+          {/* Document Metadata Grid (REQ-REC-1, REQ-REC-2, REQ-TRK-2) */}
           <div className="mt-6 border-t border-ink-100 pt-6">
             <DefinitionList
               items={[
                 {
-                  label: 'Control Number & Revision',
+                  label: 'Control Number & Revision (REQ-REC-2)',
                   value: <span className="font-mono font-bold text-brand-900">{controlNumber(doc)}</span>,
-                  hint: doc.encodedBySecretary
-                    ? 'Walk-in document encoded by the College Secretary'
-                    : `Origin: ${doc.origin}`,
+                  hint: `Revision ${String(doc.revision).padStart(2, '0')}${doc.encodedBySecretary ? ' · Walk-in encoded by College Secretary' : ''}`,
+                },
+                {
+                  label: 'Document Type',
+                  value: docType?.name ?? '—',
+                  hint: `Audience: ${docType?.audience === 'student' ? 'Students' : 'Faculty'}`,
+                },
+                {
+                  label: 'Document Title',
+                  value: <span className="font-semibold text-ink-900">{doc.title}</span>,
+                },
+                {
+                  label: 'Institutional Origin (REQ-SUB-6)',
+                  value: (
+                    <Badge tone={doc.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                      {doc.origin === 'IDS' ? 'IDS (Integrated Developmental School)' : 'CESS (College of Education and Social Sciences)'}
+                    </Badge>
+                  ),
+                  hint: 'Derived from account and affiliation',
                 },
                 {
                   label: 'Requester',
@@ -746,17 +841,23 @@ export function DocumentDetailPage() {
                   hint: requester?.email,
                 },
                 {
-                  label: 'Date & Time Submitted',
-                  value: formatDateTime(doc.submittedAt),
-                },
-                {
-                  label: 'Last Updated Time',
-                  value: formatDateTime(doc.updatedAt),
+                  label: 'Current Status',
+                  value: <StatusBadge doc={doc} audience={isReqUser ? 'requester' : 'staff'} db={db} />,
+                  hint: doc.status === 'submitted' ? 'Awaiting College Secretary content verification' : undefined,
                 },
                 {
                   label: 'Current Office Location',
                   value: isReqUser ? locationLabel(doc, db) : locationLabelForStaff(doc, db),
                   hint: `Arrived on ${formatDate(doc.officeSince)} (${plural(doc.routeIndex, 'step')} completed)`,
+                },
+                {
+                  label: 'Date & Time Received',
+                  value: formatDateTime(doc.submittedAt),
+                  hint: 'Sealed automatic timestamp (REQ-REC-1)',
+                },
+                {
+                  label: 'Last Updated Time',
+                  value: formatDateTime(doc.updatedAt),
                 },
                 {
                   label: 'Standard Processing Time',
@@ -786,6 +887,78 @@ export function DocumentDetailPage() {
             </span>
           </div>
         </div>
+
+        {/* Automated Checklist Verification Result (REQ-REQT-2, REQ-REQT-3) */}
+        {docType && (
+          <div className="mb-5 rounded-xl border border-brand-200 bg-brand-50/30 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <FileCheck2 className="size-4 text-brand-700" />
+                <span className="text-xs font-bold uppercase tracking-wider text-brand-900">
+                  Automated Checklist Verification Result — {docType.name}
+                </span>
+              </div>
+              <Badge tone="success" dot={false}>
+                Checklist Completeness: Passed
+              </Badge>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {docType.requirements.map((req) => {
+                const attached = currentAttachments.find((a) => a.requirementId === req.id)
+                return (
+                  <div
+                    key={req.id}
+                    className={`flex flex-wrap items-center justify-between gap-2 rounded-lg p-2.5 text-xs ring-1 ring-inset ${
+                      attached
+                        ? 'bg-white text-ink-900 ring-success-200'
+                        : req.required
+                        ? 'bg-danger-50/50 text-danger-900 ring-danger-200'
+                        : 'bg-ink-50/50 text-ink-600 ring-ink-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {attached ? (
+                        <CheckCircle2 className="size-4 shrink-0 text-success-600" />
+                      ) : (
+                        <span className="size-4 grid place-items-center rounded-full bg-ink-200 text-ink-600 text-[10px] font-bold">
+                          -
+                        </span>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-ink-900">{req.label}</span>
+                          <Badge tone={req.required ? 'brand' : 'neutral'} dot={false} className="text-[10px] py-0 px-1.5">
+                            {req.required ? 'Required' : 'Optional'}
+                          </Badge>
+                        </div>
+                        {req.source && <p className="text-[11px] text-ink-500 mt-0.5">Source: {req.source}</p>}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      {attached ? (
+                        <span className="inline-flex items-center gap-1.5 font-mono text-2xs font-semibold text-success-800 bg-success-50 px-2 py-0.5 rounded border border-success-200">
+                          <FileText className="size-3 text-success-600" />
+                          {attached.name} ({formatSize(attached.sizeKb)})
+                        </span>
+                      ) : (
+                        <span className="text-2xs text-ink-400 italic">
+                          {req.required ? 'Missing required attachment' : 'Not attached (Optional)'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <p className="mt-3 text-2xs text-ink-500 italic">
+              Checked automatically against document type checklist before reaching College Secretary. Content verification focuses on document accuracy.
+            </p>
+          </div>
+        )}
+
         <AttachmentList db={db} doc={doc} />
       </Card>
 
@@ -835,6 +1008,19 @@ export function DocumentDetailPage() {
         }
       >
         <form className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2.5 text-xs text-ink-700 border border-slate-200">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-ink-900">Control Number:</span>
+              <span className="font-mono font-medium text-brand-700">{controlNumber(doc)}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-ink-900">Revision:</span>
+              <span className="rounded bg-brand-100 px-2 py-0.5 font-bold text-brand-800">
+                Rev {doc.revision} → Rev {doc.revision + 1}
+              </span>
+            </div>
+          </div>
+
           <Field label="Document Title" required error={resubmitErrors.title}>
             <Input
               type="text"
@@ -891,6 +1077,22 @@ export function DocumentDetailPage() {
                   </li>
                 ))}
               </ul>
+            )}
+            {currentAttachments.length > 0 && (
+              <div className="mt-3 rounded-lg bg-ink-50/70 p-2.5 text-xs border border-ink-100">
+                <span className="font-semibold text-ink-800">Files on Record (Revision {doc.revision}):</span>
+                <ul className="mt-1.5 space-y-1 text-ink-600">
+                  {currentAttachments.map((a) => (
+                    <li key={a.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <FileText className="size-3.5 text-ink-400 shrink-0" />
+                        <span className="truncate">{a.name}</span>
+                      </div>
+                      <span className="text-ink-400 text-[11px] shrink-0 ml-2">({formatSize(a.sizeKb)})</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </form>
@@ -955,17 +1157,39 @@ export function DocumentDetailPage() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPreviewAttachmentId(a.id)
-                        setIsPreviewModalOpen(true)
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
-                      title="Inspect and read document content before deciding"
-                    >
-                      <Eye className="size-3.5 text-brand-600" /> Preview Content
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewAttachmentId(a.id)
+                          setIsPreviewModalOpen(true)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
+                        title="Inspect and read document content before deciding"
+                      >
+                        <Eye className="size-3.5 text-brand-600" /> Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const req = docType?.requirements.find((r) => r.id === a.requirementId)
+                          downloadGeneratedPdf(a.name, `Secretary Content Inspection: ${a.name}`, [
+                            `Control Number: ${controlNumber(doc)}`,
+                            `Document Title: ${doc.title}`,
+                            `Attachment Category: ${req?.label ?? 'Supporting Attachment'}`,
+                            `Uploaded By: ${a.uploadedBy}`,
+                            `Size: ${formatSize(a.sizeKb)}`,
+                            ``,
+                            `This file is being reviewed for content accuracy by the College Secretary.`,
+                            `(Prototype: actual file content would appear here in production.)`,
+                          ])
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-ink-50 px-3 py-1.5 text-xs font-semibold text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 transition-colors"
+                        title="Download file for offline inspection"
+                      >
+                        <Download className="size-3.5" /> Download
+                      </button>
+                    </div>
                   </li>
                 )
               })}

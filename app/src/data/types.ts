@@ -11,10 +11,11 @@ export type Role =
   | 'ids_principal'
   | 'dean'
   | 'ovcaa'
+  | 'vcaf'
   | 'chancellor'
 
 /** Offices that have accounts and can hold a document (REQ-AUTH-2). */
-export type OfficeId = 'secretary' | 'chairperson' | 'ids_principal' | 'dean' | 'ovcaa' | 'chancellor'
+export type OfficeId = 'secretary' | 'chairperson' | 'ids_principal' | 'dean' | 'ovcaa' | 'vcaf' | 'chancellor'
 
 /** Offices without accounts; the College Secretary records hand-offs for them (REQ-EXT-1). */
 export type ExternalOfficeId = string

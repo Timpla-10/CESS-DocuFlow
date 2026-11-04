@@ -5,14 +5,13 @@ import {
   Clock,
   Eye,
   EyeOff,
-  Info,
   KeyRound,
   Lock,
   Mail,
   MailCheck,
-  Shield,
   ShieldCheck,
   Sparkles,
+  X,
 } from 'lucide-react'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
@@ -25,16 +24,28 @@ import { DEMO_PASSWORD } from '../../data/seed'
 import { api, useDb } from '../../data/store'
 import type { Origin, Role } from '../../data/types'
 
-const PORTAL_OPTIONS: { id: string; label: string; role: Role; origin?: 'CESS' | 'IDS' }[] = [
-  { id: 'student', label: ROLE_LABEL.student, role: 'student', origin: 'CESS' },
-  { id: 'faculty', label: ROLE_LABEL.faculty, role: 'faculty' },
-  { id: 'secretary', label: ROLE_LABEL.secretary, role: 'secretary' },
-  { id: 'chairperson', label: ROLE_LABEL.chairperson, role: 'chairperson' },
-  { id: 'ids_principal', label: ROLE_LABEL.ids_principal, role: 'ids_principal' },
-  { id: 'dean', label: ROLE_LABEL.dean, role: 'dean' },
-  { id: 'ovcaa', label: ROLE_LABEL.ovcaa, role: 'ovcaa' },
-  { id: 'chancellor', label: ROLE_LABEL.chancellor, role: 'chancellor' },
-]
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+      />
+    </svg>
+  )
+}
 
 /**
  * Right-panel visual: Smooth purple organic wave (#7C3AED -> #581C87) curving
@@ -520,17 +531,20 @@ export function SignInPage() {
 
   const emailId = useId()
   const passwordId = useId()
-  const roleId = useId()
   const rememberId = useId()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [portalId, setPortalId] = useState('')
-  const [facultyOrigin, setFacultyOrigin] = useState<'CESS' | 'IDS'>('CESS')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
   const [busy, setBusy] = useState(false)
+
+  // University Google Workspace Sign-In State
+  const [showGoogleModal, setShowGoogleModal] = useState(false)
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('')
+  const [googleError, setGoogleError] = useState<string | null>(null)
+  const [googleBusy, setGoogleBusy] = useState(false)
 
   // Registration Mode State
   const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin')
@@ -552,73 +566,54 @@ export function SignInPage() {
 
   if (user) return <Navigate to={fromPath ?? homeFor(user.role)} replace />
 
-  const handleRoleChange = (selectedId: string) => {
-    setPortalId(selectedId)
-    if (selectedId === 'faculty') {
-      const account = db.users.find(
-        (u) => u.role === 'faculty' && u.active && u.origin === facultyOrigin,
-      )
-      if (account) {
-        setEmail(account.email)
-        setPassword(DEMO_PASSWORD)
-        setErrors({})
-      }
+  const handleGoogleSignIn = async (targetEmail: string) => {
+    setGoogleError(null)
+    const clean = targetEmail.trim().toLowerCase()
+    if (!clean) {
+      setGoogleError('Please enter your university Gmail address.')
       return
     }
-    const option = PORTAL_OPTIONS.find((o) => o.id === selectedId)
-    if (option) {
-      const account = db.users.find(
-        (u) => u.role === option.role && u.active && (!option.origin || u.origin === option.origin),
-      )
-      if (account) {
-        setEmail(account.email)
-        setPassword(DEMO_PASSWORD)
-        setErrors({})
-      }
+    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(clean)) {
+      setGoogleError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
+      return
     }
-  }
-
-  const handleFacultyOriginChange = (origin: 'CESS' | 'IDS') => {
-    setFacultyOrigin(origin)
-    const account = db.users.find((u) => u.role === 'faculty' && u.active && u.origin === origin)
-    if (account) {
-      setEmail(account.email)
-      setPassword(DEMO_PASSWORD)
-      setErrors({})
+    setGoogleBusy(true)
+    try {
+      const u = await api.signInWithUniversityGoogle(clean)
+      signIn(u)
+      setShowGoogleModal(false)
+      navigate(homeFor(u.role), { replace: true })
+    } catch (err) {
+      setGoogleError(friendlyError(err))
+    } finally {
+      setGoogleBusy(false)
     }
   }
 
   const handleEmailChange = (nextEmail: string) => {
     setEmail(nextEmail)
-    const matched = db.users.find((u) => u.email.toLowerCase() === nextEmail.trim().toLowerCase())
-    if (matched) {
-      if (matched.role === 'faculty') {
-        setPortalId('faculty')
-        if (matched.origin === 'IDS' || matched.origin === 'CESS') {
-          setFacultyOrigin(matched.origin)
-        }
-        return
-      }
-      const option = PORTAL_OPTIONS.find(
-        (o) => o.role === matched.role && (!o.origin || o.origin === matched.origin),
-      )
-      if (option) setPortalId(option.id)
-    }
+    if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }))
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     const next: typeof errors = {}
-    if (!email.trim()) next.email = 'Please enter your institutional email address.'
-    if (!password) next.password = 'Please enter your password.'
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail) {
+      next.email = 'Please enter your university Gmail address.'
+    } else if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+      next.email = 'Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.'
+    }
+    if (!password) {
+      next.password = 'Please enter your password.'
+    }
     setErrors(next)
     if (Object.keys(next).length) return
     setBusy(true)
     try {
-      const selectedOption = PORTAL_OPTIONS.find((o) => o.id === portalId)
-      const u = await api.signIn(email, password, selectedOption?.role)
+      const u = await api.signIn(cleanEmail, password)
       signIn(u)
-      navigate(fromPath ?? homeFor(u.role), { replace: true })
+      navigate(homeFor(u.role), { replace: true })
     } catch (err) {
       setErrors({ form: friendlyError(err) })
     } finally {
@@ -703,7 +698,7 @@ export function SignInPage() {
 
             {state.signedOut && !errors.form && !regFeedback && (
               <Callout tone="success" icon={ShieldCheck} className="mt-5">
-                You’ve signed out. See you next time!
+                You’ve been signed out securely. Your session has ended.
               </Callout>
             )}
             {errors.form && (
@@ -712,12 +707,43 @@ export function SignInPage() {
               </Callout>
             )}
 
-            <form onSubmit={submit} noValidate className="mt-7 space-y-4">
-          {/* Field 1: Institutional Email */}
+            {/* University Google Workspace Sign-In Button */}
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setGoogleError(null)
+                  setShowGoogleModal(true)
+                }}
+                className={cn(
+                  'flex h-11 w-full items-center justify-center gap-3 rounded-full border border-purple-200/90 bg-white px-5 text-sm font-semibold text-[#1E1035] shadow-xs transition-all duration-150',
+                  'hover:border-purple-300 hover:bg-purple-50/50 hover:shadow-sm active:translate-y-0 cursor-pointer',
+                )}
+              >
+                <GoogleIcon className="size-4 shrink-0" />
+                <span>Sign in with University Google Account</span>
+              </button>
+            </div>
+
+            {/* Visual Divider */}
+            <div className="relative my-5 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                <div className="w-full border-t border-purple-200/70" />
+              </div>
+              <div className="relative bg-[#FAFAFE] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                Or enter credentials
+              </div>
+            </div>
+
+            <form onSubmit={submit} noValidate className="space-y-4">
+          {/* Field 1: University Gmail Account */}
           <div>
-            <label htmlFor={emailId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
-              Institutional Email
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label htmlFor={emailId} className="block text-xs font-semibold text-[#1E1035]">
+                University Gmail Account
+              </label>
+              <span className="text-[11px] font-medium text-purple-700">@msunaawan.edu.ph only</span>
+            </div>
             <div className="relative">
               <Mail
                 className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-purple-800/80"
@@ -729,7 +755,7 @@ export function SignInPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => handleEmailChange(e.target.value)}
-                placeholder="Enter your institutional email"
+                placeholder="username@msunaawan.edu.ph"
                 aria-invalid={!!errors.email}
                 aria-describedby={errors.email ? `${emailId}-error` : undefined}
                 className={cn(
@@ -787,110 +813,6 @@ export function SignInPage() {
                 <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
                 {errors.password}
               </p>
-            )}
-          </div>
-
-          {/* Field 3 (Optional): Role / Portal */}
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <label htmlFor={roleId} className="text-xs font-semibold text-[#1E1035]">
-                Role / Portal
-              </label>
-              <span className="text-[11px] font-medium text-[#6B7280]">Optional</span>
-            </div>
-            <div className="relative">
-              <Shield
-                className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-purple-800/80"
-                aria-hidden="true"
-              />
-              <select
-                id={roleId}
-                value={portalId}
-                onChange={(e) => handleRoleChange(e.target.value)}
-                className={cn(
-                  'h-11 w-full appearance-none rounded-full bg-[#F1ECF9] pl-11 pr-10 text-sm ring-1 ring-inset ring-purple-300/85 transition-all',
-                  'hover:ring-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700',
-                  portalId ? 'text-[#1E1035]' : 'text-[#6B7280]',
-                  'bg-[length:16px] bg-[right_0.9rem_center] bg-no-repeat',
-                  "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23581C87' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")]",
-                )}
-              >
-                <option value="">Select role portal to autofill…</option>
-                {PORTAL_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id} className="text-[#1E1035]">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Sub-selector: Faculty Unit Affiliation (CESS vs IDS) */}
-            {portalId === 'faculty' && (
-              <div className="mt-3 rounded-2xl border border-purple-200/90 bg-purple-50/70 p-3.5 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xs font-bold uppercase tracking-wider text-purple-900">
-                    Faculty Unit & Document Routing:
-                  </span>
-                  <span className="text-2xs font-medium text-purple-700">
-                    {facultyOrigin === 'IDS' ? 'Routes via IDS Principal' : 'Standard College Route'}
-                  </span>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Faculty Unit Affiliation">
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={facultyOrigin === 'CESS'}
-                    onClick={() => handleFacultyOriginChange('CESS')}
-                    className={cn(
-                      'flex flex-col items-start rounded-xl p-2.5 text-left text-xs transition-all',
-                      facultyOrigin === 'CESS'
-                        ? 'bg-purple-800 text-white shadow-xs'
-                        : 'bg-white text-purple-900 ring-1 ring-purple-200 hover:bg-purple-100/50',
-                    )}
-                  >
-                    <span className="font-bold flex items-center gap-1">🏛️ CESS Faculty</span>
-                    <span
-                      className={cn(
-                        'text-2xs mt-0.5',
-                        facultyOrigin === 'CESS' ? 'text-purple-200' : 'text-purple-600',
-                      )}
-                    >
-                      College of Education and Social Sciences
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={facultyOrigin === 'IDS'}
-                    onClick={() => handleFacultyOriginChange('IDS')}
-                    className={cn(
-                      'flex flex-col items-start rounded-xl p-2.5 text-left text-xs transition-all',
-                      facultyOrigin === 'IDS'
-                        ? 'bg-purple-800 text-white shadow-xs'
-                        : 'bg-white text-purple-900 ring-1 ring-purple-200 hover:bg-purple-100/50',
-                    )}
-                  >
-                    <span className="font-bold flex items-center gap-1">🏫 IDS Faculty</span>
-                    <span
-                      className={cn(
-                        'text-2xs mt-0.5',
-                        facultyOrigin === 'IDS' ? 'text-purple-200' : 'text-purple-600',
-                      )}
-                    >
-                      Integrated Developmental School
-                    </span>
-                  </button>
-                </div>
-                <p className="mt-2 flex items-start gap-1.5 text-2xs text-purple-700">
-                  <Info className="size-3 shrink-0 text-purple-600 mt-0.5" />
-                  <span>
-                    {facultyOrigin === 'IDS'
-                      ? 'IDS route includes review by the IDS Principal before the College Dean.'
-                      : 'CESS route routes directly from Department Chairperson to the College Dean.'}
-                  </span>
-                </p>
-              </div>
             )}
           </div>
 
@@ -1118,6 +1040,125 @@ export function SignInPage() {
               </div>
             </form>
           </>
+        )}
+
+        {/* Google Workspace University Account Picker Modal */}
+        {showGoogleModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="google-modal-title"
+          >
+            <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-black/10 sm:p-7 animate-scale-in">
+              {/* Modal Header */}
+              <div className="flex items-start justify-between border-b border-purple-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="grid size-10 place-items-center rounded-xl bg-purple-50 ring-1 ring-purple-200">
+                    <GoogleIcon className="size-5" />
+                  </div>
+                  <div>
+                    <h2 id="google-modal-title" className="text-base font-bold text-[#1E1035]">
+                      Sign in with Google Workspace
+                    </h2>
+                    <p className="text-xs text-[#6B7280]">
+                      Mindanao State University at Naawan
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleModal(false)}
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+
+              {/* Policy Banner */}
+              <div className="mt-4 flex items-center gap-2 rounded-xl bg-purple-50/80 px-3.5 py-2.5 text-xs text-purple-900 ring-1 ring-purple-200/80">
+                <ShieldCheck className="size-4 shrink-0 text-purple-700" />
+                <span>
+                  Only official <strong>@msunaawan.edu.ph</strong> university Gmail accounts are authorized.
+                </span>
+              </div>
+
+              {googleError && (
+                <div className="mt-3.5">
+                  <Callout tone="danger" title="Unable to sign in">
+                    {googleError}
+                  </Callout>
+                </div>
+              )}
+
+              {/* Account List */}
+              <div className="mt-4">
+                <p className="text-2xs font-bold uppercase tracking-wider text-[#6B7280]">
+                  Choose University Account
+                </p>
+                <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                  {db.users
+                    .filter((u) => u.active)
+                    .map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        disabled={googleBusy}
+                        onClick={() => handleGoogleSignIn(u.email)}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-2xl border border-transparent p-2.5 text-left transition-all cursor-pointer',
+                          'hover:border-purple-200 hover:bg-purple-50/70 active:scale-[0.99]',
+                          googleBusy && 'opacity-60 cursor-not-allowed',
+                        )}
+                      >
+                        <div className="grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-purple-700 to-indigo-900 text-xs font-bold text-white shadow-xs">
+                          {u.name.slice(0, 1)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-xs font-bold text-[#1E1035]">{u.name}</span>
+                            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-800">
+                              {ROLE_LABEL[u.role]}
+                            </span>
+                          </div>
+                          <p className="truncate text-[11px] text-[#6B7280]">{u.email}</p>
+                        </div>
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              {/* Custom University Email Input */}
+              <div className="mt-5 border-t border-purple-100 pt-4">
+                <p className="text-2xs font-bold uppercase tracking-wider text-[#6B7280]">
+                  Or enter another university account
+                </p>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleGoogleSignIn(customGoogleEmail)
+                  }}
+                  className="mt-2 flex gap-2"
+                >
+                  <input
+                    type="email"
+                    value={customGoogleEmail}
+                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                    placeholder="name@msunaawan.edu.ph"
+                    className="h-10 flex-1 rounded-full bg-[#F1ECF9] px-4 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
+                  />
+                  <button
+                    type="submit"
+                    disabled={googleBusy}
+                    className="h-10 rounded-full bg-purple-800 px-5 text-xs font-bold text-white transition-all hover:bg-purple-900 disabled:opacity-60 cursor-pointer"
+                  >
+                    {googleBusy ? 'Signing in…' : 'Continue'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </AuthLayout>

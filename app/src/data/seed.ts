@@ -24,7 +24,7 @@ import {
 } from './engine'
 import type { Database, DocumentType, ExternalOfficeItem, User } from './types'
 
-export const DB_VERSION = 14
+export const DB_VERSION = 15
 export const DEMO_PASSWORD = 'cess2026'
 
 
@@ -39,6 +39,7 @@ const users: User[] = [
   { id: 'u-ids', name: 'Dr. Teresa Gomez', email: 'ids.principal@msunaawan.edu.ph', role: 'ids_principal', origin: 'IDS', department: 'Integrated Developmental School', position: 'IDS Principal', active: true, notificationPreference: 'both' },
   { id: 'u-dean', name: 'Dr. Ramon Villanueva', email: 'cess.dean@msunaawan.edu.ph', role: 'dean', department: 'College of Education and Social Sciences', position: 'College Dean', active: true, notificationPreference: 'both' },
   { id: 'u-ovcaa', name: 'Dr. Victor Salazar', email: 'ovcaa@msunaawan.edu.ph', role: 'ovcaa', department: 'Office of the Vice Chancellor for Academic Affairs', position: 'Vice Chancellor for Academic Affairs', active: true, notificationPreference: 'both' },
+  { id: 'u-vcaf', name: 'Dr. Carmelo Prudente', email: 'vcaf@msunaawan.edu.ph', role: 'vcaf', department: 'Office of the Vice Chancellor for Administration and Finance', position: 'Vice Chancellor for Administration and Finance', active: true, notificationPreference: 'both' },
   { id: 'u-chancellor', name: 'Dr. Antonio Cabrera', email: 'chancellor@msunaawan.edu.ph', role: 'chancellor', department: 'Office of the Chancellor', position: 'Chancellor', active: true, notificationPreference: 'both' },
 ]
 
@@ -305,6 +306,7 @@ export function createSeed(): Database {
     ids_principal: U('u-ids'),
     dean: U('u-dean'),
     ovcaa: U('u-ovcaa'),
+    vcaf: U('u-vcaf'),
     chancellor: U('u-chancellor'),
   }
   const review = (docId: string, office: string, kind: ReviewKind, at: string, remarks = '') =>

@@ -8,9 +8,13 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  ListFilter,
   PackageCheck,
   RotateCcw,
+  Search,
+  X,
 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import {
@@ -18,6 +22,7 @@ import {
   StatusBadge,
   WaitingTime,
 } from '../../components/documents'
+import { Input } from '../../components/form'
 import {
   Badge,
   Button,
@@ -34,7 +39,7 @@ import {
   downloadGeneratedPdf,
   revisionLabel,
 } from '../../content/language'
-import { isDelayed, visibleDocuments } from '../../data/selectors'
+import { byNewest, isDelayed, typeOf, visibleDocuments } from '../../data/selectors'
 import { useDb } from '../../data/store'
 import type { DocumentType } from '../../data/types'
 import { formatDate } from '../../lib/time'
@@ -43,6 +48,8 @@ export function MyDocumentsPage() {
   const user = useUser()
   const db = useDb()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeTab, setActiveTab] = useState<'folders' | 'all'>('folders')
 
   const isRequesterUser = user.role === 'student' || user.role === 'faculty'
   const canSubmit = isRequesterUser
@@ -61,6 +68,29 @@ export function MyDocumentsPage() {
 
   const folderParam = searchParams.get('folder')
   const selectedType = allowedTypes.find((t) => t.id === folderParam)
+
+  const searchedDocs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    const sorted = [...myDocs].sort(byNewest)
+    if (!q) return sorted
+    return sorted.filter((d) => {
+      const type = typeOf(db, d)
+      const ctrl = controlNumber(d).toLowerCase()
+      const title = d.title.toLowerCase()
+      const desc = d.description.toLowerCase()
+      const typeName = (type?.name ?? '').toLowerCase()
+      const status = d.status.toLowerCase()
+      const origin = (d.origin ?? '').toLowerCase()
+      return (
+        ctrl.includes(q) ||
+        title.includes(q) ||
+        desc.includes(q) ||
+        typeName.includes(q) ||
+        status.includes(q) ||
+        origin.includes(q)
+      )
+    })
+  }, [myDocs, searchQuery, db])
 
   const openFolder = (typeId: string) => {
     setSearchParams({ folder: typeId })
@@ -88,7 +118,7 @@ export function MyDocumentsPage() {
       'INSTRUCTIONS FOR REQUESTER:',
       '1. Fill in all required fields on this official college form accurately.',
       '2. Obtain preliminary departmental or instructor endorsements if applicable.',
-      '3. Save or scan the completed form as PDF, JPG, or PNG (max 10 MB) and upload it in CESS DocuFlow.',
+      '3. Save or scan the completed form as PDF, JPG, or PNG (max 20 MB) and upload it in CESS DocuFlow.',
     ])
   }
 
@@ -356,6 +386,8 @@ export function MyDocumentsPage() {
                 ? 'Department Workspace'
                 : user.role === 'ovcaa'
                 ? 'OVCAA Workspace'
+                : user.role === 'vcaf'
+                ? 'VCAF Workspace'
                 : user.role === 'chancellor'
                 ? 'Chancellor Workspace'
                 : user.role === 'dean'
@@ -424,18 +456,185 @@ export function MyDocumentsPage() {
             </Callout>
           )}
 
-          {/* Section Heading */}
-          <div>
-            <h2 className="text-lg font-bold text-ink-950">
-              Official Document Categories
-            </h2>
-            <p className="text-xs text-ink-500">
-              Select a document type folder to view all submitted records of that category, download blank templates, or file a new request.
-            </p>
+          {/* Search & Repository Findability Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-2xs ring-1 ring-ink-200/80">
+            <div className="relative min-w-[260px] flex-1 sm:max-w-md">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
+              <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Find request by Control Number (e.g. MSU-CESS-COM-0001), title, or type…"
+                className="pl-9.5 pr-8 text-xs"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-ink-400 hover:text-ink-600"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 rounded-lg bg-ink-100/70 p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab('folders')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold transition-colors',
+                  activeTab === 'folders' && !searchQuery
+                    ? 'bg-white text-brand-950 shadow-2xs ring-1 ring-ink-200/50'
+                    : 'text-ink-600 hover:text-ink-950',
+                )}
+              >
+                <Folder className="size-3.5" />
+                <span>Category Folders ({allowedTypes.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('all')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 font-semibold transition-colors',
+                  activeTab === 'all' || searchQuery
+                    ? 'bg-white text-brand-950 shadow-2xs ring-1 ring-ink-200/50'
+                    : 'text-ink-600 hover:text-ink-950',
+                )}
+              >
+                <ListFilter className="size-3.5" />
+                <span>All Requests ({myDocs.length})</span>
+              </button>
+            </div>
           </div>
 
-          {/* CATEGORY FOLDER GRID */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+          {/* Section Content: Either Search/All List OR Category Folders */}
+          {searchQuery || activeTab === 'all' ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-ink-950">
+                    {searchQuery ? `Search Results for “${searchQuery}”` : 'All Submitted Document Requests'}
+                  </h2>
+                  <p className="text-xs text-ink-500">
+                    {searchQuery
+                      ? `Found ${searchedDocs.length} matching request(s) findable by Control Number or details.`
+                      : `Displaying all ${myDocs.length} requests chronologically with unique Control Numbers.`}
+                  </p>
+                </div>
+                {searchQuery && (
+                  <Button size="sm" variant="secondary" onClick={() => setSearchQuery('')}>
+                    Clear Search
+                  </Button>
+                )}
+              </div>
+
+              {searchedDocs.length === 0 ? (
+                <Card className="p-8">
+                  <EmptyState
+                    icon={FolderOpen}
+                    title="No matching requests found"
+                    action={
+                      <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
+                        Show all requests
+                      </Button>
+                    }
+                  >
+                    No document request matched “{searchQuery}”. Check the Control Number or try another title.
+                  </EmptyState>
+                </Card>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-1">
+                  {searchedDocs.map((doc) => {
+                    const delayed = isDelayed(db, doc)
+                    const docType = typeOf(db, doc)
+                    return (
+                      <Card
+                        key={doc.id}
+                        className={cn(
+                          'p-5 transition-all hover:border-brand-300 hover:shadow-xs',
+                          doc.status === 'returned' && 'border-danger-300 bg-danger-50/20',
+                        )}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-brand-900 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                                {controlNumber(doc)}
+                              </span>
+                              <Badge tone="neutral" dot={false}>
+                                {revisionLabel(doc.revision)}
+                              </Badge>
+                              <Badge tone={doc.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                                {doc.origin}
+                              </Badge>
+                              <span className="text-xs text-ink-500">
+                                Submitted {formatDate(doc.submittedAt)}
+                              </span>
+                              {docType && (
+                                <span className="text-xs font-semibold text-ink-600">
+                                  • {docType.name}
+                                </span>
+                              )}
+                            </div>
+
+                            <Link
+                              to={`/app/documents/${doc.id}`}
+                              className="mt-2 block text-lg font-bold text-ink-950 hover:text-brand-700 hover:underline"
+                            >
+                              {doc.title}
+                            </Link>
+
+                            {doc.description && (
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+                                {doc.description}
+                              </p>
+                            )}
+
+                            {doc.status === 'returned' && doc.returnInfo && (
+                              <div className="mt-3 rounded-lg border border-danger-200 bg-danger-50/80 p-3 text-xs text-danger-900">
+                                <p className="font-bold">
+                                  Return comments from {doc.returnInfo.office}:
+                                </p>
+                                <p className="mt-0.5">{doc.returnInfo.reasons}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col items-end gap-2">
+                            <StatusBadge doc={doc} audience="requester" db={db} />
+                            {delayed && <DelayedBadge audience="requester" />}
+                            <WaitingTime doc={doc} />
+
+                            <Link
+                              to={`/app/documents/${doc.id}`}
+                              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
+                            >
+                              View Details & Progress <ArrowRight className="size-3" />
+                            </Link>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Section Heading */}
+              <div>
+                <h2 className="text-lg font-bold text-ink-950">
+                  Official Document Categories
+                </h2>
+                <p className="text-xs text-ink-500">
+                  Select a document type folder to view all submitted records of that category, download blank templates, or file a new request.
+                </p>
+              </div>
+
+              {/* CATEGORY FOLDER GRID */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
             {allowedTypes.map((t) => {
               const typeDocs = myDocs.filter((d) => d.typeId === t.id)
               const returnedCount = isRequesterUser
@@ -540,8 +739,10 @@ export function MyDocumentsPage() {
               )
             })}
           </div>
-        </div>
+        </>
       )}
     </div>
+  )}
+</div>
   )
 }

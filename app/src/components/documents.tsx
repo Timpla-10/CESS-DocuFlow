@@ -126,7 +126,7 @@ export function useDocumentFilters(db: Database, docs: DocRecord[], initialSort:
   return { filters, setFilters, result, active, clear }
 }
 
-const ALL_INTERNAL_OFFICES: OfficeId[] = ['secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+const ALL_INTERNAL_OFFICES: OfficeId[] = ['secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
 
 export function FilterBar({
   db,

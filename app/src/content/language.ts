@@ -10,7 +10,7 @@
  *    Secretary) and explain them in plain words where helpful.
  *  - Never invent a status, stage, or promise that the record cannot support.
  */
-import type { Database, DocRecord, ExternalOfficeId, HistoryEntry, NotificationPreference, OfficeId, Role, Status } from '../data/types'
+import type { Database, DocRecord, ExternalOfficeId, HistoryEntry, NotificationPreference, OfficeId, Origin, Role, Status } from '../data/types'
 import { formatDate } from '../lib/time'
 
 export const OFFICE_LABEL: Record<OfficeId, string> = {
@@ -19,6 +19,7 @@ export const OFFICE_LABEL: Record<OfficeId, string> = {
   ids_principal: 'IDS Principal',
   dean: 'College Dean',
   ovcaa: 'OVCAA',
+  vcaf: 'VCAF',
   chancellor: 'Office of the Chancellor',
 }
 
@@ -29,6 +30,7 @@ export const OFFICE_HELP: Record<OfficeId, string> = {
   ids_principal: 'Head of the Integrated Developmental School; reviews IDS documents.',
   dean: 'Head of the College of Education and Social Sciences.',
   ovcaa: 'Office of the Vice Chancellor for Academic Affairs — handles university-level academic approvals.',
+  vcaf: 'Office of the Vice Chancellor for Administration and Finance — handles administrative and financial reviews and approvals.',
   chancellor: 'The highest approving office of MSU at Naawan.',
 }
 
@@ -62,7 +64,15 @@ export const ROLE_LABEL: Record<Role, string> = {
   ids_principal: 'IDS Principal',
   dean: 'College Dean',
   ovcaa: 'OVCAA',
+  vcaf: 'VCAF',
   chancellor: 'Office of the Chancellor',
+}
+
+export function formatRoleTitle(user: { role: Role; origin?: Origin }): string {
+  if (user.role === 'faculty') {
+    return user.origin === 'IDS' ? 'IDS Faculty' : 'CESS Faculty'
+  }
+  return ROLE_LABEL[user.role]
 }
 
 export const NOTIFICATION_PREF_LABEL: Record<NotificationPreference, string> = {
@@ -77,6 +87,7 @@ export const ROLE_OFFICE: Partial<Record<Role, OfficeId>> = {
   ids_principal: 'ids_principal',
   dean: 'dean',
   ovcaa: 'ovcaa',
+  vcaf: 'vcaf',
   chancellor: 'chancellor',
 }
 
@@ -85,7 +96,7 @@ export function isRequester(role: Role): boolean {
 }
 
 export function isReviewer(role: Role): boolean {
-  return ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor'].includes(role)
+  return ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor'].includes(role)
 }
 
 export function controlNumber(doc: Pick<DocRecord, 'controlBase' | 'revision'>): string {
@@ -300,7 +311,7 @@ export const MESSAGES = {
   notFound: 'We couldn’t find that document. It may have been moved, or the link may be incorrect.',
   notAllowedToAct: 'This document is no longer waiting for your action. Someone may have already recorded a decision — refresh to see the latest status.',
   requiredField: 'Please complete this field.',
-  fileTooLarge: (name: string) => `“${name}” is larger than 10 MB. Please attach a smaller file or a compressed scan.`,
+  fileTooLarge: (name: string, maxMb = 20) => `“${name}” is larger than ${maxMb} MB. Please attach a smaller file or a compressed scan.`,
   fileWrongType: (name: string) => `“${name}” isn’t a supported file type. Please attach a PDF, JPG, or PNG file.`,
 } as const
 
