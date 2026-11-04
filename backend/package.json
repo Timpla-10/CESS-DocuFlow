@@ -1,0 +1,40 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node tests/test-pb02-rbac.js && node tests/test-pb10-document-types.js && node tests/test-pb11-requirements.js && node tests/test-pb18-prevent-editing.js && node tests/test-pb19-resubmit-history.js && node tests/test-pb20-secretary-queue.js && node tests/test-pb22-return-request.js && node tests/test-pb23-reject-request.js && node tests/test-pb24-office-decision.js && node tests/test-pb25-cess-vs-ids-routes.js && node tests/test-pb26-timeline-history.js && node tests/test-pb44-manage-doctypes.js && node tests/test-pb45-workflow-routes.js && node tests/test-pb48-audit-integrity.js && node tests/test-pb49-security.js",
+    "test:rbac": "node tests/test-pb02-rbac.js",
+    "test:pb10": "node tests/test-pb10-document-types.js",
+    "test:pb11": "node tests/test-pb11-requirements.js",
+    "test:pb18": "node tests/test-pb18-prevent-editing.js",
+    "test:pb19": "node tests/test-pb19-resubmit-history.js",
+    "test:pb20": "node tests/test-pb20-secretary-queue.js",
+    "test:pb22": "node tests/test-pb22-return-request.js",
+    "test:pb23": "node tests/test-pb23-reject-request.js",
+    "test:pb24": "node tests/test-pb24-office-decision.js",
+    "test:pb25": "node tests/test-pb25-cess-vs-ids-routes.js",
+    "test:pb26": "node tests/test-pb26-timeline-history.js",
+    "test:pb44": "node tests/test-pb44-manage-doctypes.js",
+    "test:pb45": "node tests/test-pb45-workflow-routes.js",
+    "test:db": "node tests/test-db.js",
+    "start": "node server.js",
+    "test:pb48": "node tests/test-pb48-audit-integrity.js",
+    "test:pb49": "node tests/test-pb49-security.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/server": "^1.9.2",
+    "@supabase/supabase-js": "^2.118.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0"
+  }
+}
