@@ -1,5 +1,6 @@
 const AccessControlService = require('../services/accessControlService');
 const DocumentTypeModel = require('../models/documentTypeModel');
+const DocumentModel = require('../models/documentModel');
 
 const DocumentController = {
   /**
@@ -507,6 +508,97 @@ const DocumentController = {
         req.params.id
       );
       res.json(routeData);
+    } catch (err) {
+      next(err);
+    }
+  },
+  /**
+   * DELETE /api/documents/:id
+   * PB-48 AC 3: Permanent hard deletion is blocked; records and files are preserved via soft-delete / archive
+   */
+  async deleteDocument(req, res, next) {
+    try {
+      const isHard = req.query.hard === 'true' || req.body?.hard === true;
+      if (isHard) {
+        return res.status(403).json({
+          error: 'Forbidden: Permanent deletion of document records and files is prohibited. Records must be preserved for audit trail and compliance (PB-48).',
+        });
+      }
+      await DocumentModel.softDelete(req.params.id);
+      res.json({
+        message: 'Document successfully archived. Audit trail and file attachments remain preserved.',
+        documentId: req.params.id,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/:id/attachments
+   * PB-49 AC 2 / PB-37: Direct URL access & unauthorized file access protection
+   */
+  async getDocumentAttachments(req, res, next) {
+    try {
+      const data = await AccessControlService.getDocumentAttachments(
+        req.user,
+        req.params.id
+      );
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/:id/attachments/:attachmentId
+   * PB-49 AC 2 / PB-37: Direct access to single attachment metadata with authorization check
+   */
+  async getAttachmentById(req, res, next) {
+    try {
+      const data = await AccessControlService.getAttachmentById(
+        req.user,
+        req.params.id,
+        req.params.attachmentId
+      );
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/:id/attachments/:attachmentId/download
+   * PB-49 AC 2 / PB-37: Download attachment with authorization and private URL security
+   */
+  async downloadAttachment(req, res, next) {
+    try {
+      const data = await AccessControlService.getAttachmentDownload(
+        req.user,
+        req.params.id,
+        req.params.attachmentId
+      );
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/documents/:id/attachments
+   * PB-49 AC 2 & 3: Attach a file to an existing document with file validation (20 MB limit & format check)
+   */
+  async addAttachment(req, res, next) {
+    try {
+      const added = await AccessControlService.addAttachment(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.status(201).json({
+        message: 'Attachment successfully added.',
+        attachment: added,
+      });
     } catch (err) {
       next(err);
     }

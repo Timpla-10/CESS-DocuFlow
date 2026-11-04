@@ -43,17 +43,18 @@ router.get('/:id/actions', DocumentController.getPermittedActions);
 // PB-19 / PB-22 / PB-26 / SRS 3.4 REQ-REC-4 & SRS 3.6: Processing history, return reason & versioned attachments
 router.get('/:id/history', DocumentController.getDocumentHistory);
 
-// PB-26 / SRS 3.4 REQ-REC-4: Processing history is immutable; ordinary users cannot edit or delete history
-router.all('/:id/history', (req, res, next) => {
-  if (req.method === 'GET') return next();
-  return res.status(405).json({
-    error: 'Method Not Allowed: Document processing history is immutable and cannot be edited or deleted.',
-  });
+// PB-48 AC 2: History immutability guards (Ordinary users and callers cannot edit or delete history)
+router.put('/:id/history', (req, res) => {
+  res.status(403).json({ error: 'Forbidden: Document processing history is immutable and cannot be modified.' });
 });
-router.all('/:id/history/:historyId', (req, res) => {
-  return res.status(405).json({
-    error: 'Method Not Allowed: Document processing history is immutable and cannot be edited or deleted.',
-  });
+router.delete('/:id/history', (req, res) => {
+  res.status(403).json({ error: 'Forbidden: Document processing history is immutable and cannot be deleted.' });
+});
+router.put('/:id/history/:historyId', (req, res) => {
+  res.status(403).json({ error: 'Forbidden: Document processing history is immutable and cannot be modified.' });
+});
+router.delete('/:id/history/:historyId', (req, res) => {
+  res.status(403).json({ error: 'Forbidden: Document processing history is immutable and cannot be deleted.' });
 });
 
 // PB-25 / SRS 3.5: Inspect configured route, current step, and completed step history based on origin
@@ -83,5 +84,14 @@ router.put('/:id', DocumentController.editDocument);
 
 // PB-18 / REQ-SUB-8: Resubmit returned document with new revision
 router.post('/:id/resubmit', requireAction('resubmit_document'), DocumentController.resubmitDocument);
+
+// PB-49 / PB-37: Direct URL access & unauthorized file access protection
+router.get('/:id/attachments', DocumentController.getDocumentAttachments);
+router.get('/:id/attachments/:attachmentId', DocumentController.getAttachmentById);
+router.get('/:id/attachments/:attachmentId/download', DocumentController.downloadAttachment);
+router.post('/:id/attachments', DocumentController.addAttachment);
+
+// PB-48 AC 3: Records and files are not hard-deleted (Soft-delete / archive guard)
+router.delete('/:id', DocumentController.deleteDocument);
 
 module.exports = router;

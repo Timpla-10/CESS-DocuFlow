@@ -1,3 +1,4 @@
+const path = require('path');
 const DocumentModel = require('../models/documentModel');
 const DocumentTypeModel = require('../models/documentTypeModel');
 const UserModel = require('../models/userModel');
@@ -14,6 +15,84 @@ const {
   validateRouteTransition,
   getPermittedActions,
 } = require('../utils/roles');
+
+
+/**
+ * PB-49 & PB-14: File Rules and Validation Limits
+ * - 20 MB size limit (20,480 KB)
+ * - Allowed file extensions: .pdf, .doc, .docx, .jpg, .jpeg, .png
+ * - Malicious / executable format rejection
+ * - Path traversal protection
+ */
+const ALLOWED_FILE_EXTENSIONS = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+const MAX_FILE_SIZE_KB = 20480; // 20 MB
+
+function validateAttachmentFiles(files) {
+  if (!Array.isArray(files) || files.length === 0) return;
+
+  for (const f of files) {
+    const rawName = f.file_name || f.name || '';
+    if (!rawName) {
+      const err = new Error('Invalid file attachment: File name is required.');
+      err.status = 400;
+      throw err;
+    }
+
+    if (rawName.includes('..') || rawName.includes('/') || rawName.includes('\\') || rawName.includes('\0')) {
+      const err = new Error(`Invalid file name '${rawName}': Path traversal characters are not permitted.`);
+      err.status = 400;
+      throw err;
+    }
+
+    const ext = path.extname(rawName).toLowerCase();
+    if (!ext || !ALLOWED_FILE_EXTENSIONS.includes(ext)) {
+      const err = new Error(
+        `Invalid file type '${ext || 'unknown'}' for file '${rawName}'. Allowed file types are: ${ALLOWED_FILE_EXTENSIONS.join(', ')}.`
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const PROHIBITED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.sh', '.vbs', '.js', '.py', '.msi', '.bin', '.php', '.phtml', '.com'];
+    if (PROHIBITED_EXTENSIONS.includes(ext)) {
+      const err = new Error(
+        `Prohibited executable or script format '${ext}' detected in file '${rawName}'. Allowed file types are: ${ALLOWED_FILE_EXTENSIONS.join(', ')}.`
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    let sizeKb = f.file_size_kb || f.sizeKb || f.size_kb;
+    if (sizeKb === undefined && (f.size || f.file_size)) {
+      sizeKb = Math.ceil((f.size || f.file_size) / 1024);
+    }
+    if (sizeKb !== undefined && Number(sizeKb) > MAX_FILE_SIZE_KB) {
+      const err = new Error(
+        `File '${rawName}' (${sizeKb} KB) exceeds the maximum allowed file size limit of 20 MB (20,480 KB).`
+      );
+      err.status = 400;
+      throw err;
+    }
+  }
+}
+
+function getMimeTypeFromExtension(filename) {
+  const ext = path.extname(filename || '').toLowerCase();
+  switch (ext) {
+    case '.pdf': return 'application/pdf';
+    case '.doc': return 'application/msword';
+    case '.docx': return 'application/docx';
+    case '.jpg':
+    case '.jpeg': return 'image/jpeg';
+    case '.png': return 'image/png';
+    default: return 'application/octet-stream';
+  }
+}
+
+function resolveSafeFileType(f) {
+  const typeStr = f.file_type || f.type || getMimeTypeFromExtension(f.file_name || f.name);
+  return String(typeStr || 'application/pdf').slice(0, 50);
+}
 
 const AccessControlService = {
   /**
@@ -101,8 +180,8 @@ const AccessControlService = {
     };
   },
 
-  async getDocumentByIdForUser(user, docId) {
-    const doc = await DocumentModel.findById(docId);
+  async getDocumentByIdForUser(user, docId, options = {}) {
+    const doc = await DocumentModel.findById(docId, options);
     if (!doc) {
       const err = new Error('Document record not found.');
       err.status = 404;
@@ -219,12 +298,14 @@ const AccessControlService = {
     });
 
     // PB-19 / SRS 3.2: Persist initial Revision 1 attachments
+    if (!input.title || !String(input.title).trim()) { const err = new Error("Document title/subject is required."); err.status = 400; throw err; }
     const initialFiles = Array.isArray(input.attachments)
       ? input.attachments
       : Array.isArray(input.files)
       ? input.files
       : [];
 
+    validateAttachmentFiles(initialFiles);
     if (initialFiles.length > 0) {
       for (const f of initialFiles) {
         await DocumentModel.addAttachment({
@@ -233,7 +314,7 @@ const AccessControlService = {
           revision_no: 1,
           file_name: f.file_name || f.name || 'Initial_Attachment.pdf',
           file_url: f.file_url || f.url || `/uploads/${created.document_id}_rev1_${Date.now()}.pdf`,
-          file_type: f.file_type || f.type || 'application/pdf',
+          file_type: resolveSafeFileType(f),
           file_size_kb: f.file_size_kb || f.sizeKb || 100,
         });
       }
@@ -792,6 +873,7 @@ const AccessControlService = {
       ? input.attachments
       : [];
 
+    validateAttachmentFiles(incomingFiles);
     if (incomingFiles.length > 0) {
       for (const f of incomingFiles) {
         await DocumentModel.addAttachment({
@@ -800,7 +882,7 @@ const AccessControlService = {
           revision_no: newRevisionNo,
           file_name: f.file_name || f.name || 'Corrected_Attachment.pdf',
           file_url: f.file_url || f.url || `/uploads/${docId}_rev${newRevisionNo}_${Date.now()}.pdf`,
-          file_type: f.file_type || f.type || 'application/pdf',
+          file_type: resolveSafeFileType(f),
           file_size_kb: f.file_size_kb || f.sizeKb || 100,
         });
       }
@@ -822,7 +904,7 @@ const AccessControlService = {
    * PB-19 / PB-22 / SRS 3.6: Get complete processing history, return reason & versioned attachments
    */
   async getDocumentHistory(user, docId) {
-    const doc = await this.getDocumentByIdForUser(user, docId);
+    const doc = await this.getDocumentByIdForUser(user, docId, { includeDeleted: true });
     if (!doc) return null;
 
     const notifications = await DocumentModel.getNotificationsForUser(doc.requester_id, docId);
@@ -945,6 +1027,112 @@ const AccessControlService = {
   async getNotifications(user, documentId = null) {
     return DocumentModel.getNotificationsForUser(user.id, documentId);
   },
+  /**
+   * PB-49 AC 2 / PB-37: Direct URL/API file access verification
+   */
+  async getDocumentAttachments(user, docId) {
+    const doc = await this.getDocumentByIdForUser(user, docId);
+    const attachments = doc.document_attachment || doc.attachments || [];
+    return {
+      documentId: doc.document_id,
+      controlNumber: doc.control_number,
+      count: attachments.length,
+      attachments,
+    };
+  },
+
+  /**
+   * PB-49 AC 2 / PB-37: Get single attachment metadata with authorization check
+   */
+  async getAttachmentById(user, docId, attachmentId) {
+    const doc = await this.getDocumentByIdForUser(user, docId);
+    const attachments = doc.document_attachment || doc.attachments || [];
+    const attachment = attachments.find(
+      (a) => String(a.attachment_id) === String(attachmentId)
+    );
+    if (!attachment) {
+      const err = new Error('Attachment not found for this document.');
+      err.status = 404;
+      throw err;
+    }
+    return {
+      documentId: doc.document_id,
+      controlNumber: doc.control_number,
+      attachment,
+    };
+  },
+
+  /**
+   * PB-49 AC 2 / PB-37: Download attachment with authorization and private URL security
+   */
+  async getAttachmentDownload(user, docId, attachmentId) {
+    const doc = await this.getDocumentByIdForUser(user, docId);
+    const attachments = doc.document_attachment || doc.attachments || [];
+    const attachment = attachments.find(
+      (a) => String(a.attachment_id) === String(attachmentId)
+    );
+    if (!attachment) {
+      const err = new Error('Attachment not found for this document.');
+      err.status = 404;
+      throw err;
+    }
+    return {
+      documentId: doc.document_id,
+      controlNumber: doc.control_number,
+      attachmentId: attachment.attachment_id,
+      fileName: attachment.file_name,
+      fileType: attachment.file_type,
+      fileSizeKb: attachment.file_size_kb,
+      downloadUrl: attachment.file_url,
+    };
+  },
+
+  /**
+   * PB-49 AC 2 & 3: Add attachment to existing document with role & file rules enforcement
+   */
+  async addAttachment(user, docId, fileInput = {}) {
+    const doc = await this.getDocumentByIdForUser(user, docId);
+    
+    const requesterId = doc.requester_id || doc.requesterId;
+    const isOwner = requesterId === user.id;
+    const isSecretary = user.role === ROLES.SECRETARY;
+
+    if (!isOwner && !isSecretary) {
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not permitted to attach files to this document.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    const file = {
+      file_name: fileInput.file_name || fileInput.name,
+      file_url: fileInput.file_url || fileInput.url,
+      file_type: fileInput.file_type || fileInput.type,
+      file_size_kb: fileInput.file_size_kb || fileInput.sizeKb,
+      form_id: fileInput.form_id || fileInput.formId || null,
+      revision_no: fileInput.revision_no || doc.current_revision_no || 1,
+    };
+
+    validateAttachmentFiles([file]);
+
+    const created = await DocumentModel.addAttachment({
+      document_id: doc.document_id,
+      form_id: file.form_id,
+      revision_no: file.revision_no,
+      file_name: file.file_name,
+      file_url: file.file_url || `/uploads/${doc.document_id}_rev${file.revision_no}_${Date.now()}.pdf`,
+      file_type: resolveSafeFileType(file),
+      file_size_kb: file.file_size_kb || 100,
+    });
+
+    return created;
+  },
+
+  validateFiles(files) {
+    validateAttachmentFiles(files);
+  },
+
 };
 
 module.exports = AccessControlService;

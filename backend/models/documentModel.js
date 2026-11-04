@@ -21,6 +21,12 @@ const DOC_SELECT = `
       office_name,
       office_type
     ),
+    actor:action_by_user_id (
+      user_id,
+      first_name,
+      last_name,
+      university_email
+    ),
     user:action_by_user_id (
       user_id,
       first_name,
@@ -320,7 +326,7 @@ const DocumentModel = {
     return (data || []).map(normalizeDoc).filter((d) => !d.is_deleted);
   },
 
-  async findById(id) {
+  async findById(id, { includeDeleted = false } = {}) {
     await ensureOfficesLoaded();
     const { data, error } = await supabase
       .from('document_request')
@@ -330,7 +336,7 @@ const DocumentModel = {
     if (error) throw error;
     const doc = normalizeDoc(data);
     const cached = docCache.get(id);
-    if (!doc || doc.is_deleted) return null;
+    if (!doc || (!includeDeleted && doc.is_deleted)) return null;
     if (cached) {
       const officeId = cached.current_office_id !== undefined ? cached.current_office_id : doc.current_office_id;
       const officeObj = (officeId && officeLookupById[officeId]) || cached.office || doc.office;
@@ -574,6 +580,47 @@ const DocumentModel = {
     return data || [];
   },
 
+  
+  async findAttachmentById(attachmentId) {
+    const { data, error } = await supabase
+      .from('document_attachment')
+      .select('*')
+      .eq('attachment_id', attachmentId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async getAttachmentsByDocumentId(documentId) {
+    const { data, error } = await supabase
+      .from('document_attachment')
+      .select('*')
+      .eq('document_id', documentId)
+      .order('revision_no', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async updateHistory() {
+    const err = new Error('Forbidden: Document processing history is immutable and cannot be updated.');
+    err.status = 403;
+    throw err;
+  },
+
+  async deleteHistory() {
+    const err = new Error('Forbidden: Document processing history is immutable and cannot be deleted.');
+    err.status = 403;
+    throw err;
+  },
+
+  async deleteDocument(id, forceHardDelete = false) {
+    if (forceHardDelete) {
+      const err = new Error('Forbidden: Permanent deletion of document records and files is disabled to preserve audit integrity. Use archive instead.');
+      err.status = 403;
+      throw err;
+    }
+    return this.softDelete(id);
+  },
   async softDelete(id) {
     const { error } = await supabase
       .from('document_request')
