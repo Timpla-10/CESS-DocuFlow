@@ -1,0 +1,84 @@
+name: CESS DocuFlow CI
+
+on:
+  push:
+    branches:
+      - devops-ci-setup
+      - tempoMain
+
+  pull_request:
+    branches:
+      - tempoMain
+      - Main
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build React Application
+        working-directory: app
+        run: npm run build
+
+  backend:
+    name: Backend Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Check Backend Syntax
+        run: |
+          node --check backend/server.js
+          node --check backend/config/database.js
+          node --check backend/routes/index.js
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs:
+      - frontend
+      - backend
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Validate Docker Compose
+        run: docker compose config --no-env-resolution --quiet
+
+      - name: Build Frontend Docker Image
+        run: docker build -t cess-docuflow-frontend:ci ./app
+
+      - name: Build Backend Docker Image
+        run: docker build -t cess-docuflow-backend:ci ./backend
