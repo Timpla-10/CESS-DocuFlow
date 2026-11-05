@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const supabase = require('../config/database');
 const UserModel = require('../models/userModel');
+const EmailService = require('./emailService');
 const {
   ROLES,
   ALL_ROLES,
@@ -427,18 +428,29 @@ const AuthService = {
       throw err;
     }
 
-    // Generate cryptographically secure one-time recovery token
+    // Generate cryptographically secure one-time recovery token & dynamic 6-digit OTP code
     const rawToken = crypto.randomBytes(24).toString('hex');
     const tokenHash = sha256(rawToken);
+    const otpCode = crypto.randomInt
+      ? crypto.randomInt(100000, 1000000).toString()
+      : Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = sha256(otpCode);
     const expiresAt = Date.now() + RESET_TOKEN_TTL_MS;
 
-    passwordResetTokens.set(tokenHash, {
+    const tokenRecord = {
       email: cleanEmail,
       userId: profile.id,
       createdAt: Date.now(),
       expiresAt,
       used: false,
-    });
+    };
+    passwordResetTokens.set(tokenHash, tokenRecord);
+    passwordResetTokens.set(otpHash, tokenRecord);
+
+    // Also accept Figma demo code in non-production for instant prototyping
+    if (process.env.NODE_ENV !== 'production') {
+      passwordResetTokens.set(sha256('658485'), tokenRecord);
+    }
 
     // Best-effort trigger of Supabase Auth email recovery link (non-blocking if rate-limited)
     try {
@@ -461,11 +473,23 @@ const AuthService = {
       },
     });
 
+    // Dispatch real email via Nodemailer
+    EmailService.sendPasswordResetEmail({
+      to: cleanEmail,
+      name: profile.name || cleanEmail,
+      code: otpCode,
+      resetToken: rawToken,
+      expiresAt,
+    }).catch((mailErr) => {
+      console.warn(`[Nodemailer] Warning: Could not deliver reset email to ${cleanEmail}:`, mailErr.message);
+    });
+
     return {
       success: true,
       email: cleanEmail,
       message: `Password reset instructions have been sent to your registered university email (${cleanEmail}).`,
       resetToken: rawToken,
+      code: otpCode,
       expiresAt: new Date(expiresAt).toISOString(),
     };
   },
@@ -477,7 +501,7 @@ const AuthService = {
    * - Updates password securely in Supabase Auth without exposing password in logs
    */
   async confirmPasswordReset(input = {}) {
-    const rawToken = (input.token || input.resetToken || '').trim();
+    const rawToken = (input.token || input.resetToken || input.code || '').trim();
     const providedEmail = input.email ? String(input.email).trim().toLowerCase() : null;
     const newPassword = input.newPassword ?? input.password ?? '';
     const confirmPassword = input.confirmPassword;
@@ -614,6 +638,14 @@ const AuthService = {
       secretsToRedact: secrets,
     });
 
+    // Notify user of password update via Nodemailer
+    EmailService.sendPasswordChangedAlert({
+      to: targetEmail,
+      name: profile?.name || targetEmail,
+    }).catch((err) => {
+      console.warn('[Nodemailer] Warning: Could not deliver password changed alert:', err.message);
+    });
+
     return {
       success: true,
       email: targetEmail,
@@ -747,6 +779,14 @@ const AuthService = {
       secretsToRedact: secrets,
     });
 
+    // Notify user of password update via Nodemailer
+    EmailService.sendPasswordChangedAlert({
+      to: cleanEmail,
+      name: actor.name || cleanEmail,
+    }).catch((err) => {
+      console.warn('[Nodemailer] Warning: Could not deliver password changed alert:', err.message);
+    });
+
     return {
       success: true,
       email: cleanEmail,
@@ -815,6 +855,12 @@ const AuthService = {
 
     const existingUser = await UserModel.findByEmail(cleanEmail);
 
+    if (existingUser && existingUser.account_status === 'Active') {
+      const err = new Error('An account with this institutional email already exists. Please proceed to Sign In.');
+      err.status = 409;
+      throw err;
+    }
+
     // 1. If already pre-registered in "User" with is_whitelisted = true -> Auto-Verify & Activate!
     if (existingUser && existingUser.is_whitelisted) {
       const activated = await provisionVerifiedUser({
@@ -826,6 +872,16 @@ const AuthService = {
         department: existingUser.department || input.department || 'CESS',
         accountStatus: 'Active',
         isWhitelisted: true,
+      });
+
+      // Send real email notification via Nodemailer
+      EmailService.sendAccountActivatedEmail({
+        to: cleanEmail,
+        name: existingUser.name || cleanName,
+        role: existingUser.role,
+        department: existingUser.department || input.department || 'CESS',
+      }).catch((mailErr) => {
+        console.warn(`[Nodemailer] Warning: Could not deliver activation email to ${cleanEmail}:`, mailErr.message);
       });
 
       return {
@@ -858,6 +914,16 @@ const AuthService = {
       department: (input.department || 'General').trim(),
       accountStatus: 'Pending_Verification',
       isWhitelisted: false,
+    });
+
+    // Send real email notification via Nodemailer
+    EmailService.sendRegistrationQueuedEmail({
+      to: cleanEmail,
+      name: cleanName,
+      requestedRole,
+      department: (input.department || 'General').trim(),
+    }).catch((mailErr) => {
+      console.warn(`[Nodemailer] Warning: Could not deliver queued registration email to ${cleanEmail}:`, mailErr.message);
     });
 
     return {
@@ -898,6 +964,16 @@ const AuthService = {
       department: verifiedDepartment,
       accountStatus: 'Active',
       isWhitelisted: true,
+    });
+
+    // Send real activation email via Nodemailer
+    EmailService.sendAccountActivatedEmail({
+      to: reg.email,
+      name: reg.name,
+      role: verifiedRole,
+      department: verifiedDepartment,
+    }).catch((mailErr) => {
+      console.warn(`[Nodemailer] Warning: Could not deliver approval email to ${reg.email}:`, mailErr.message);
     });
 
     return {
