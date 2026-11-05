@@ -28,8 +28,8 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dang
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 const buttonBase =
-  'inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-all duration-150 ' +
-  'disabled:cursor-not-allowed disabled:opacity-55 active:translate-y-px select-none'
+  'inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-center leading-snug transition-all duration-150 ' +
+  'disabled:cursor-not-allowed disabled:opacity-55 active:translate-y-px select-none break-words min-w-0'
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
@@ -42,9 +42,9 @@ const buttonVariants: Record<ButtonVariant, string> = {
 }
 
 const buttonSizes: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-[13px]',
-  md: 'h-10 px-4 text-sm',
-  lg: 'h-12 px-6 text-[15px]',
+  sm: 'min-h-8 py-1.5 px-3 text-[13px]',
+  md: 'min-h-10 py-2 px-4 text-sm',
+  lg: 'min-h-12 py-2.5 px-6 text-[15px]',
 }
 
 export function buttonClass(variant: ButtonVariant = 'primary', size: ButtonSize = 'md', extra?: string) {
@@ -75,9 +75,9 @@ export function Button({
 }: ButtonProps) {
   return (
     <button type={type} className={buttonClass(variant, size, className)} disabled={disabled || loading} aria-busy={loading} {...rest}>
-      {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : Icon ? <Icon className="size-4" aria-hidden /> : null}
-      <span>{loading && loadingText ? loadingText : children}</span>
-      {IconRight && !loading ? <IconRight className="size-4" aria-hidden /> : null}
+      {loading ? <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden /> : Icon ? <Icon className="size-4 shrink-0" aria-hidden /> : null}
+      <span className="min-w-0 max-w-full text-center leading-snug">{loading && loadingText ? loadingText : children}</span>
+      {IconRight && !loading ? <IconRight className="size-4 shrink-0" aria-hidden /> : null}
     </button>
   )
 }
@@ -101,9 +101,9 @@ export function ButtonLink({
 }) {
   return (
     <Link to={to} className={buttonClass(variant, size, className)}>
-      {Icon ? <Icon className="size-4" aria-hidden /> : null}
-      <span>{children}</span>
-      {IconRight ? <IconRight className="size-4" aria-hidden /> : null}
+      {Icon ? <Icon className="size-4 shrink-0" aria-hidden /> : null}
+      <span className="min-w-0 max-w-full text-center leading-snug">{children}</span>
+      {IconRight ? <IconRight className="size-4 shrink-0" aria-hidden /> : null}
     </Link>
   )
 }
@@ -138,13 +138,13 @@ export function Badge({ tone = 'neutral', children, dot = true, className }: { t
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset',
+        'inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg sm:rounded-full px-2 sm:px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset leading-snug break-words text-left',
         badgeTones[tone],
         className,
       )}
     >
       {dot && <span className={cn('size-1.5 shrink-0 rounded-full', dotTones[tone])} aria-hidden />}
-      <span className="inline-flex items-center gap-1">{children}</span>
+      <span className="min-w-0 break-words leading-tight">{children}</span>
     </span>
   )
 }
@@ -165,7 +165,7 @@ export function DepartmentBadge(_props?: {
 
 export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('rounded-xl bg-white shadow-card ring-1 ring-ink-100', className)} {...rest}>
+    <div className={cn('w-full min-w-0 max-w-full overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-ink-100', className)} {...rest}>
       {children}
     </div>
   )
@@ -202,13 +202,13 @@ export function PageHeader({
   eyebrow?: ReactNode
 }) {
   return (
-    <header className="mb-6 flex animate-fade-up flex-wrap items-end justify-between gap-4">
-      <div className="min-w-0 max-w-3xl">
-        {eyebrow && <div className="mb-1.5 text-xs font-bold uppercase tracking-[0.08em] text-brand-600">{eyebrow}</div>}
-        <h1 className="text-balance text-2xl font-extrabold tracking-tight text-brand-900 sm:text-[28px]">{title}</h1>
-        {description && <p className="mt-1.5 text-[15px] leading-relaxed text-ink-600">{description}</p>}
+    <header className="mb-4 sm:mb-6 flex w-full min-w-0 max-w-full animate-fade-up flex-wrap items-end justify-between gap-3 sm:gap-4">
+      <div className="w-full min-w-0 max-w-3xl flex-1 sm:w-auto">
+        {eyebrow && <div className="mb-1 truncate text-2xs font-bold uppercase tracking-[0.08em] text-brand-600 sm:text-xs">{eyebrow}</div>}
+        <h1 className="text-balance break-words text-xl font-extrabold tracking-tight text-brand-900 sm:text-2xl lg:text-[28px]">{title}</h1>
+        {description && <p className="mt-1 break-words text-xs leading-relaxed text-ink-600 sm:text-[15px]">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </header>
   )
 }

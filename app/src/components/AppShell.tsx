@@ -81,7 +81,7 @@ export function AppShell() {
 
       <div
         className={cn(
-          'transition-[padding] duration-300 ease-in-out',
+          'w-full min-w-0 max-w-full overflow-x-hidden transition-[padding] duration-300 ease-in-out',
           isLocked ? 'lg:pl-[264px]' : 'lg:pl-[72px]'
         )}
       >
@@ -90,7 +90,7 @@ export function AppShell() {
           isLocked={isLocked}
           onToggleLock={toggleLock}
         />
-        <main id="main" className="mx-auto w-full max-w-[1440px] 2xl:max-w-[1560px] px-4 pb-20 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+        <main id="main" className="mx-auto w-full min-w-0 max-w-[1440px] px-2.5 pb-20 pt-4 2xl:max-w-[1560px] sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
           <Outlet />
         </main>
       </div>
@@ -286,15 +286,15 @@ function TopBar({
   onToggleLock: () => void
 }) {
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-ink-100 bg-white/80 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-20 flex h-14 sm:h-16 w-full min-w-0 max-w-full items-center gap-1.5 sm:gap-3 border-b border-ink-100 bg-white/80 px-2 sm:px-6 lg:px-8 backdrop-blur-xl">
       {/* Mobile hamburger */}
       <button
         type="button"
         onClick={onMenu}
-        className="grid size-10 place-items-center rounded-lg text-ink-700 hover:bg-brand-50 lg:hidden"
+        className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-700 hover:bg-brand-50 sm:size-10 lg:hidden"
         aria-label="Open menu"
       >
-        <Menu className="size-5" aria-hidden />
+        <Menu className="size-4.5 sm:size-5 shrink-0" aria-hidden />
       </button>
 
       {/* Desktop hamburger toggle: only rendered when sidebar is collapsed (rail mode) */}
@@ -310,10 +310,18 @@ function TopBar({
         </button>
       )}
 
-      <div className="lg:hidden">
-        <Logo subtitle={false} />
+      <div className="min-w-0 shrink lg:hidden">
+        <div className="hidden min-[440px]:block">
+          <Logo subtitle={false} />
+        </div>
+        <div className="hidden min-[260px]:block min-[440px]:hidden">
+          <LogoMark size="sm" />
+        </div>
+        <div className="block min-[260px]:hidden">
+          <LogoMark size="xs" />
+        </div>
       </div>
-      <div className="flex-1" />
+      <div className="min-w-0 flex-1" />
       <NotificationBell />
       <UserMenu />
     </header>
@@ -357,23 +365,23 @@ function NotificationBell() {
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative shrink-0" ref={ref}>
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
         aria-label={unread ? `Email updates — ${unread} new` : 'Email updates'}
-        className="relative grid size-10 place-items-center rounded-lg text-ink-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+        className="relative grid size-8 sm:size-10 place-items-center rounded-lg text-ink-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
       >
-        <Bell className="size-5" aria-hidden />
+        <Bell className="size-4.5 sm:size-5" aria-hidden />
         {unread > 0 && (
-          <span className="absolute right-1.5 top-1.5 grid min-w-[18px] place-items-center rounded-full bg-brand-600 px-1 text-[10px] font-bold leading-[18px] text-white ring-2 ring-white">
+          <span className="absolute right-0.5 top-0.5 sm:right-1.5 sm:top-1.5 grid min-w-4 sm:min-w-[18px] place-items-center rounded-full bg-brand-600 px-0.5 sm:px-1 text-[9px] sm:text-[10px] font-bold leading-none sm:leading-[18px] text-white ring-1.5 sm:ring-2 ring-white">
             {unread}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-12 z-30 w-[min(92vw,380px)] origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white shadow-raised ring-1 ring-ink-100">
+        <div className="absolute right-0 top-11 sm:top-12 z-30 w-[min(calc(100vw-16px),380px)] origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white shadow-raised ring-1 ring-ink-100">
           <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
             <div>
               <p className="text-sm font-bold text-ink-900">Notifications & Email Updates</p>
@@ -443,21 +451,21 @@ function UserMenu() {
   const navigate = useNavigate()
   const { open, setOpen, ref } = usePopover()
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative shrink-0" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex items-center gap-2.5 rounded-xl py-1 pl-1 pr-2 transition-colors hover:bg-brand-50"
+        className="flex items-center gap-1.5 sm:gap-2.5 rounded-xl p-0.5 sm:py-1 sm:pl-1 sm:pr-2 transition-colors hover:bg-brand-50"
       >
-        <Avatar name={user.name} />
+        <Avatar name={user.name} className="size-7 sm:size-9 text-[11px] sm:text-xs" />
         <span className="hidden text-left leading-tight sm:block">
           <span className="block text-sm font-semibold text-ink-900">{user.name}</span>
           <span className="block text-xs text-ink-500">{user.position}</span>
         </span>
         <ChevronDown
           className={cn(
-            'size-4 text-ink-400 transform-gpu transition-transform duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+            'hidden min-[280px]:block size-3.5 sm:size-4 text-ink-400 transform-gpu transition-transform duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
             open && 'rotate-180',
           )}
           style={{ transformOrigin: 'center' }}
@@ -465,7 +473,7 @@ function UserMenu() {
         />
       </button>
       {open && (
-        <div className="absolute right-0 top-12 z-30 w-60 origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white p-1.5 shadow-raised ring-1 ring-ink-100">
+        <div className="absolute right-0 top-11 sm:top-12 z-30 w-[min(calc(100vw-16px),240px)] origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white p-1.5 shadow-raised ring-1 ring-ink-100">
           <div className="px-3 py-2">
             <p className="truncate text-sm font-semibold text-ink-900">{user.name}</p>
             <p className="truncate text-xs text-ink-500">{user.email}</p>

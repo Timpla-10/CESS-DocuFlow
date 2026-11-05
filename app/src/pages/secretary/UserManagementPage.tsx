@@ -1143,6 +1143,21 @@ export function UserManagementPage() {
               required
             />
           </Field>
+
+          {!editingUserId && (
+            <div className="rounded-lg bg-brand-50 p-3 text-xs text-brand-900 border border-brand-200">
+              <p className="font-bold flex items-center gap-1.5">
+                <span>Default Password for New Accounts</span>
+              </p>
+              <p className="mt-1 text-brand-700 leading-relaxed">
+                New accounts are assigned the system default password:{' '}
+                <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-brand-300 text-brand-950">
+                  cess2026
+                </strong>
+                . The user can sign in using their official Gmail (<span className="font-mono">@msunaawan.edu.ph</span>) and this password.
+              </p>
+            </div>
+          )}
         </form>
       </Dialog>
 

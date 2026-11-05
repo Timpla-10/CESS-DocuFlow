@@ -49,9 +49,9 @@ export function StatusBadge({ doc, audience, db }: { doc: DocRecord; audience: '
 
 export function DelayedBadge({ audience }: { audience: 'requester' | 'staff' }) {
   return (
-    <Badge tone="warning" dot={false} className="shrink-0 gap-1.5 whitespace-nowrap">
+    <Badge tone="warning" dot={false} className="max-w-full gap-1.5 break-words">
       <Hourglass className="size-3 shrink-0" aria-hidden />
-      <span>{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
+      <span className="min-w-0 break-words">{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
     </Badge>
   )
 }
@@ -152,9 +152,9 @@ export function FilterBar({
   const types = db.documentTypes.filter((t) => audience === 'all' || t.audience === audience)
   const statusList = statuses ?? (Object.keys(STATUS_FILTER_LABEL) as Status[])
   return (
-    <div className="space-y-3.5 border-b border-ink-100 px-6 py-5">
-      <div className="flex flex-wrap items-end gap-3.5">
-        <div className="relative min-w-[220px] flex-1">
+    <div className="w-full min-w-0 space-y-3.5 border-b border-ink-100 p-3 sm:px-6 sm:py-5">
+      <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 sm:gap-3.5">
+        <div className="relative w-full min-w-0 flex-1 sm:w-auto sm:min-w-[220px]">
           <label htmlFor="doc-search" className="mb-1 block text-xs font-semibold text-ink-600">
             Search
           </label>
@@ -166,7 +166,7 @@ export function FilterBar({
               value={filters.q}
               onChange={(e) => setFilters({ ...filters, q: e.target.value })}
               placeholder={searchLabel}
-              className="pl-10 pr-4"
+              className="w-full pl-10 pr-4"
             />
           </div>
         </div>
@@ -223,23 +223,23 @@ export function FilterBar({
       </div>
 
       {showDateRange && (
-        <div className="flex flex-wrap items-end gap-3 pt-1">
-          <label className="block">
+        <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 pt-1 sm:gap-3">
+          <label className="block w-full min-w-0 sm:w-auto">
             <span className="mb-1 block text-xs font-semibold text-ink-600">Submitted from date</span>
             <Input
               type="date"
               value={filters.dateFrom}
               onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-              className="h-9 w-40 text-xs"
+              className="h-9 w-full min-w-0 text-xs sm:w-40"
             />
           </label>
-          <label className="block">
+          <label className="block w-full min-w-0 sm:w-auto">
             <span className="mb-1 block text-xs font-semibold text-ink-600">Submitted to date</span>
             <Input
               type="date"
               value={filters.dateTo}
               onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-              className="h-9 w-40 text-xs"
+              className="h-9 w-full min-w-0 text-xs sm:w-40"
             />
           </label>
           {(filters.dateFrom || filters.dateTo || filters.office || filters.status || filters.type || filters.origin || filters.q) && (
@@ -270,9 +270,9 @@ export function FilterBar({
 
 function FilterSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: ReactNode }) {
   return (
-    <label className="block">
+    <label className="block w-full min-w-0 sm:w-auto">
       <span className="mb-1 block text-xs font-semibold text-ink-600">{label}</span>
-      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 min-w-[150px]">
+      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-full min-w-0 sm:min-w-[150px]">
         {children}
       </Select>
     </label>
@@ -456,27 +456,27 @@ export function DocumentList({
       </div>
 
       {/* Mobile cards */}
-      <ul className="divide-y divide-ink-100 md:hidden">
+      <ul className="w-full min-w-0 max-w-full divide-y divide-ink-100 overflow-hidden md:hidden">
         {docs.map((d) => {
           const type = typeOf(db, d)
           const req = userById(db, d.requesterId)
           return (
-            <li key={d.id}>
-              <Link to={`/app/documents/${d.id}`} className="block px-4 py-4 hover:bg-brand-50/70">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-ink-900">{d.title}</p>
-                    <p className="mt-0.5 text-xs text-ink-500">
+            <li key={d.id} className="w-full min-w-0 max-w-full overflow-hidden">
+              <Link to={`/app/documents/${d.id}`} className="block w-full min-w-0 max-w-full px-3 py-3.5 hover:bg-brand-50/70 sm:px-4 sm:py-4">
+                <div className="flex w-full min-w-0 items-start justify-between gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1 break-words">
+                    <p className="font-semibold text-ink-900 break-words">{d.title}</p>
+                    <p className="mt-0.5 text-xs text-ink-500 break-words">
                       {type?.name}
                       {showRequester && req ? ` · ${req.name}` : ''}
                     </p>
                   </div>
                   <ArrowRight className="mt-1 size-4 shrink-0 text-ink-400" aria-hidden />
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="mt-2 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
                   <StatusBadge doc={d} audience={audience} db={db} />
                   {isDelayed(db, d) && <DelayedBadge audience={audience} />}
-                  <span className="text-xs text-ink-500">Submitted {formatDate(lastSubmittedAt(d))}</span>
+                  <span className="min-w-0 break-words text-xs text-ink-500">Submitted {formatDate(lastSubmittedAt(d))}</span>
                 </div>
               </Link>
             </li>

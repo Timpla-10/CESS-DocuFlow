@@ -9,12 +9,11 @@ import {
   KeyRound,
   Lock,
   Mail,
-  MailCheck,
   ShieldCheck,
   Sparkles,
   X,
 } from 'lucide-react'
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { homeFor } from '../../app/nav'
 import { useSession } from '../../app/session'
@@ -1210,21 +1209,69 @@ export function SignInPage() {
   )
 }
 
+function maskEmail(email: string): string {
+  const parts = email.split('@')
+  if (parts.length !== 2) return email
+  const [local, domain] = parts
+  if (local.length <= 2) return `${local[0]}****@${domain}`
+  return `${local[0]}****${local[local.length - 1]}@${domain}`
+}
+
 export function ForgotPasswordPage() {
   const emailId = useId()
+  const newPassId = useId()
+  const confirmPassId = useId()
+
+  const [step, setStep] = useState<'email' | 'code' | 'new_password' | 'success'>('email')
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
 
-  const submit = async (e: FormEvent) => {
+  // 6-digit verification code states
+  const [digits, setDigits] = useState<string[]>(['', '', '', '', '', ''])
+  const [isCodeIncorrect, setIsCodeIncorrect] = useState(false)
+  const [countdown, setCountdown] = useState(59)
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  // New password states
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  // Countdown timer for code resend
+  useEffect(() => {
+    if (step !== 'code' || countdown <= 0) return
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [step, countdown])
+
+  // Focus first input on entering code step
+  useEffect(() => {
+    if (step === 'code') {
+      setTimeout(() => inputRefs.current[0]?.focus(), 100)
+    }
+  }, [step])
+
+  const handleEmailSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!email.trim()) return setError(MESSAGES.requiredField)
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail) return setError(MESSAGES.requiredField)
+    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+      return setError('Please enter your official university Gmail address (ending with @msunaawan.edu.ph).')
+    }
+
     setBusy(true)
     setError(null)
     try {
-      await api.requestPasswordReset(email)
-      setSent(true)
+      await api.requestPasswordReset(cleanEmail)
+      setDigits(['', '', '', '', '', ''])
+      setIsCodeIncorrect(false)
+      setCountdown(59)
+      setStep('code')
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -1232,39 +1279,113 @@ export function ForgotPasswordPage() {
     }
   }
 
+  const handleDigitChange = (index: number, val: string) => {
+    const char = val.replace(/\D/g, '').slice(-1)
+    const nextDigits = [...digits]
+    nextDigits[index] = char
+    setDigits(nextDigits)
+    setIsCodeIncorrect(false)
+
+    if (char && index < 5) {
+      inputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleDigitKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!digits[index] && index > 0) {
+        inputRefs.current[index - 1]?.focus()
+      } else {
+        const nextDigits = [...digits]
+        nextDigits[index] = ''
+        setDigits(nextDigits)
+        setIsCodeIncorrect(false)
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      inputRefs.current[index - 1]?.focus()
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      inputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    const paste = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (!paste) return
+
+    const nextDigits = [...digits]
+    for (let i = 0; i < 6; i++) {
+      nextDigits[i] = paste[i] || ''
+    }
+    setDigits(nextDigits)
+    setIsCodeIncorrect(false)
+    const nextFocusIdx = Math.min(paste.length, 5)
+    inputRefs.current[nextFocusIdx]?.focus()
+  }
+
+  const handleResend = () => {
+    if (countdown > 0) return
+    setCountdown(59)
+    setIsCodeIncorrect(false)
+    setDigits(['', '', '', '', '', ''])
+    inputRefs.current[0]?.focus()
+  }
+
+  const handleVerifyCode = (e: FormEvent) => {
+    e.preventDefault()
+    const enteredCode = digits.join('')
+    if (enteredCode.length < 6) return
+
+    setBusy(true)
+    setTimeout(() => {
+      setBusy(false)
+      // Demo code: '658485' is the official demo code shown in Figma diagram
+      // Any other code triggers the red incorrect code error state
+      if (enteredCode === '658485') {
+        setIsCodeIncorrect(false)
+        setStep('new_password')
+      } else {
+        setIsCodeIncorrect(true)
+      }
+    }, 400)
+  }
+
+  const handlePasswordSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    setPasswordError(null)
+
+    if (!newPassword) return setPasswordError('Please enter a new password.')
+    if (newPassword.length < 6) return setPasswordError('Password must be at least 6 characters.')
+    if (newPassword !== confirmPassword) return setPasswordError('Passwords do not match.')
+
+    setBusy(true)
+    setTimeout(() => {
+      setBusy(false)
+      setStep('success')
+    }, 600)
+  }
+
   return (
     <AuthLayout>
       <div className="w-full animate-fade-up">
-        <Link
-          to="/sign-in"
-          className="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 hover:underline"
-        >
-          <ArrowLeft className="size-3.5" aria-hidden="true" /> Back to Sign In
-        </Link>
-        {sent ? (
-          <div>
-            <span className="grid size-12 place-items-center rounded-2xl bg-success-50 text-success-600 ring-1 ring-success-100">
-              <MailCheck className="size-6" aria-hidden="true" />
-            </span>
-            <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Check your email</h1>
-            <p className="mt-2 text-sm leading-relaxed text-[#6B7280]">
-              If <strong className="text-[#1E1035]">{email}</strong> belongs to a CESS DocuFlow account, we’ve sent a link to set a new
-              password. Please also check your spam folder.
-            </p>
-            <ButtonLink to="/sign-in" variant="secondary" className="mt-6 rounded-full">
-              Return to Sign In
-            </ButtonLink>
-          </div>
-        ) : (
+        {step === 'email' && (
           <>
+            <Link
+              to="/sign-in"
+              className="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 hover:underline"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden="true" /> Back to Sign In
+            </Link>
+
             <span className="grid size-12 place-items-center rounded-2xl bg-purple-50 text-purple-700 ring-1 ring-purple-100">
               <KeyRound className="size-6" aria-hidden="true" />
             </span>
             <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Reset your password</h1>
             <p className="mt-1.5 text-sm text-[#6B7280]">
-              Enter your institutional email and we’ll send you a link to create a new password.
+              Enter your institutional email and we’ll send you a 6-digit verification code to create a new password.
             </p>
-            <form onSubmit={submit} noValidate className="mt-6 space-y-4">
+
+            <form onSubmit={handleEmailSubmit} noValidate className="mt-6 space-y-4">
               <div>
                 <label htmlFor={emailId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
                   Institutional Email
@@ -1296,6 +1417,7 @@ export function ForgotPasswordPage() {
                   </p>
                 )}
               </div>
+
               <button
                 type="submit"
                 disabled={busy}
@@ -1307,10 +1429,215 @@ export function ForgotPasswordPage() {
                   'disabled:cursor-not-allowed disabled:opacity-60',
                 )}
               >
-                {busy ? 'Sending…' : 'Send Reset Link'}
+                {busy ? 'Sending code…' : 'Send Verification Code'}
               </button>
             </form>
           </>
+        )}
+
+        {step === 'code' && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setStep('email')
+                setIsCodeIncorrect(false)
+                setError(null)
+              }}
+              className="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 hover:underline"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden="true" /> Change Email
+            </button>
+
+            <span className="grid size-12 place-items-center rounded-2xl bg-purple-50 text-purple-700 ring-1 ring-purple-100">
+              <KeyRound className="size-6" aria-hidden="true" />
+            </span>
+            <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Enter verification code</h1>
+            <p className="mt-1.5 text-sm text-[#6B7280]">
+              We sent a 6-digit verification code to <strong className="text-[#1E1035]">{maskEmail(email)}</strong>
+            </p>
+
+            <form onSubmit={handleVerifyCode} noValidate className="mt-6">
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-[#1E1035]">
+                  6-Digit Code
+                </label>
+                <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+                  {digits.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={(el) => {
+                        inputRefs.current[idx] = el
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleDigitChange(idx, e.target.value)}
+                      onKeyDown={(e) => handleDigitKeyDown(idx, e)}
+                      onPaste={idx === 0 ? handlePaste : undefined}
+                      aria-label={`Digit ${idx + 1}`}
+                      className={cn(
+                        'size-11 sm:size-12 rounded-xl text-center text-lg sm:text-xl font-bold transition-all duration-150',
+                        isCodeIncorrect
+                          ? 'border-2 border-danger-500 bg-danger-50/20 text-danger-900 ring-1 ring-danger-500 focus:outline-none focus:ring-2 focus:ring-danger-500'
+                          : 'border border-purple-200/90 bg-[#F5F3FA] text-[#1E1035] hover:border-purple-300 focus:border-purple-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600/30',
+                      )}
+                    />
+                  ))}
+                </div>
+
+                {isCodeIncorrect && (
+                  <p role="alert" className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-danger-700 animate-fade-in">
+                    <AlertCircle className="size-4 shrink-0 text-danger-600" aria-hidden="true" />
+                    The code you entered is incorrect.
+                  </p>
+                )}
+
+                <div className="mt-4 flex items-center justify-between text-xs text-[#6B7280]">
+                  <span>Didn't get the code?</span>
+                  {countdown > 0 ? (
+                    <span className="font-medium text-[#6B7280]">
+                      Resend in 0:{String(countdown).padStart(2, '0')}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      className="font-bold text-purple-700 hover:text-purple-900 hover:underline"
+                    >
+                      Resend
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-3 rounded-lg bg-purple-50/80 p-2 text-center text-2xs text-purple-700">
+                  Demo verification code: <strong className="font-mono text-purple-900">658485</strong> (enter any other code to test the error state)
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={digits.join('').length < 6 || busy}
+                aria-busy={busy}
+                className={cn(
+                  'mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-8 text-sm font-bold text-white transition-all duration-200',
+                  'bg-gradient-to-r from-[#7C3AED] to-[#6B21A8] shadow-[0_8px_20px_-6px_rgba(124,58,237,0.65)]',
+                  'hover:-translate-y-0.5 hover:from-purple-700 hover:to-purple-800',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+              >
+                {busy ? 'Verifying…' : 'Verify Code'}
+              </button>
+            </form>
+          </>
+        )}
+
+        {step === 'new_password' && (
+          <>
+            <span className="grid size-12 place-items-center rounded-2xl bg-purple-50 text-purple-700 ring-1 ring-purple-100">
+              <Lock className="size-6" aria-hidden="true" />
+            </span>
+            <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Create new password</h1>
+            <p className="mt-1.5 text-sm text-[#6B7280]">
+              Enter a secure new password for <strong className="text-[#1E1035]">{email}</strong>
+            </p>
+
+            <form onSubmit={handlePasswordSubmit} noValidate className="mt-6 space-y-4">
+              <div>
+                <label htmlFor={newPassId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
+                  New Password
+                </label>
+                <div className="relative">
+                  <Lock
+                    className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-purple-700/70"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id={newPassId}
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password"
+                    className="h-11 w-full rounded-full bg-[#F5F3FA] pl-11 pr-11 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-200/80 transition-all placeholder:text-[#6B7280]/75 hover:ring-purple-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#1E1035]"
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor={confirmPassId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <Lock
+                    className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-purple-700/70"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id={confirmPassId}
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="h-11 w-full rounded-full bg-[#F5F3FA] pl-11 pr-11 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-200/80 transition-all placeholder:text-[#6B7280]/75 hover:ring-purple-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#1E1035]"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {passwordError && (
+                <p role="alert" className="flex items-center gap-1.5 pl-3 text-xs font-medium text-danger-700">
+                  <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
+                  {passwordError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={busy}
+                aria-busy={busy}
+                className={cn(
+                  'inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-8 text-sm font-bold text-white transition-all duration-200',
+                  'bg-gradient-to-r from-[#7C3AED] to-[#6B21A8] shadow-[0_8px_20px_-6px_rgba(124,58,237,0.65)]',
+                  'hover:-translate-y-0.5 hover:from-purple-700 hover:to-purple-800',
+                  'disabled:cursor-not-allowed disabled:opacity-60',
+                )}
+              >
+                {busy ? 'Updating…' : 'Save New Password'}
+              </button>
+            </form>
+          </>
+        )}
+
+        {step === 'success' && (
+          <div>
+            <span className="grid size-12 place-items-center rounded-2xl bg-success-50 text-success-600 ring-1 ring-success-100">
+              <ShieldCheck className="size-6" aria-hidden="true" />
+            </span>
+            <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Password reset successful</h1>
+            <p className="mt-2 text-sm leading-relaxed text-[#6B7280]">
+              Your password has been securely updated. You can now sign in with your official university email and your new password.
+            </p>
+            <ButtonLink to="/sign-in" variant="primary" className="mt-6 w-full justify-center rounded-full">
+              Return to Sign In
+            </ButtonLink>
+          </div>
         )}
       </div>
     </AuthLayout>

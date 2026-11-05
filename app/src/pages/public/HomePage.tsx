@@ -18,7 +18,7 @@ import { Link } from 'react-router-dom'
 import heroImg from '../../assets/hero-documents.jpg'
 import { useSession } from '../../app/session'
 import { homeFor } from '../../app/nav'
-import { Logo } from '../../components/Logo'
+import { Logo, LogoMark } from '../../components/Logo'
 import { ButtonLink, buttonClass, cn } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { useDb } from '../../data/store'
@@ -34,8 +34,15 @@ export function HomePage() {
     <div className="min-h-dvh bg-white">
       {/* Header */}
       <header className="absolute inset-x-0 top-0 z-20">
-        <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-5 sm:px-8">
-          <Logo tone="light" />
+        <div className="mx-auto flex h-16 sm:h-20 w-full min-w-0 max-w-6xl items-center justify-between px-2.5 sm:px-8">
+          <div className="min-w-0 shrink">
+            <div className="hidden min-[420px]:block">
+              <Logo tone="light" />
+            </div>
+            <div className="block min-[420px]:hidden">
+              <LogoMark size="sm" />
+            </div>
+          </div>
           <nav aria-label="Homepage" className="flex items-center gap-1 sm:gap-2">
             <a href="#how-it-works" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-brand-100 hover:bg-white/10 hover:text-white sm:inline-block">
               How It Works
@@ -46,8 +53,8 @@ export function HomePage() {
             <a href="#faculty-syllabi" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-brand-100 hover:bg-white/10 hover:text-white sm:inline-block">
               Faculty &amp; Syllabi
             </a>
-            <Link to={primary.to} className={buttonClass('on-dark', 'md')}>
-              {user ? 'My Dashboard' : 'Sign In'}
+            <Link to={primary.to} className={cn(buttonClass('on-dark', 'sm'), 'px-2.5 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm')}>
+              {user ? 'Dashboard' : 'Sign In'}
             </Link>
           </nav>
         </div>

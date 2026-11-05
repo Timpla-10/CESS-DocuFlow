@@ -537,7 +537,7 @@ export function AllDocumentsPage() {
                             )}
                           </div>
 
-                          <div className="flex flex-col items-end gap-2">
+                          <div className="flex flex-wrap items-center sm:flex-col sm:items-end gap-2 w-full sm:w-auto">
                             <StatusBadge doc={doc} audience="staff" db={db} />
                             {delayed && <DelayedBadge audience="staff" />}
                             <WaitingTime doc={doc} />
@@ -546,7 +546,7 @@ export function AllDocumentsPage() {
                               to={`/app/documents/${doc.id}`}
                               className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
                             >
-                              Inspect & Route <ArrowRight className="size-3" />
+                              Inspect & Route <ArrowRight className="size-3 shrink-0" />
                             </Link>
                           </div>
                         </div>

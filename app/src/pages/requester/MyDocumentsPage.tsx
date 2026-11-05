@@ -305,12 +305,12 @@ export function MyDocumentsPage() {
                       <Card
                         key={doc.id}
                         className={cn(
-                          'p-5 transition-all hover:border-brand-300 hover:shadow-xs',
+                          'p-3.5 sm:p-5 transition-all hover:border-brand-300 hover:shadow-xs w-full min-w-0',
                           doc.status === 'returned' && 'border-danger-300 bg-danger-50/20',
                         )}
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-3 w-full min-w-0">
+                          <div className="min-w-0 flex-1 w-full">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono text-xs font-bold text-ink-600">
                                 {controlNumber(doc)}
@@ -352,7 +352,7 @@ export function MyDocumentsPage() {
                             )}
                           </div>
 
-                          <div className="flex flex-col items-end gap-2">
+                          <div className="flex flex-wrap items-center sm:flex-col sm:items-end gap-2 w-full sm:w-auto">
                             <StatusBadge doc={doc} audience="requester" db={db} />
                             {delayed && <DelayedBadge audience="requester" />}
                             <WaitingTime doc={doc} />
@@ -361,7 +361,7 @@ export function MyDocumentsPage() {
                               to={`/app/documents/${doc.id}`}
                               className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
                             >
-                              View Details & Progress <ArrowRight className="size-3" />
+                              View Details & Progress <ArrowRight className="size-3 shrink-0" />
                             </Link>
                           </div>
                         </div>
@@ -553,12 +553,12 @@ export function MyDocumentsPage() {
                       <Card
                         key={doc.id}
                         className={cn(
-                          'p-5 transition-all hover:border-brand-300 hover:shadow-xs',
+                          'p-3.5 sm:p-5 transition-all hover:border-brand-300 hover:shadow-xs w-full min-w-0',
                           doc.status === 'returned' && 'border-danger-300 bg-danger-50/20',
                         )}
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-3 w-full min-w-0">
+                          <div className="min-w-0 flex-1 w-full">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono text-xs font-bold text-brand-900 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
                                 {controlNumber(doc)}
@@ -602,7 +602,7 @@ export function MyDocumentsPage() {
                             )}
                           </div>
 
-                          <div className="flex flex-col items-end gap-2">
+                          <div className="flex flex-wrap items-center sm:flex-col sm:items-end gap-2 w-full sm:w-auto">
                             <StatusBadge doc={doc} audience="requester" db={db} />
                             {delayed && <DelayedBadge audience="requester" />}
                             <WaitingTime doc={doc} />
@@ -611,7 +611,7 @@ export function MyDocumentsPage() {
                               to={`/app/documents/${doc.id}`}
                               className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
                             >
-                              View Details & Progress <ArrowRight className="size-3" />
+                              View Details & Progress <ArrowRight className="size-3 shrink-0" />
                             </Link>
                           </div>
                         </div>
