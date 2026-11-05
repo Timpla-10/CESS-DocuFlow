@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
 const serverConfig = require('./config/server');
+const swaggerSpec = require('./config/swagger');
 const apiRoutes = require('./routes');
 
 const app = express();
@@ -8,13 +10,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Swagger API Documentation (Interactive UI & Raw JSON Spec)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'CESS DocuFlow API Docs',
+}));
+app.get('/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
 // Root status endpoint
 app.get('/', (req, res) => {
   res.json({
     status: 'online',
     service: 'CESS-DocuFlow Backend Server',
     database: 'Supabase PostgreSQL Connected',
+    documentation: '/api-docs',
     endpoints: {
+      docs: '/api-docs',
+      docsJson: '/api-docs.json',
       health: '/api/health',
       login: 'POST /api/auth/login',
       register: 'POST /api/auth/register',
@@ -23,6 +37,7 @@ app.get('/', (req, res) => {
       pending: 'GET /api/auth/pending',
       documents: 'GET /api/documents',
       documentTypes: 'GET /api/document-types',
+      routes: 'GET /api/workflow/routes',
     },
   });
 });
