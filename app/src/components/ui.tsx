@@ -2,7 +2,7 @@
  * Core UI primitives for CESS DocuFlow.
  * All colours come from the tokens in index.css — no raw hex values here.
  */
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import {
   useId,
   useState,
@@ -802,6 +802,7 @@ export function Pagination({
   itemLabel = 'logs',
   className,
 }: PaginationProps) {
+  const [isRowsFocused, setIsRowsFocused] = useState(false)
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const end = Math.min(currentPage * pageSize, totalItems)
@@ -834,18 +835,41 @@ export function Pagination({
           <label htmlFor="rows-select" className="text-ink-600">
             Rows:
           </label>
-          <select
-            id="rows-select"
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-8 rounded-lg border border-ink-200 bg-white !pl-2.5 !pr-7 py-0 text-xs font-semibold text-ink-800 shadow-2xs hover:border-ink-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer"
-          >
-            {pageSizeOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
+          <div className="group relative">
+            <select
+              id="rows-select"
+              value={pageSize}
+              onChange={(e) => {
+                setIsRowsFocused(false)
+                e.currentTarget.blur()
+                onPageSizeChange(Number(e.target.value))
+              }}
+              onFocus={() => setIsRowsFocused(true)}
+              onBlur={() => setIsRowsFocused(false)}
+              className="h-8 appearance-none rounded-lg border border-ink-200 bg-white pl-2.5 pr-7 py-0 text-xs font-semibold text-ink-800 shadow-2xs hover:border-ink-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer"
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+              <ChevronDown
+                className={cn(
+                  'size-3.5 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+                  isRowsFocused
+                    ? 'text-brand-600'
+                    : 'text-ink-500 group-hover:translate-y-0.5 group-hover:text-brand-600',
+                )}
+                style={{
+                  transform: isRowsFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transformOrigin: 'center',
+                }}
+                aria-hidden="true"
+              />
+            </div>
+          </div>
         </div>
       </div>
 

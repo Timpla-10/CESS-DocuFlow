@@ -2,6 +2,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  ChevronDown,
   Clock,
   Eye,
   EyeOff,
@@ -555,6 +556,8 @@ export function SignInPage() {
   const [regOrigin, setRegOrigin] = useState<'CESS' | 'IDS'>('CESS')
   const [regDept, setRegDept] = useState('BSEd English')
   const [regErrors, setRegErrors] = useState<{ name?: string; email?: string; dept?: string }>({})
+  const [roleFocused, setRoleFocused] = useState(false)
+  const [originFocused, setOriginFocused] = useState(false)
   const [regBusy, setRegBusy] = useState(false)
   const [regFeedback, setRegFeedback] = useState<{
     type: 'success' | 'pending' | 'error'
@@ -960,26 +963,68 @@ export function SignInPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Role</label>
-                  <select
-                    value={regRole}
-                    onChange={(e) => setRegRole(e.target.value as Role)}
-                    className="h-10 w-full rounded-full bg-[#F1ECF9] px-3 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
-                  >
-                    <option value="student">Student</option>
-                    <option value="faculty">Faculty Member</option>
-                  </select>
+                  <div className="group relative">
+                    <select
+                      value={regRole}
+                      onChange={(e) => {
+                        setRoleFocused(false)
+                        e.currentTarget.blur()
+                        setRegRole(e.target.value as Role)
+                      }}
+                      onFocus={() => setRoleFocused(true)}
+                      onBlur={() => setRoleFocused(false)}
+                      className="h-10 w-full appearance-none rounded-full bg-[#F1ECF9] pl-3.5 pr-8 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 cursor-pointer"
+                    >
+                      <option value="student">Student</option>
+                      <option value="faculty">Faculty Member</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                      <ChevronDown
+                        className={cn(
+                          'size-3.5 text-purple-700 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+                          !roleFocused && 'group-hover:translate-y-0.5',
+                        )}
+                        style={{
+                          transform: roleFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transformOrigin: 'center',
+                        }}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Unit / School</label>
-                  <select
-                    value={regOrigin}
-                    onChange={(e) => setRegOrigin(e.target.value as Origin)}
-                    className="h-10 w-full rounded-full bg-[#F1ECF9] px-3 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
-                  >
-                    <option value="CESS">CESS Main Campus</option>
-                    <option value="IDS">IDS Developmental School</option>
-                  </select>
+                  <div className="group relative">
+                    <select
+                      value={regOrigin}
+                      onChange={(e) => {
+                        setOriginFocused(false)
+                        e.currentTarget.blur()
+                        setRegOrigin(e.target.value as Origin)
+                      }}
+                      onFocus={() => setOriginFocused(true)}
+                      onBlur={() => setOriginFocused(false)}
+                      className="h-10 w-full appearance-none rounded-full bg-[#F1ECF9] pl-3.5 pr-8 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 cursor-pointer"
+                    >
+                      <option value="CESS">CESS Main Campus</option>
+                      <option value="IDS">IDS Developmental School</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                      <ChevronDown
+                        className={cn(
+                          'size-3.5 text-purple-700 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+                          !originFocused && 'group-hover:translate-y-0.5',
+                        )}
+                        style={{
+                          transform: originFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transformOrigin: 'center',
+                        }}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 

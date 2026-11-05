@@ -455,7 +455,14 @@ function UserMenu() {
           <span className="block text-sm font-semibold text-ink-900">{user.name}</span>
           <span className="block text-xs text-ink-500">{user.position}</span>
         </span>
-        <ChevronDown className="size-4 text-ink-400" aria-hidden />
+        <ChevronDown
+          className={cn(
+            'size-4 text-ink-400 transform-gpu transition-transform duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+            open && 'rotate-180',
+          )}
+          style={{ transformOrigin: 'center' }}
+          aria-hidden
+        />
       </button>
       {open && (
         <div className="absolute right-0 top-12 z-30 w-60 origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white p-1.5 shadow-raised ring-1 ring-ink-100">

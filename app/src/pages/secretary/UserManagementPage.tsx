@@ -588,10 +588,10 @@ export function UserManagementPage() {
               </div>
 
               <div>
-                <select
+                <Select
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="h-9 text-xs"
                 >
                   <option value="all">All Roles ({db.users.length})</option>
                   {ALL_ROLES.map((r) => (
@@ -599,31 +599,31 @@ export function UserManagementPage() {
                       {ROLE_LABEL[r]}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div>
-                <select
+                <Select
                   value={originFilter}
                   onChange={(e) => setOriginFilter(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="h-9 text-xs"
                 >
                   <option value="all">All Units (CESS & IDS)</option>
                   <option value="CESS">CESS Main Campus</option>
                   <option value="IDS">Integrated Developmental School (IDS)</option>
-                </select>
+                </Select>
               </div>
 
               <div>
-                <select
+                <Select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="h-9 text-xs"
                 >
                   <option value="all">All Account Statuses</option>
                   <option value="active">Active Only</option>
                   <option value="deactivated">Deactivated Only</option>
-                </select>
+                </Select>
               </div>
             </div>
           </div>
@@ -707,14 +707,14 @@ export function UserManagementPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-ink-800">Masterlist Type</label>
-                  <select
+                  <Select
                     value={importTargetRole}
                     onChange={(e) => setImportTargetRole(e.target.value as 'student' | 'faculty')}
-                    className="h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-800 focus:border-brand-500 focus:outline-none"
+                    className="h-10 text-sm"
                   >
                     <option value="student">Enrolled Students Masterlist</option>
                     <option value="faculty">Faculty & Academic Staff Roster</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div>
@@ -909,15 +909,15 @@ export function UserManagementPage() {
                 </div>
 
                 <div>
-                  <select
+                  <Select
                     value={whitelistRoleFilter}
                     onChange={(e) => setWhitelistRoleFilter(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none"
+                    className="h-9 text-xs"
                   >
                     <option value="all">All Roles</option>
                     <option value="student">Students</option>
                     <option value="faculty">Faculty</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
             </div>
