@@ -4,6 +4,7 @@ const swaggerUi = require('swagger-ui-express');
 const serverConfig = require('./config/server');
 const swaggerSpec = require('./config/swagger');
 const apiRoutes = require('./routes');
+const { sanitizeForLog } = require('./services/authService');
 
 const app = express();
 
@@ -32,6 +33,9 @@ app.get('/', (req, res) => {
       health: '/api/health',
       login: 'POST /api/auth/login',
       register: 'POST /api/auth/register',
+      forgotPassword: 'POST /api/auth/forgot-password',
+      resetPassword: 'POST /api/auth/reset-password',
+      changePassword: 'POST /api/auth/change-password',
       me: 'GET /api/auth/me',
       whitelist: 'GET /api/auth/whitelist',
       pending: 'GET /api/auth/pending',
@@ -45,11 +49,18 @@ app.get('/', (req, res) => {
 // Mount API routes
 app.use('/api', apiRoutes);
 
-// Global error handler
+// Global error handler (PB-03: ensures passwords are never exposed in error payloads or logs)
 app.use((err, req, res, next) => {
   const status = err.status || 500;
+  const bodySecrets = [
+    req.body?.password,
+    req.body?.currentPassword,
+    req.body?.newPassword,
+    req.body?.confirmPassword,
+  ].filter(Boolean);
+  const safeMessage = sanitizeForLog(err.message || 'Internal Server Error', bodySecrets);
   res.status(status).json({
-    error: err.message || 'Internal Server Error',
+    error: safeMessage,
   });
 });
 

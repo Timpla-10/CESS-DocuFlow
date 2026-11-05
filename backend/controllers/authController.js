@@ -136,6 +136,47 @@ const AuthController = {
       next(err);
     }
   },
+
+  /** POST /api/auth/forgot-password — Request password reset via registered university email (PB-03) */
+  async requestPasswordReset(req, res, next) {
+    try {
+      const { email, redirectTo } = req.body || {};
+      const result = await AuthService.requestPasswordReset(email, { redirectTo });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /** POST /api/auth/reset-password — Confirm password reset with recovery token & new password (PB-03) */
+  async confirmPasswordReset(req, res, next) {
+    try {
+      const result = await AuthService.confirmPasswordReset(req.body || {});
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /** POST /api/auth/change-password — Signed-in user changes account password (PB-03) */
+  async changePassword(req, res, next) {
+    try {
+      const result = await AuthService.changePassword(req.user, req.body || {});
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /** GET /api/auth/security-logs — Inspect sanitized account security logs (Secretary only, PB-03) */
+  async getSecurityLogs(req, res, next) {
+    try {
+      const logs = AuthService.getSecurityLogs();
+      res.json({ count: logs.length, logs });
+    } catch (err) {
+      next(err);
+    }
+  },
 };
 
 module.exports = AuthController;
