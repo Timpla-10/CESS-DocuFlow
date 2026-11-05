@@ -1,0 +1,278 @@
+// ============================================================
+// CESS DocuFlow — DBML for dbdiagram.io
+// Based on: CESS DocuFlow SRS & Product Backlog Constraints
+// ============================================================
+
+Enum user_account_status {
+  Active
+  Inactive
+  Pending_Verification
+}
+
+Enum user_role_name {
+  Student
+  CESS_Faculty
+  IDS_Faculty
+  IDS_Principal
+  Dept_Chairperson
+  College_Dean
+  OVCAA
+  VCAF
+  Chancellor
+  College_Secretary_Admin
+}
+
+Enum office_type {
+  Internal_Review
+  External_Office
+  Admin
+}
+
+Enum document_origin {
+  CESS
+  IDS
+}
+
+Enum document_status {
+  Submitted
+  Under_Review
+  Returned
+  Rejected
+  With_External_Office
+  Ready_for_Release
+  Released
+  Archived
+}
+
+Enum action_type {
+  Submitted
+  Content_Verified
+  Routed
+  Endorsed
+  Approved
+  Returned
+  Rejected
+  Sent_External
+  Returned_External
+  Ready_for_Release
+  Released
+  Archived
+}
+
+Enum notification_type {
+  Status_Update
+  Reminder_3_Days
+  Return_Alert
+  Reject_Alert
+  Release_Alert
+  Notice_Minutes_Alert
+}
+
+Enum delivery_method {
+  Email
+  In_System
+  Both
+}
+
+Enum notification_status {
+  Pending
+  Sent
+  Failed
+}
+
+Table "User" {
+  user_id uuid [pk, default: `gen_random_uuid()`]
+  university_email varchar(255) [unique, not null, note: "University Gmail account (PB-01)"]
+  first_name varchar(100) [not null]
+  last_name varchar(100) [not null]
+  department_or_office varchar(150)
+  account_status user_account_status [not null, default: 'Active']
+  is_whitelisted boolean [not null, default: true, note: "Admin verification/whitelist (PB-43)"]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table Role {
+  role_id int [pk, increment]
+  role_name user_role_name [unique, not null]
+}
+
+Table User_Role {
+  user_id uuid [ref: > "User".user_id]
+  role_id int [ref: > Role.role_id]
+  assigned_at timestamptz [not null, default: `now()`]
+  indexes {
+    (user_id, role_id) [pk]
+  }
+}
+
+Table Office {
+  office_id int [pk, increment]
+  office_name varchar(150) [unique, not null]
+  office_type office_type [not null]
+  is_active boolean [not null, default: true]
+}
+
+Table User_Office {
+  user_id uuid [ref: > "User".user_id]
+  office_id int [ref: > Office.office_id]
+  assigned_at timestamptz [not null, default: `now()`]
+  indexes {
+    (user_id, office_id) [pk]
+  }
+}
+
+Table Document_Type {
+  doc_type_id int [pk, increment]
+  type_name varchar(200) [not null]
+  origin document_origin [not null]
+  standard_processing_days int [not null, note: "SLA standard days (PB-30)"]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Required_Form {
+  form_id int [pk, increment]
+  doc_type_id int [ref: > Document_Type.doc_type_id]
+  form_name varchar(200) [not null]
+  is_required boolean [not null, default: true]
+  template_url varchar(500)
+  source_office varchar(150)
+}
+
+Table Document_Request {
+  document_id uuid [pk, default: `gen_random_uuid()`]
+  control_number varchar(50) [unique, not null]
+  current_revision_no int [not null, default: 1]
+  requester_id uuid [ref: > "User".user_id, not null]
+  doc_type_id int [ref: > Document_Type.doc_type_id, not null]
+  title varchar(255) [not null]
+  description text
+  origin document_origin [not null]
+  current_status document_status [not null, default: 'Submitted']
+  current_office_id int [ref: > Office.office_id]
+  submitted_at timestamptz [not null, default: `now()` packaging: "Used for FIFO ordering"]
+  last_updated_at timestamptz [not null, default: `now()` packaging: "Track 3-day aging"]
+  is_deleted boolean [not null, default: false, note: "Soft delete / archiving (PB-34)"]
+
+  indexes {
+    submitted_at
+    current_status
+    current_office_id
+    requester_id
+  }
+}
+
+Table Document_Attachment {
+  attachment_id uuid [pk, default: `gen_random_uuid()`]
+  document_id uuid [ref: > Document_Request.document_id, not null]
+  form_id int [ref: > Required_Form.form_id]
+  revision_no int [not null, default: 1]
+  file_name varchar(255) [not null]
+  file_url varchar(500) [not null]
+  file_type varchar(50)
+  file_size_kb int [note: "Max 20MB / 20480 KB (PB-14)"]
+  uploaded_at timestamptz [not null, default: `now()`]
+}
+
+Table Document_History {
+  history_id uuid [pk, default: `gen_random_uuid()`]
+  document_id uuid [ref: > Document_Request.document_id, not null]
+  revision_no int [not null]
+  action_by_user_id uuid [ref: > "User".user_id]
+  action_office_id int [ref: > Office.office_id]
+  action_type action_type [not null]
+  action_remarks text [note: "Mandatory for Return and Reject"]
+  action_timestamp timestamptz [not null, default: `now()`]
+
+  indexes {
+    document_id
+  }
+}
+
+Table Route_Template {
+  route_id int [pk, increment]
+  doc_type_id int [ref: > Document_Type.doc_type_id]
+  origin document_origin [not null]
+  description text
+
+  indexes {
+    (doc_type_id, origin) [unique]
+  }
+}
+
+Table Route_Step {
+  step_id int [pk, increment]
+  route_id int [ref: > Route_Template.route_id]
+  office_id int [ref: > Office.office_id]
+  step_order int [not null]
+  is_conditional boolean [not null, default: false]
+
+  indexes {
+    (route_id, step_order) [unique]
+  }
+}
+
+Table Notification_Preference {
+  pref_id int [pk, increment]
+  user_id uuid [unique, ref: - "User".user_id]
+  receive_email boolean [not null, default: true]
+  receive_in_system boolean [not null, default: true]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table Notification_Log {
+  notification_id uuid [pk, default: `gen_random_uuid()`]
+  recipient_id uuid [ref: > "User".user_id]
+  document_id uuid [ref: > Document_Request.document_id]
+  notification_type notification_type [not null]
+  delivery_method delivery_method [not null]
+  title varchar(255) [not null]
+  message text [not null]
+  is_read boolean [not null, default: false]
+  status notification_status [not null, default: 'Pending']
+  sent_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    recipient_id
+  }
+}
+
+Table Faculty_Profile {
+  profile_id int [pk, increment]
+  user_id uuid [unique, ref: - "User".user_id]
+  biography text
+  display_picture_url varchar(500)
+  consultation_hours varchar(255)
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table Subject {
+  subject_id int [pk, increment]
+  subject_code varchar(50) [unique, not null]
+  subject_name varchar(200) [not null]
+  description text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table Syllabus {
+  syllabus_id int [pk, increment]
+  subject_id int [ref: > Subject.subject_id]
+  faculty_id int [ref: > Faculty_Profile.profile_id]
+  academic_year varchar(20) [not null, default: '2025-2026']
+  semester varchar(20) [not null, default: '1st Semester']
+  file_url varchar(500) [not null]
+  uploaded_at timestamptz [not null, default: `now()`]
+}
+
+Table Announcement {
+  announcement_id int [pk, increment]
+  title varchar(255) [not null]
+  content text [not null]
+  published_by uuid [ref: > "User".user_id]
+  target_audience varchar(50) [not null, default: 'All']
+  is_published boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
