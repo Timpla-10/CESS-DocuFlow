@@ -1,4 +1,6 @@
-const { transporter, defaultFrom, isConfigured, user: smtpUser } = require('../config/mailer');
+const { transporter, defaultFrom, isConfigured, host, port, user: smtpUser } = require('../config/mailer');
+const NotificationModel = require('../models/notificationModel');
+const UserModel = require('../models/userModel');
 
 /**
  * Base email layout wrapper with MSU at Naawan / CESS DocuFlow branding.
@@ -59,7 +61,7 @@ function wrapHtmlLayout(title, contentHtml) {
 
 const EmailService = {
   /**
-   * Verify SMTP connectivity
+   * PB-52: Verify SMTP connectivity and readiness
    */
   async verifySmtp() {
     if (!isConfigured) {
@@ -77,11 +79,32 @@ const EmailService = {
   },
 
   /**
-   * Send a raw email
+   * PB-42 & PB-49: Send a raw email and record delivery status in `notification_log`
    */
-  async sendMail({ to, subject, html, text }) {
+  async sendMail({ to, subject, html, text, recipientId, documentId, notificationType = 'Status_Update' }) {
+    let resolvedRecipientId = recipientId;
+    if (!resolvedRecipientId) {
+      try {
+        const u = await UserModel.findByEmail(to);
+        if (u) resolvedRecipientId = u.id;
+      } catch {
+        // Fallback
+      }
+    }
+
     if (!isConfigured) {
       console.warn(`⚠️ [Nodemailer skipped - no credentials] To: ${to} | Subject: ${subject}`);
+      if (resolvedRecipientId) {
+        await NotificationModel.createLog({
+          recipientId: resolvedRecipientId,
+          documentId,
+          notificationType,
+          deliveryMethod: 'Email',
+          title: subject,
+          message: text,
+          status: 'Failed',
+        }).catch(() => null);
+      }
       return { success: false, reason: 'smtp_not_configured' };
     }
 
@@ -95,9 +118,39 @@ const EmailService = {
       });
 
       console.log(`📧 [Nodemailer sent] ID: ${info.messageId} | To: ${to} | Subject: ${subject}`);
+
+      // PB-42: Track successful delivery in notification log
+      if (resolvedRecipientId) {
+        await NotificationModel.createLog({
+          recipientId: resolvedRecipientId,
+          documentId,
+          notificationType,
+          deliveryMethod: 'Email',
+          title: subject,
+          message: text,
+          status: 'Sent',
+          sentAt: new Date().toISOString(),
+        }).catch((e) => console.warn('Could not record sent notification log:', e.message));
+      }
+
       return { success: true, messageId: info.messageId };
     } catch (err) {
       console.error(`❌ [Nodemailer error] Failed to send to ${to}:`, err.message);
+
+      // PB-42: Track failure in notification log for Secretary auditing
+      if (resolvedRecipientId) {
+        await NotificationModel.createLog({
+          recipientId: resolvedRecipientId,
+          documentId,
+          notificationType,
+          deliveryMethod: 'Email',
+          title: subject,
+          message: `${text}\n[Delivery Error: ${err.message}]`,
+          status: 'Failed',
+          sentAt: new Date().toISOString(),
+        }).catch(() => null);
+      }
+
       return { success: false, error: err.message };
     }
   },
@@ -160,11 +213,12 @@ const EmailService = {
       subject: `[CESS DocuFlow] Password Reset Verification Code: ${code}`,
       html: wrapHtmlLayout('Password Reset Request', contentHtml),
       text,
+      notificationType: 'Status_Update',
     });
   },
 
   /**
-   * Account Registration Submitted (Pending College Secretary verification)
+   * PB-02: Account Registration Submitted (Pending Secretary Verification)
    */
   async sendRegistrationQueuedEmail({ to, name = 'Applicant', requestedRole, department }) {
     const contentHtml = `
@@ -205,11 +259,12 @@ const EmailService = {
       subject: `[CESS DocuFlow] Registration Received — Pending Verification`,
       html: wrapHtmlLayout('Registration Received', contentHtml),
       text: `Hello ${name},\n\nYour registration request for CESS DocuFlow (${to}) has been received and is pending verification with the College Secretary.\n\nRole: ${requestedRole}\nDepartment: ${department}\n\nYou will receive a notification once approved.`,
+      notificationType: 'Status_Update',
     });
   },
 
   /**
-   * Account Verified & Activated Email
+   * PB-02: Account Verified & Activated Email
    */
   async sendAccountActivatedEmail({ to, name = 'University Member', role, department }) {
     const signInUrl = 'http://localhost:5173/sign-in';
@@ -244,11 +299,48 @@ const EmailService = {
       subject: `[CESS DocuFlow] Account Verified & Activated — Welcome!`,
       html: wrapHtmlLayout('Account Activated', contentHtml),
       text: `Hello ${name},\n\nYour CESS DocuFlow account (${to}) has been verified and activated!\n\nRole: ${role}\nDepartment: ${department}\n\nSign in at: ${signInUrl}`,
+      notificationType: 'Status_Update',
     });
   },
 
   /**
-   * Password Changed Security Alert (PB-03)
+   * PB-02: Account Registration Rejected Notification
+   */
+  async sendRegistrationRejectedEmail({ to, name = 'Applicant', reason }) {
+    const reasonText = reason || 'Your application credentials could not be verified against institutional masterlists.';
+
+    const contentHtml = `
+      <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #B91C1C;">
+        Registration Update
+      </h2>
+      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #4B5563;">
+        Hello <strong>${name}</strong>,<br>
+        Thank you for submitting your application to <strong>CESS DocuFlow</strong>. Following review by the College Secretary, your registration request could not be approved at this time:
+      </p>
+
+      <div style="background-color: #FEF2F2; border-left: 4px solid #EF4444; border-radius: 6px; padding: 16px; margin: 20px 0;">
+        <div style="font-size: 12px; font-weight: 700; color: #991B1B; text-transform: uppercase;">Secretary Reason:</div>
+        <div style="font-size: 13px; color: #7F1D1D; margin-top: 4px; line-height: 1.5;">
+          ${reasonText}
+        </div>
+      </div>
+
+      <p style="font-size: 13px; color: #4B5563; line-height: 1.6;">
+        If you believe this is an error or need assistance, please visit the <strong>College Secretary's Office (CESS Building)</strong> with your student ID or appointment papers.
+      </p>
+    `;
+
+    return this.sendMail({
+      to,
+      subject: `[CESS DocuFlow] Update on Your Account Registration Request`,
+      html: wrapHtmlLayout('Registration Notice', contentHtml),
+      text: `Hello ${name},\n\nYour registration request for CESS DocuFlow (${to}) was not approved.\n\nReason: ${reasonText}\n\nPlease contact the College Secretary's Office for inquiries.`,
+      notificationType: 'Reject_Alert',
+    });
+  },
+
+  /**
+   * PB-03: Password Changed Security Alert
    */
   async sendPasswordChangedAlert({ to, name = 'User' }) {
     const contentHtml = `
@@ -273,9 +365,160 @@ const EmailService = {
       subject: `[CESS DocuFlow Security Alert] Your Password Was Changed`,
       html: wrapHtmlLayout('Security Alert: Password Changed', contentHtml),
       text: `Hello ${name},\n\nThe password for your CESS DocuFlow account (${to}) was changed on ${new Date().toLocaleString()}.\n\nIf you did not make this change, please reset your password immediately.`,
+      notificationType: 'Status_Update',
+    });
+  },
+
+  /**
+   * PB-17: Document Request Submitted & Control Number Assigned Confirmation
+   */
+  async sendSubmissionConfirmationEmail({ to, name = 'Requester', controlNumber, title, documentType, documentId, recipientId }) {
+    const trackUrl = `http://localhost:5173/documents`;
+
+    const contentHtml = `
+      <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #1E1035;">
+        Request Submitted: ${controlNumber}
+      </h2>
+      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #4B5563;">
+        Hello <strong>${name}</strong>,<br>
+        Your document request has been submitted to <strong>CESS DocuFlow</strong> and assigned an official tracking control number.
+      </p>
+
+      <div style="background-color: #F5F3FA; border: 1.5px solid #DDD6FE; border-radius: 12px; padding: 20px; margin: 20px 0;">
+        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #7C3AED;">Official Control Number</div>
+        <div style="font-family: monospace; font-size: 22px; font-weight: 800; color: #4C2882; margin: 4px 0 12px 0;">
+          ${controlNumber}
+        </div>
+        <div style="font-size: 13px; color: #4B5563; line-height: 1.5;">
+          • <strong>Title:</strong> ${title}<br>
+          • <strong>Type:</strong> ${documentType || 'Administrative Request'}<br>
+          • <strong>Current Status:</strong> <span style="color: #6B21A8; font-weight: 700;">Submitted (Queued for College Secretary Verification)</span>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${trackUrl}" style="display: inline-block; background: linear-gradient(135deg, #7C3AED 0%, #6B21A8 100%); color: #FFFFFF; font-size: 14px; font-weight: 700; text-decoration: none; padding: 12px 28px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);">
+          View Request Details
+        </a>
+      </div>
+    `;
+
+    return this.sendMail({
+      to,
+      recipientId,
+      documentId,
+      notificationType: 'Status_Update',
+      subject: `[CESS DocuFlow] Request Submitted — ${controlNumber}`,
+      html: wrapHtmlLayout('Submission Confirmation', contentHtml),
+      text: `Hello ${name},\n\nYour request has been submitted to CESS DocuFlow.\n\nControl Number: ${controlNumber}\nTitle: ${title}\nStatus: Submitted\n\nTrack your document at: ${trackUrl}`,
+    });
+  },
+
+  /**
+   * PB-22: Document Returned for Revision Notification
+   */
+  async sendReturnForRevisionEmail({ to, name = 'Requester', controlNumber, title, returnedByOffice, remarks, documentId, recipientId }) {
+    const editUrl = `http://localhost:5173/documents`;
+
+    const contentHtml = `
+      <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #D97706;">
+        Action Needed: Request Returned for Revision
+      </h2>
+      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #4B5563;">
+        Hello <strong>${name}</strong>,<br>
+        Your document request <strong>${controlNumber}</strong> (${title}) was returned for revision by <strong>${returnedByOffice || 'Reviewing Office'}</strong>.
+      </p>
+
+      <div style="background-color: #FFFBEB; border-left: 4px solid #F59E0B; padding: 16px; border-radius: 6px; margin: 20px 0;">
+        <div style="font-size: 12px; font-weight: 700; color: #92400E; text-transform: uppercase;">Revision Remarks:</div>
+        <div style="font-size: 13px; color: #78350F; margin-top: 4px; line-height: 1.5;">
+          ${remarks || 'Please review requirements and resubmit corrected files.'}
+        </div>
+      </div>
+
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${editUrl}" style="display: inline-block; background: linear-gradient(135deg, #D97706 0%, #B45309 100%); color: #FFFFFF; font-size: 14px; font-weight: 700; text-decoration: none; padding: 12px 28px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);">
+          Resubmit Revision
+        </a>
+      </div>
+    `;
+
+    return this.sendMail({
+      to,
+      recipientId,
+      documentId,
+      notificationType: 'Return_Alert',
+      subject: `[Action Required] Request Returned for Revision: ${controlNumber}`,
+      html: wrapHtmlLayout('Revision Needed', contentHtml),
+      text: `Hello ${name},\n\nYour request ${controlNumber} was returned for revision by ${returnedByOffice}.\n\nRemarks: ${remarks}\n\nPlease resubmit at: ${editUrl}`,
+    });
+  },
+
+  /**
+   * PB-23: Document Disapproved / Rejected Notification
+   */
+  async sendDocumentRejectedEmail({ to, name = 'Requester', controlNumber, title, rejectedByOffice, remarks, documentId, recipientId }) {
+    const contentHtml = `
+      <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #B91C1C;">
+        Request Rejected / Disapproved
+      </h2>
+      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #4B5563;">
+        Hello <strong>${name}</strong>,<br>
+        Your document request <strong>${controlNumber}</strong> (${title}) was disapproved by <strong>${rejectedByOffice || 'Reviewing Office'}</strong>.
+      </p>
+
+      <div style="background-color: #FEF2F2; border-left: 4px solid #EF4444; padding: 16px; border-radius: 6px; margin: 20px 0;">
+        <div style="font-size: 12px; font-weight: 700; color: #991B1B; text-transform: uppercase;">Disapproval Reason:</div>
+        <div style="font-size: 13px; color: #7F1D1D; margin-top: 4px; line-height: 1.5;">
+          ${remarks || 'Request cannot proceed due to policy non-compliance.'}
+        </div>
+      </div>
+    `;
+
+    return this.sendMail({
+      to,
+      recipientId,
+      documentId,
+      notificationType: 'Reject_Alert',
+      subject: `[CESS DocuFlow] Request Disapproved: ${controlNumber}`,
+      html: wrapHtmlLayout('Request Disapproved', contentHtml),
+      text: `Hello ${name},\n\nYour request ${controlNumber} was disapproved by ${rejectedByOffice}.\n\nReason: ${remarks}`,
+    });
+  },
+
+  /**
+   * PB-24: Document Ready for Release Notification
+   */
+  async sendReadyForReleaseEmail({ to, name = 'Requester', controlNumber, title, releaseOffice, documentId, recipientId }) {
+    const contentHtml = `
+      <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #047857;">
+        🎉 Document Ready for Release!
+      </h2>
+      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #4B5563;">
+        Hello <strong>${name}</strong>,<br>
+        Great news! All endorsements and approvals for your request <strong>${controlNumber}</strong> (${title}) have been completed.
+      </p>
+
+      <div style="background-color: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 12px; padding: 16px; margin: 20px 0;">
+        <div style="font-size: 13px; font-weight: 700; color: #065F46;">Release Details:</div>
+        <div style="font-size: 13px; color: #047857; margin-top: 4px; line-height: 1.5;">
+          • Control Number: <strong>${controlNumber}</strong><br>
+          • Release Location: <strong>${releaseOffice || "College Secretary's Office"}</strong><br>
+          • Status: <strong>Ready for Release</strong>
+        </div>
+      </div>
+    `;
+
+    return this.sendMail({
+      to,
+      recipientId,
+      documentId,
+      notificationType: 'Release_Alert',
+      subject: `[CESS DocuFlow] Document Ready for Release: ${controlNumber}`,
+      html: wrapHtmlLayout('Ready for Release', contentHtml),
+      text: `Hello ${name},\n\nYour document request ${controlNumber} is approved and ready for release at ${releaseOffice}.\n\nStatus: Ready for Release`,
     });
   },
 };
 
 module.exports = EmailService;
-

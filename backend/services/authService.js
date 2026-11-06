@@ -535,7 +535,9 @@ const AuthService = {
         secretsToRedact: secrets,
       });
       const err = new Error(
-        'Invalid or expired password reset token. Please request a new password reset link.'
+        tokenRecord?.used
+          ? 'This password reset token has already been used. Please request a new password reset link.'
+          : 'Invalid or expired password reset token. Please request a new password reset link.'
       );
       err.status = 400;
       throw err;
@@ -986,12 +988,14 @@ const AuthService = {
   /**
    * PB-02: Admin (College Secretary) rejects a pending registration
    */
-  async rejectPendingRegistration(actor, registrationId) {
+  async rejectPendingRegistration(actor, registrationId, reason) {
     if (!canPerformAction(actor, 'verify_registration')) {
       const err = new Error('Forbidden: Only the College Secretary can reject registrations.');
       err.status = 403;
       throw err;
     }
+
+    const reg = await UserModel.findPendingById(registrationId);
 
     const { error } = await supabase
       .from('User')
@@ -999,7 +1003,20 @@ const AuthService = {
       .eq('user_id', registrationId);
     if (error) throw error;
 
-    return UserModel.findById(registrationId);
+    const updated = await UserModel.findById(registrationId);
+
+    // PB-02: Notify student/faculty when Secretary rejects their account
+    if (reg?.email) {
+      EmailService.sendRegistrationRejectedEmail({
+        to: reg.email,
+        name: reg.name,
+        reason: reason || 'Application credentials could not be verified against institutional masterlists.',
+      }).catch((mailErr) => {
+        console.warn(`[Nodemailer] Warning: Could not deliver rejection email to ${reg.email}:`, mailErr.message);
+      });
+    }
+
+    return updated;
   },
 
   /**

@@ -1,4 +1,5 @@
 const supabase = require('../config/database');
+const NotificationModel = require('./notificationModel');
 
 const DOC_SELECT = `
   *,
@@ -456,128 +457,28 @@ const DocumentModel = {
    * PB-22 & PB-05: Get user's notification delivery preference
    */
   async getNotificationPreference(userId) {
-    if (!userId) return mapPreferenceRow(null);
-    if (prefCache.has(userId)) {
-      return mapPreferenceRow(prefCache.get(userId));
-    }
-
-    const { data, error } = await supabase
-      .from('notification_preference')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error) {
-      return mapPreferenceRow(null);
-    }
-    return mapPreferenceRow(data);
+    return NotificationModel.getPreference(userId);
   },
 
   /**
    * PB-22 & PB-05: Update user's notification delivery preference
    */
   async updateNotificationPreference(userId, input = {}) {
-    let receive_email = true;
-    let receive_in_system = true;
-
-    if (typeof input.preference === 'string') {
-      const p = input.preference.toLowerCase();
-      if (p === 'email_only' || p === 'email') {
-        receive_email = true;
-        receive_in_system = false;
-      } else if (p === 'in_system_only' || p === 'in_system') {
-        receive_email = false;
-        receive_in_system = true;
-      } else {
-        receive_email = true;
-        receive_in_system = true;
-      }
-    } else {
-      if (input.receive_email !== undefined) receive_email = Boolean(input.receive_email);
-      if (input.receive_in_system !== undefined) receive_in_system = Boolean(input.receive_in_system);
-    }
-
-    prefCache.set(userId, { user_id: userId, receive_email, receive_in_system });
-
-    const { data, error } = await supabase
-      .from('notification_preference')
-      .upsert(
-        {
-          user_id: userId,
-          receive_email,
-          receive_in_system,
-        },
-        { onConflict: 'user_id' }
-      )
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      // Fallback to in-memory cache if table trigger has updated_at issue
-      return mapPreferenceRow(prefCache.get(userId));
-    }
-
-    return mapPreferenceRow(data || prefCache.get(userId));
+    return NotificationModel.updatePreference(userId, input);
   },
 
   /**
    * PB-22 & PB-06: Record a notification in `notification_log` following user's preference
    */
-  async createNotification({
-    recipientId,
-    documentId,
-    notificationType = 'Return_Alert',
-    deliveryMethod = 'Both',
-    title,
-    message,
-  }) {
-    const payload = {
-      recipient_id: recipientId,
-      document_id: documentId || null,
-      notification_type: notificationType,
-      delivery_method: deliveryMethod,
-      title,
-      message,
-      is_read: false,
-      status: 'Sent',
-      sent_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await supabase
-      .from('notification_log')
-      .insert(payload)
-      .select()
-      .single();
-
-    if (error) {
-      // Return synthetic notification object if insert fails
-      return {
-        notification_id: `notif-${Date.now()}`,
-        ...payload,
-        created_at: new Date().toISOString(),
-      };
-    }
-
-    return data;
+  async createNotification(payload) {
+    return NotificationModel.createLog(payload);
   },
 
   /**
    * PB-22 & PB-06: List notifications for a user (optionally filtered by document_id)
    */
   async getNotificationsForUser(recipientId, documentId = null) {
-    let query = supabase
-      .from('notification_log')
-      .select('*')
-      .eq('recipient_id', recipientId)
-      .order('created_at', { ascending: false });
-
-    if (documentId) {
-      query = query.eq('document_id', documentId);
-    }
-
-    const { data, error } = await query;
-    if (error) return [];
-    return data || [];
+    return NotificationModel.getNotificationsForUser(recipientId, { documentId });
   },
 
   

@@ -1,7 +1,9 @@
 const path = require('path');
 const DocumentModel = require('../models/documentModel');
 const DocumentTypeModel = require('../models/documentTypeModel');
+const NotificationModel = require('../models/notificationModel');
 const UserModel = require('../models/userModel');
+const EmailService = require('./emailService');
 const {
   ROLES,
   REVIEWER_ROLES,
@@ -320,6 +322,33 @@ const AccessControlService = {
       }
     }
 
+    // PB-17 & PB-05 / PB-06: Submission Confirmation and Notification per User Preferences
+    const pref = await NotificationModel.getPreference(user.id);
+    if (pref.receive_in_system) {
+      await NotificationModel.createLog({
+        recipientId: user.id,
+        documentId: created.document_id,
+        notificationType: 'Status_Update',
+        deliveryMethod: pref.deliveryMethod,
+        title: `Request Submitted: ${created.control_number}`,
+        message: `Your document request "${created.title}" was submitted successfully and assigned control number ${created.control_number}.`,
+        status: 'Sent',
+      }).catch(() => null);
+    }
+
+    if (pref.receive_email && user.email) {
+      EmailService.sendSubmissionConfirmationEmail({
+        to: user.email,
+        name: user.name || 'Requester',
+        controlNumber: created.control_number,
+        title: created.title,
+        documentId: created.document_id,
+        recipientId: user.id,
+      }).catch((mailErr) => {
+        console.warn(`[Nodemailer] Warning: Could not deliver submission confirmation email to ${user.email}:`, mailErr.message);
+      });
+    }
+
     return DocumentModel.findById(created.document_id);
   },
 
@@ -444,6 +473,35 @@ const AccessControlService = {
           ? { returnedByOffice: 'College Secretary' }
           : { rejectedByOffice: 'College Secretary' }),
       };
+
+      if (pref.receive_email) {
+        UserModel.findById(doc.requester_id).then((reqUser) => {
+          if (!reqUser?.email) return;
+          if (isReturn) {
+            EmailService.sendReturnForRevisionEmail({
+              to: reqUser.email,
+              name: reqUser.name,
+              controlNumber: doc.control_number,
+              title: doc.title,
+              returnedByOffice: 'College Secretary',
+              remarks: cleanRemarks,
+              documentId: docId,
+              recipientId: doc.requester_id,
+            }).catch(() => null);
+          } else {
+            EmailService.sendDocumentRejectedEmail({
+              to: reqUser.email,
+              name: reqUser.name,
+              controlNumber: doc.control_number,
+              title: doc.title,
+              rejectedByOffice: 'College Secretary',
+              remarks: cleanRemarks,
+              documentId: docId,
+              recipientId: doc.requester_id,
+            }).catch(() => null);
+          }
+        }).catch(() => null);
+      }
     }
 
     const updatedDoc = await DocumentModel.findById(docId);
@@ -679,6 +737,35 @@ const AccessControlService = {
           ? { returnedByOffice: actorOfficeName }
           : { rejectedByOffice: actorOfficeName }),
       };
+
+      if (pref.receive_email) {
+        UserModel.findById(doc.requester_id).then((reqUser) => {
+          if (!reqUser?.email) return;
+          if (isReturned) {
+            EmailService.sendReturnForRevisionEmail({
+              to: reqUser.email,
+              name: reqUser.name,
+              controlNumber: doc.control_number,
+              title: doc.title,
+              returnedByOffice: actorOfficeName,
+              remarks: cleanRemarks,
+              documentId: docId,
+              recipientId: doc.requester_id,
+            }).catch(() => null);
+          } else {
+            EmailService.sendDocumentRejectedEmail({
+              to: reqUser.email,
+              name: reqUser.name,
+              controlNumber: doc.control_number,
+              title: doc.title,
+              rejectedByOffice: actorOfficeName,
+              remarks: cleanRemarks,
+              documentId: docId,
+              recipientId: doc.requester_id,
+            }).catch(() => null);
+          }
+        }).catch(() => null);
+      }
     }
 
     const updatedDoc = await DocumentModel.findById(docId);
