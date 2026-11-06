@@ -10,6 +10,7 @@ import {
   FileText,
   Info,
   Paperclip,
+  Route,
   Send,
   UploadCloud,
   X,
@@ -325,7 +326,7 @@ export function NewRequestPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="w-full space-y-6">
       <Link
         to={
           selectedTypeId
@@ -344,12 +345,15 @@ export function NewRequestPage() {
       />
 
       <form onSubmit={handleSubmit} noValidate className="space-y-6">
-        {/* Step 1: Document Type Choice & Template Download (REQ-SUB-1, REQ-REQT-9) */}
-        <Card className="p-5 sm:p-6">
-          <CardHeader
-            title="1. Select Document Type & Download Template"
-            description="Choose the document you are requesting."
-          />
+        <div className="grid items-start gap-6 lg:grid-cols-12">
+          {/* Main 8-Column Form Stream */}
+          <div className="min-w-0 space-y-6 lg:col-span-7 xl:col-span-8">
+            {/* Step 1: Document Type Choice & Template Download (REQ-SUB-1, REQ-REQT-9) */}
+            <Card className="p-5 sm:p-6">
+              <CardHeader
+                title="1. Select Document Type & Download Template"
+                description="Choose the document you are requesting."
+              />
           <div className="mt-4 space-y-4">
             <Field
               label="Document Type"
@@ -415,7 +419,7 @@ export function NewRequestPage() {
           />
           <div className="mt-4 space-y-4">
             {/* Requester Profile & Automatic Metadata (REQ-SUB-2, REQ-SUB-5, REQ-SUB-6) */}
-            <div className="rounded-xl border border-ink-200 bg-ink-50/70 p-4 text-xs">
+            <div className="rounded-xl border border-ink-200 bg-ink-50/70 p-4 text-xs lg:hidden">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 pb-3">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-ink-900 text-sm">Requester Information</span>
@@ -474,7 +478,7 @@ export function NewRequestPage() {
 
 
             {/* Explicit Affiliation & Routing Path Notice (REQ-PM-FEEDBACK-2) */}
-            <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 text-xs">
+            <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 text-xs lg:hidden">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-brand-950">
@@ -861,6 +865,163 @@ export function NewRequestPage() {
             >
               Submit Document Request
             </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky 4-Column Summary & Routing Rail */}
+          <div className="hidden min-w-0 space-y-6 lg:sticky lg:top-20 lg:col-span-5 xl:col-span-4 lg:block">
+            {/* Requester Profile & Affiliation Card */}
+            <Card className="p-5">
+              <div className="flex items-center justify-between gap-2 border-b border-ink-100 pb-3">
+                <span className="font-bold text-ink-950 text-sm">Requester Information</span>
+                <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                  {derivedOrigin === 'IDS' ? 'IDS Affiliation' : 'CESS Affiliation'}
+                </Badge>
+              </div>
+              <div className="mt-3 space-y-2.5 text-xs">
+                <div>
+                  <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Requester</span>
+                  <span className="font-bold text-ink-900 text-sm">{user.name}</span>
+                </div>
+                <div>
+                  <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Official University Email</span>
+                  <span className="font-medium text-ink-800 break-all">{user.email}</span>
+                </div>
+                <div>
+                  <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Role & Position</span>
+                  <span className="font-medium text-ink-800">{user.position} ({formatRoleTitle(user)})</span>
+                </div>
+                <div>
+                  <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Department / Academic Program</span>
+                  <span className="font-medium text-ink-800">{user.department}</span>
+                </div>
+                <div className="pt-2 border-t border-ink-100 flex items-center justify-between text-2xs text-ink-500">
+                  <span className="flex items-center gap-1">
+                    <Clock className="size-3 text-brand-600" aria-hidden="true" />
+                    <span>Submission Timestamp</span>
+                  </span>
+                  <span className="font-semibold text-brand-800 font-mono">Automatic</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Official Routing Pipeline Card */}
+            <Card className="p-5">
+              <div className="flex items-center justify-between gap-2 border-b border-ink-100 pb-3">
+                <div className="flex items-center gap-1.5">
+                  <Route className="size-4 text-brand-600" aria-hidden="true" />
+                  <span className="font-bold text-ink-950 text-sm">Official Routing Path</span>
+                </div>
+                {selectedType && (
+                  <span className="text-2xs font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                    {selectedType.processingDays[0]}–{selectedType.processingDays[1]} days
+                  </span>
+                )}
+              </div>
+              <div className="mt-3 text-xs">
+                <ol className="relative ml-2.5 space-y-3 border-l-2 border-brand-200 pl-4 text-xs">
+                  <li className="relative">
+                    <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-600 ring-4 ring-white" />
+                    <span className="font-bold text-ink-900">1. College Secretary</span>
+                    <p className="text-2xs text-ink-500">Completeness & content verification</p>
+                  </li>
+                  <li className="relative">
+                    <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-400 ring-4 ring-white" />
+                    <span className="font-bold text-ink-900">2. Department Chairperson</span>
+                    <p className="text-2xs text-ink-500">Academic & curricular recommendation</p>
+                  </li>
+                  {derivedOrigin === 'IDS' && user.role !== 'ids_principal' && (
+                    <li className="relative">
+                      <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-warning-500 ring-4 ring-white" />
+                      <span className="font-bold text-warning-900">3. IDS Principal Review</span>
+                      <p className="text-2xs text-warning-700">Developmental school review & sign-off</p>
+                    </li>
+                  )}
+                  <li className="relative">
+                    <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-300 ring-4 ring-white" />
+                    <span className="font-bold text-ink-900">
+                      {derivedOrigin === 'IDS' && user.role !== 'ids_principal' ? '4. College Dean' : '3. College Dean'}
+                    </span>
+                    <p className="text-2xs text-ink-500">Final collegiate endorsement & seal</p>
+                  </li>
+                  <li className="relative">
+                    <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-success-500 ring-4 ring-white" />
+                    <span className="font-bold text-ink-900">
+                      {derivedOrigin === 'IDS' && user.role !== 'ids_principal' ? '5. Document Release' : '4. Document Release'}
+                    </span>
+                    <p className="text-2xs text-ink-500">Signed document collection & record</p>
+                  </li>
+                </ol>
+              </div>
+            </Card>
+
+            {/* Live Progress & Quick Actions Card */}
+            <Card className="p-5 ring-1 ring-brand-200">
+              <div className="flex items-center justify-between gap-2 border-b border-ink-100 pb-3">
+                <div className="flex items-center gap-1.5">
+                  <FileCheck2 className="size-4 text-brand-600" aria-hidden="true" />
+                  <span className="font-bold text-ink-950 text-sm">Submission Readiness</span>
+                </div>
+                <Badge tone={isFormComplete ? 'success' : 'warning'} dot={false}>
+                  {isFormComplete ? 'Ready' : 'Incomplete'}
+                </Badge>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                {selectedType && requiredList.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between text-2xs uppercase tracking-wider font-bold text-ink-500 mb-1.5">
+                      <span>Required Forms</span>
+                      <span>{attachedRequiredCount} of {requiredList.length}</span>
+                    </div>
+                    <ul className="space-y-1 text-xs">
+                      {requiredList.map((r) => {
+                        const attached = attachedFiles.find((f) => f.requirementId === r.id)
+                        return (
+                          <li key={r.id} className="flex items-center justify-between gap-2 rounded bg-ink-50/70 px-2 py-1">
+                            <span className="truncate text-ink-800 text-2xs font-medium">• {r.label}</span>
+                            {attached ? (
+                              <span className="shrink-0 text-success-700 font-bold text-2xs">✓ Ready</span>
+                            ) : (
+                              <span className="shrink-0 text-amber-600 font-medium text-2xs">Missing</span>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="pt-2 space-y-2">
+                  <Button
+                    type="submit"
+                    size="lg"
+                    loading={isSubmitting}
+                    loadingText="Submitting Request…"
+                    iconRight={Send}
+                    className="w-full justify-center shadow-md"
+                  >
+                    Submit Document Request
+                  </Button>
+                  <ButtonLink
+                    to={user.role === 'ids_principal' ? '/app/for-review' : '/app/my-documents'}
+                    variant="secondary"
+                    className="w-full justify-center"
+                  >
+                    Cancel
+                  </ButtonLink>
+                </div>
+              </div>
+            </Card>
+
+            {/* Informative Submission Summary */}
+            <div className="rounded-2xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-100 text-xs">
+              <p className="font-bold text-brand-900">What happens next?</p>
+              <p className="mt-1 leading-relaxed text-ink-600 text-2xs">
+                The College Secretary verifies the content of all required files. Once confirmed, your document routes automatically along the official collegiate path with real-time tracking.
+              </p>
+            </div>
           </div>
         </div>
       </form>
