@@ -320,3 +320,4 @@ const NotificationModel = {
 };
 
 module.exports = NotificationModel;
+

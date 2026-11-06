@@ -22,3 +22,4 @@ router.post('/mark-all-read', verifyUser, NotificationController.markAllAsRead);
 router.get('/logs', verifyUser, requireRole(ROLES.SECRETARY), NotificationController.getNotificationLogs);
 
 module.exports = router;
+
