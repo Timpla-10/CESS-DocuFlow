@@ -5,21 +5,21 @@ import {
   ClipboardCheck,
   Download,
   FileCheck2,
-  GraduationCap,
   Landmark,
   MapPin,
   Route,
   Send,
   ShieldCheck,
-  UserRoundCheck,
   Users,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import cessLogo from '../../assets/cess-logo.png'
 import heroImg from '../../assets/hero-documents.jpg'
+import msunLogo from '../../assets/msun-logo.png'
 import { useSession } from '../../app/session'
 import { homeFor } from '../../app/nav'
-import { Logo, LogoMark } from '../../components/Logo'
-import { ButtonLink, buttonClass, cn } from '../../components/ui'
+import { Logo } from '../../components/Logo'
+import { ButtonLink } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { useDb } from '../../data/store'
 
@@ -32,101 +32,125 @@ export function HomePage() {
 
   return (
     <div className="min-h-dvh bg-white">
-      {/* Header */}
-      <header className="absolute inset-x-0 top-0 z-20">
-        <div className="mx-auto flex h-16 sm:h-20 w-full min-w-0 max-w-6xl items-center justify-between px-2.5 sm:px-8">
-          <div className="min-w-0 shrink">
-            <div className="hidden min-[420px]:block">
-              <Logo tone="light" />
-            </div>
-            <div className="block min-[420px]:hidden">
-              <LogoMark size="sm" />
-            </div>
-          </div>
-          <nav aria-label="Homepage" className="flex items-center gap-1 sm:gap-2">
-            <a href="#how-it-works" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-brand-100 hover:bg-white/10 hover:text-white sm:inline-block">
-              How It Works
-            </a>
-            <a href="#documents" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-brand-100 hover:bg-white/10 hover:text-white sm:inline-block">
-              Documents You Can Request
-            </a>
-            <a href="#faculty-syllabi" className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-brand-100 hover:bg-white/10 hover:text-white sm:inline-block">
-              Faculty &amp; Syllabi
-            </a>
-            <Link to={primary.to} className={cn(buttonClass('on-dark', 'sm'), 'px-2.5 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm')}>
-              {user ? 'Dashboard' : 'Sign In'}
-            </Link>
-          </nav>
-        </div>
-      </header>
+      {/* Hero & Top Navigation */}
+      <section className="surface-brand-gradient relative overflow-hidden pb-14 pt-3 sm:pb-20 sm:pt-4 text-white">
+        {/* Subtle dot matrix grid matching mockup */}
+        <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
 
-      {/* Hero */}
-      <section className="surface-brand-gradient relative overflow-hidden pb-24 pt-32 sm:pb-32 sm:pt-40">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(var(--color-white)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
-        {/* Balanced tri-color ambient glow sources with living aurora motion in CESS department purples & pink */}
-        <div className="pointer-events-none absolute -right-36 -top-36 size-[560px] rounded-full bg-dsee-300/45 blur-2xl animate-aurora-lavender" aria-hidden />
-        <div className="pointer-events-none absolute -bottom-28 -left-28 size-[520px] rounded-full bg-ids-400/50 blur-2xl animate-aurora-pink" aria-hidden />
-        <div className="pointer-events-none absolute right-1/3 top-1/2 size-[420px] -translate-y-1/2 rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" aria-hidden />
-
-        <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-5 sm:px-8 lg:grid-cols-[1.05fr_1fr]">
-          <div className="animate-fade-up">
-            <p className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/12 px-3.5 py-1.5 text-xs font-semibold text-brand-100 ring-1 ring-inset ring-white/20 backdrop-blur">
-              <GraduationCap className="size-3.5 text-dsee-200" aria-hidden />
-              College of Education and Social Sciences · MSU at Naawan
-            </p>
-            <h1 className="text-balance font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-[54px]">
-              Know where your document is —{' '}
-              <span className="bg-gradient-to-r from-purple-200 via-dsee-200 to-ids-200 bg-clip-text text-transparent">
-                without visiting the office.
-              </span>
-            </h1>
-            <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-brand-100/95">
-              Submit your document requests online, see which office is handling them right now, and get an email when your document is
-              returned for correction or ready to collect.
-            </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <ButtonLink to={primary.to} size="lg" iconRight={ArrowRight} className="bg-white !text-brand-800 shadow-raised hover:!bg-brand-50">
-                {primary.label}
-              </ButtonLink>
-              <a href="#how-it-works" className={buttonClass('on-dark', 'lg')}>
-                See How It Works
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* Top Navbar */}
+          <header className="flex items-center justify-between gap-4 py-2 sm:py-3">
+            <div className="hidden sm:block sm:flex-1" />
+            <nav aria-label="Homepage" className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 md:gap-10 text-xs sm:text-sm font-semibold text-white/90">
+              <a href="#" className="hover:text-white transition-colors">
+                Home
               </a>
+              <a href="#how-it-works" className="hover:text-white transition-colors">
+                How It Works
+              </a>
+              <a href="#documents" className="hover:text-white transition-colors">
+                Documents You Can Request
+              </a>
+              <a href="#faculty-syllabi" className="hover:text-white transition-colors">
+                Faculty &amp; Syllabi
+              </a>
+            </nav>
+            <div className="flex sm:flex-1 justify-end">
+              <Link
+                to={primary.to}
+                className="rounded-full bg-white px-5 sm:px-6 py-2 text-xs sm:text-sm font-bold text-[#191970] shadow-md hover:bg-slate-100 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {user ? 'Dashboard' : 'Sign In'}
+              </Link>
             </div>
-            <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-brand-100/90">
-              {['Students', 'CESS and IDS faculty', 'College offices'].map((t) => (
-                <li key={t} className="flex items-center gap-2">
-                  <UserRoundCheck className="size-4 text-dsee-200" aria-hidden />
-                  {t}
-                </li>
-              ))}
-            </ul>
+          </header>
+
+          {/* Centered Brand Emblem */}
+          <div className="mx-auto my-5 sm:my-8 flex max-w-4xl items-center justify-center gap-3 sm:gap-6 md:gap-8 px-2 text-center">
+            <img
+              src={msunLogo}
+              alt="MSU Naawan Seal"
+              className="size-14 sm:size-18 md:size-20 shrink-0 rounded-full drop-shadow-md object-contain"
+            />
+            <div className="flex flex-col items-center">
+              <h1 className="text-2xl sm:text-4xl md:text-[44px] font-black tracking-tight text-white leading-tight">
+                CESS <span className="text-[#C4B5FD]">DocuFlow</span>
+              </h1>
+              <p className="mt-1 text-[10px] sm:text-xs md:text-[13px] font-bold tracking-[0.16em] sm:tracking-[0.18em] text-white/95 uppercase">
+                Mindanao State University at Naawan
+              </p>
+              <p className="mt-0.5 text-xs sm:text-sm md:text-base font-medium text-[#c0b5f5]">
+                College of Education and Social Sciences
+              </p>
+            </div>
+            <img
+              src={cessLogo}
+              alt="CESS Seal"
+              className="size-14 sm:size-18 md:size-20 shrink-0 rounded-full drop-shadow-md object-contain"
+            />
           </div>
 
-          <div className="relative animate-fade-up [animation-delay:120ms]">
-            <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-dsee-300/30 via-dssh-500/20 to-ids-400/25 blur-2xl" aria-hidden />
-            <div className="relative overflow-hidden rounded-[1.75rem] bg-white/15 p-2.5 shadow-[0_24px_60px_-15px_rgba(25,25,112,0.45)] ring-1 ring-white/30 backdrop-blur-md">
-              <img
-                src={heroImg}
-                alt="Illustration of documents travelling along a path between college offices, with an email notification along the way"
-                className="w-full rounded-[1.35rem] shadow-sm"
-                width={1200}
-                height={900}
-              />
-            </div>
-            {/* Floating status cards */}
-            <div className="absolute -left-6 bottom-10 hidden w-64 animate-float rounded-2xl bg-white/95 p-4 shadow-raised ring-1 ring-ink-100/80 backdrop-blur-md sm:block">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-ink-500">Travel Order</p>
-              <p className="mt-1 text-sm font-bold text-ink-900">Now with the College Dean</p>
-              <div className="mt-3 flex gap-1" aria-hidden>
-                {[1, 1, 1, 0, 0].map((d, i) => (
-                  <span key={i} className={cn('h-1.5 flex-1 rounded-full', d ? 'bg-brand-600' : 'bg-brand-100')} />
-                ))}
+          {/* 2-Column Hero Content */}
+          <div className="mt-4 grid items-center gap-8 lg:grid-cols-[1.05fr_1fr] lg:gap-12 pb-6">
+            <div className="space-y-5 text-left">
+              <h2 className="font-display text-3xl sm:text-4xl lg:text-[50px] font-bold leading-[1.14] tracking-tight text-white">
+                Know where<br />
+                your document<br />
+                is — without<br />
+                <span className="bg-gradient-to-r from-[#DDD2FF] via-[#E4CBFA] to-[#F0C3E2] bg-clip-text text-transparent">
+                  visiting the office.
+                </span>
+              </h2>
+              <p className="max-w-xl text-sm sm:text-base lg:text-lg leading-relaxed text-indigo-100/90">
+                Submit your document requests online, see which office is handling them right now, and get an email when your document is returned for correction or ready to collect.
+              </p>
+              <div className="flex flex-wrap items-center gap-4 pt-2">
+                <Link
+                  to={primary.to}
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-6 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-bold text-[#191970] shadow-lg transition-transform hover:scale-[1.02] hover:bg-slate-50 active:scale-[0.98]"
+                >
+                  {primary.label}
+                  <ArrowRight className="size-4 text-[#191970]" />
+                </Link>
+                <a
+                  href="#how-it-works"
+                  className="inline-flex items-center rounded-full bg-white/10 px-6 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-semibold text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-white/15"
+                >
+                  See How It Works
+                </a>
               </div>
             </div>
-            <div className="absolute -right-4 top-8 hidden animate-float rounded-2xl bg-white/95 px-4 py-3 shadow-raised ring-1 ring-ink-100/80 backdrop-blur-md [animation-delay:1.5s] sm:block">
-              <p className="flex items-center gap-2 text-sm font-bold text-success-700">
-                <FileCheck2 className="size-4" aria-hidden /> Ready to collect
-              </p>
+
+            <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
+              {/* Outer Glow & Card Container */}
+              <div className="relative overflow-hidden rounded-[2.25rem] bg-white p-3 sm:p-4 shadow-2xl ring-1 ring-white/20">
+                <img
+                  src={heroImg}
+                  alt="Illustration of documents travelling along a path between college offices"
+                  className="w-full rounded-[1.75rem] object-cover"
+                  width={1200}
+                  height={900}
+                />
+              </div>
+
+              {/* Ready to collect badge */}
+              <div className="absolute -top-3.5 right-4 sm:-top-4 sm:right-6 flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-lg ring-1 ring-black/10 animate-float">
+                <FileCheck2 className="size-4 text-[#16a34a]" aria-hidden="true" />
+                <span className="text-xs sm:text-sm font-bold text-[#15803d]">Ready to collect</span>
+              </div>
+
+              {/* Travel Order progress card */}
+              <div className="absolute -bottom-6 left-2 sm:-bottom-7 sm:left-4 w-64 sm:w-72 rounded-2xl bg-white p-4 shadow-xl ring-1 ring-black/5 animate-float [animation-delay:1.5s]">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">TRAVEL ORDER</p>
+                <p className="mt-1 text-sm font-bold text-slate-900">Now with the College Dean</p>
+                <div className="mt-3 flex gap-1.5" aria-hidden="true">
+                  <span className="h-1.5 flex-1 rounded-full bg-[#191970]" />
+                  <span className="h-1.5 flex-1 rounded-full bg-[#191970]" />
+                  <span className="h-1.5 flex-1 rounded-full bg-[#191970]" />
+                  <span className="h-1.5 flex-1 rounded-full bg-slate-200" />
+                  <span className="h-1.5 flex-1 rounded-full bg-slate-200" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -268,13 +292,12 @@ export function HomePage() {
 
       {/* CTA */}
       <section className="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
-        <div className="surface-brand-gradient relative overflow-hidden rounded-3xl px-8 py-12 text-center sm:px-16">
-          <div className="pointer-events-none absolute -left-20 -top-20 size-72 rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" aria-hidden />
-          <div className="pointer-events-none absolute -bottom-20 -right-20 size-72 rounded-full bg-ids-400/45 blur-2xl animate-aurora-pink" aria-hidden />
+        <div className="surface-brand-gradient relative overflow-hidden rounded-3xl px-8 py-12 text-center sm:px-16 text-white shadow-xl">
+          <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
           <h2 className="relative text-balance font-display text-3xl font-semibold text-white">Ready to submit or check a request?</h2>
-          <p className="relative mx-auto mt-3 max-w-xl text-brand-100/90">Sign in with your MSU at Naawan email address.</p>
+          <p className="relative mx-auto mt-3 max-w-xl text-indigo-100/90">Sign in with your MSU at Naawan email address.</p>
           <div className="relative mt-7 flex justify-center">
-            <ButtonLink to={primary.to} size="lg" iconRight={ArrowRight} className="bg-white !text-brand-800 hover:!bg-brand-50">
+            <ButtonLink to={primary.to} size="lg" iconRight={ArrowRight} className="bg-white !text-[#191970] shadow-md hover:!bg-slate-100">
               {primary.label}
             </ButtonLink>
           </div>
