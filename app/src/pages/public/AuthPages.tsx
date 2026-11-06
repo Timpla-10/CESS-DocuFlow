@@ -10,7 +10,6 @@ import {
   Lock,
   Mail,
   ShieldCheck,
-  Sparkles,
   X,
 } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
@@ -1063,7 +1062,6 @@ export function SignInPage() {
                     'active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer',
                   )}
                 >
-                  <Sparkles className="size-4" />
                   <span>{regBusy ? 'Verifying with Masterlist…' : 'Verify & Register Account'}</span>
                 </button>
               </div>
