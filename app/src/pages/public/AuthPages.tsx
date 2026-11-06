@@ -556,6 +556,7 @@ export function SignInPage() {
   const [regErrors, setRegErrors] = useState<{ name?: string; email?: string; dept?: string }>({})
   const [roleFocused, setRoleFocused] = useState(false)
   const [originFocused, setOriginFocused] = useState(false)
+  const [deptFocused, setDeptFocused] = useState(false)
   const [regBusy, setRegBusy] = useState(false)
   const [regFeedback, setRegFeedback] = useState<{
     type: 'success' | 'pending' | 'error'
@@ -967,7 +968,13 @@ export function SignInPage() {
                       onChange={(e) => {
                         setRoleFocused(false)
                         e.currentTarget.blur()
-                        setRegRole(e.target.value as Role)
+                        const nextRole = e.target.value as Role
+                        setRegRole(nextRole)
+                        if (regOrigin === 'IDS') {
+                          setRegDept(nextRole === 'faculty' ? 'Integrated Developmental School' : 'IDS Grade 12 - STEM')
+                        } else {
+                          setRegDept(nextRole === 'faculty' ? 'Department of Secondary and Elementary Education' : 'BSEd English')
+                        }
                       }}
                       onFocus={() => setRoleFocused(true)}
                       onBlur={() => setRoleFocused(false)}
@@ -1000,7 +1007,13 @@ export function SignInPage() {
                       onChange={(e) => {
                         setOriginFocused(false)
                         e.currentTarget.blur()
-                        setRegOrigin(e.target.value as Origin)
+                        const nextOrigin = e.target.value as Origin
+                        setRegOrigin(nextOrigin)
+                        if (nextOrigin === 'IDS') {
+                          setRegDept(regRole === 'faculty' ? 'Integrated Developmental School' : 'IDS Grade 12 - STEM')
+                        } else {
+                          setRegDept(regRole === 'faculty' ? 'Department of Secondary and Elementary Education' : 'BSEd English')
+                        }
                       }}
                       onFocus={() => setOriginFocused(true)}
                       onBlur={() => setOriginFocused(false)}
@@ -1028,21 +1041,71 @@ export function SignInPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Department / Degree Program</label>
-                <input
-                  type="text"
-                  value={regDept}
-                  onChange={(e) => {
-                    setRegDept(e.target.value)
-                    if (regErrors.dept) setRegErrors((prev) => ({ ...prev, dept: undefined }))
-                  }}
-                  placeholder="e.g. BSEd English, BEEd, or IDS High School"
-                  required
-                  aria-invalid={!!regErrors.dept}
-                  className={cn(
-                    'h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 transition-all',
-                    regErrors.dept && 'bg-danger-50/50 ring-danger-500 focus:ring-danger-500',
-                  )}
-                />
+                <div className="group relative">
+                  <select
+                    value={regDept}
+                    onChange={(e) => {
+                      setDeptFocused(false)
+                      e.currentTarget.blur()
+                      setRegDept(e.target.value)
+                      if (regErrors.dept) setRegErrors((prev) => ({ ...prev, dept: undefined }))
+                    }}
+                    onFocus={() => setDeptFocused(true)}
+                    onBlur={() => setDeptFocused(false)}
+                    className={cn(
+                      'h-10 w-full appearance-none rounded-full bg-[#F1ECF9] pl-3.5 pr-8 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 cursor-pointer transition-all',
+                      regErrors.dept && 'bg-danger-50/50 ring-danger-500 focus:ring-danger-500',
+                    )}
+                  >
+                    {regOrigin === 'CESS' ? (
+                      regRole === 'faculty' ? (
+                        <>
+                          <option value="Department of Secondary and Elementary Education">
+                            Department of Secondary and Elementary Education (DSEE)
+                          </option>
+                          <option value="Department of Social Sciences and Humanities">
+                            Department of Social Sciences and Humanities (DSSH)
+                          </option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="BSEd English">BSEd English</option>
+                          <option value="BSEd Filipino">BSEd Filipino</option>
+                          <option value="BSEd Social Studies">BSEd Social Studies</option>
+                          <option value="BSEd Science">BSEd Science</option>
+                          <option value="BSEd Mathematics">BSEd Mathematics</option>
+                          <option value="BEEd General Curriculum">BEEd General Curriculum</option>
+                          <option value="BA Social Sciences">BA Social Sciences</option>
+                        </>
+                      )
+                    ) : regRole === 'faculty' ? (
+                      <>
+                        <option value="Integrated Developmental School">Integrated Developmental School (IDS Faculty)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="IDS Grade 12 - STEM">IDS Grade 12 - STEM</option>
+                        <option value="IDS Grade 12 - HUMSS">IDS Grade 12 - HUMSS</option>
+                        <option value="IDS Grade 12 - TVL / GAS">IDS Grade 12 - TVL / GAS</option>
+                        <option value="IDS Grade 11 - Senior High School">IDS Grade 11 - Senior High School</option>
+                        <option value="IDS Grade 7-10 - Junior High School">IDS Grade 7-10 - Junior High School</option>
+                      </>
+                    )}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                    <ChevronDown
+                      className={cn(
+                        'size-3.5 text-purple-700 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+                        !deptFocused && 'group-hover:translate-y-0.5',
+                      )}
+                      style={{
+                        transform: deptFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transformOrigin: 'center',
+                      }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
                 {regErrors.dept && (
                   <p role="alert" className="mt-1 flex items-center gap-1.5 pl-3 text-xs font-medium text-danger-700">
                     <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
