@@ -31,6 +31,7 @@ export function DashboardPage() {
   if (
     user.role === 'chairperson' ||
     user.role === 'ovcaa' ||
+    user.role === 'vcaf' ||
     user.role === 'chancellor' ||
     user.role === 'dean' ||
     user.role === 'ids_principal'
@@ -84,9 +85,10 @@ function RequesterDashboard() {
               <Link
                 key={doc.id}
                 to={`/app/documents/${doc.id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-700"
+                className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-700"
               >
-                <RotateCcw className="size-3.5" /> Fix {doc.title}
+                <RotateCcw className="size-3.5 shrink-0" />
+                <span className="truncate">Fix {doc.title}</span>
               </Link>
             ))}
           </div>
@@ -107,9 +109,9 @@ function RequesterDashboard() {
               <Link
                 key={doc.id}
                 to={`/app/documents/${doc.id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-700"
+                className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-700"
               >
-                View {doc.title}
+                <span className="truncate">View {doc.title}</span>
               </Link>
             ))}
           </div>
@@ -117,7 +119,7 @@ function RequesterDashboard() {
       )}
 
       {/* Overview Metric Summary Cards */}
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2.5 min-[380px]:grid-cols-2 min-[380px]:gap-3.5 sm:grid-cols-4">
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <span className="text-2xs font-bold uppercase tracking-wider text-ink-500">

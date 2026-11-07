@@ -5,7 +5,6 @@ import {
   FileText,
   Info,
   Search,
-  Sparkles,
   Trash2,
   UploadCloud,
 } from 'lucide-react'
@@ -200,7 +199,7 @@ export function FacultyDirectoryPage() {
       <PageHeader
         eyebrow="Academic Directory"
         title="Faculty Members, Subjects & Course Syllabi"
-        description="Browse College of Education and Social Sciences faculty members, their assigned teaching subjects, and official course syllabi (REQ-INFO-2, REQ-INFO-3, REQ-INFO-4)."
+        description="Browse College of Education and Social Sciences faculty members, their assigned teaching subjects, and official course syllabi."
       />
 
       {/* Official Syllabus Template Card */}
@@ -258,9 +257,8 @@ export function FacultyDirectoryPage() {
 
             {isSecretary && (
               <label
-                className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 ${
-                  isUploadingTemplate ? 'opacity-60 pointer-events-none' : ''
-                }`}
+                className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 ${isUploadingTemplate ? 'opacity-60 pointer-events-none' : ''
+                  }`}
               >
                 <UploadCloud className="size-3.5 text-brand-200" />
                 {isUploadingTemplate ? 'Uploading…' : 'Upload / Replace Template'}
@@ -303,26 +301,26 @@ export function FacultyDirectoryPage() {
       )}
 
       {isStudent && (
-        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
           <div className="flex items-center gap-2">
             <Info className="size-4 shrink-0 text-brand-700" />
             <span>
               <strong>Enrolled Course Syllabi:</strong> Displaying assigned professors and course syllabi for your registered subjects this semester.
             </span>
           </div>
-          <Badge tone="brand">🎓 1st Semester AY 2026-2027</Badge>
+          <Badge tone="brand" className="shrink-0 whitespace-nowrap [&>span]:whitespace-nowrap">🎓 1st Semester AY 2026-2027</Badge>
         </div>
       )}
 
       {isFacultyUser && (
-        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
           <div className="flex items-center gap-2">
             <Info className="size-4 shrink-0 text-brand-700" />
             <span>
               <strong>Faculty Self-Service Portal:</strong> You can download the official syllabus template and manage syllabi for your assigned subjects. In accordance with university privacy standards, other faculties' syllabi are hidden.
             </span>
           </div>
-          <Badge tone="brand">📋 My Teaching Load</Badge>
+          <Badge tone="brand" className="shrink-0 whitespace-nowrap [&>span]:whitespace-nowrap">📋 My Teaching Load</Badge>
         </div>
       )}
 
@@ -377,11 +375,10 @@ export function FacultyDirectoryPage() {
             return (
               <Card
                 key={fac.id}
-                className={`overflow-hidden transition-all ${
-                  isMyProfile
+                className={`overflow-hidden transition-all ${isMyProfile
                     ? 'ring-2 ring-brand-500 shadow-md'
                     : ''
-                }`}
+                  }`}
               >
                 <div className="flex items-start justify-between gap-3 border-b border-ink-100 bg-brand-50/40 p-5">
                   <div className="flex min-w-0 items-center gap-3">
@@ -391,7 +388,7 @@ export function FacultyDirectoryPage() {
                         <h3 className="font-bold text-ink-900 truncate">{fac.name}</h3>
                         {isMyProfile && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-bold text-brand-800 ring-1 ring-inset ring-brand-300 shrink-0">
-                            <Sparkles className="size-3 text-brand-600" /> My Teaching Load
+                            My Teaching Load
                           </span>
                         )}
                       </div>
