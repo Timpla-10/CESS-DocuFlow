@@ -381,6 +381,14 @@ export const api = {
   postNotice: (user: User, input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string }) =>
     mutate((d, at) => engine.postNotice(d, user, input, at)),
 
+  updateNotice: (
+    user: User,
+    id: string,
+    input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string }
+  ) => mutate((d) => engine.updateNotice(d, user, id, input)),
+
+  deleteNotice: (user: User, id: string) => mutate((d) => engine.deleteNotice(d, user, id)),
+
   retryNotification: (user: User, id: string) => mutate((d) => engine.retryNotification(d, user, id)),
 
   markNotificationsRead: (user: User, ids: string[]) =>

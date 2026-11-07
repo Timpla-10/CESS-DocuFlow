@@ -110,7 +110,6 @@ function Sidebar({
   onToggleLock?: () => void
 }) {
   const user = useUser()
-  const db = useDb()
   const sections = navFor(user.role)
 
   return (
@@ -166,7 +165,6 @@ function Sidebar({
           <div className="mx-4 mb-2 mt-2 rounded-xl bg-white/[0.09] p-3 ring-1 ring-inset ring-white/15">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-200/90">Signed in as</p>
             <p className="mt-0.5 truncate text-sm font-bold">{formatRoleTitle(user)}</p>
-            <p className="truncate text-xs text-brand-200/80">{user.department}</p>
           </div>
         ) : (
           <div
@@ -187,73 +185,36 @@ function Sidebar({
                 </p>
               )}
               <ul className="space-y-1">
-                {s.items.map((it) => {
-                  const count = it.count?.(db, user) ?? 0
-                  return (
-                    <li key={it.to}>
-                      <NavLink
-                        to={it.to}
-                        end={it.to === '/app/documents'}
-                        title={it.label}
-                        className={({ isActive }) =>
-                          cn(
-                            'group relative flex items-center rounded-xl text-sm font-semibold transition-all',
-                            isExpanded ? 'gap-3 px-3 py-2' : 'justify-center p-2.5',
-                            isActive
-                              ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
-                              : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
-                          )
-                        }
-                      >
-                        {({ isActive }) => (
-                          <>
-                            <it.icon
-                              className={cn(
-                                'size-[18px] shrink-0',
-                                isActive ? 'text-brand-700' : 'text-brand-300 group-hover:text-white',
-                              )}
-                            />
-                            {isExpanded && <span className="flex-1 truncate">{it.label}</span>}
-                            {count > 0 &&
-                              (isExpanded ? (
-                                <span
-                                  className={cn(
-                                    'min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums leading-5',
-                                    it.countTone === 'danger'
-                                      ? 'bg-danger-500 text-white'
-                                      : it.countTone === 'warning'
-                                      ? 'bg-warning-500 text-brand-950'
-                                      : isActive
-                                      ? 'bg-brand-600 text-white'
-                                      : 'bg-white/15 text-white',
-                                  )}
-                                  aria-label={`${count} waiting`}
-                                >
-                                  {count}
-                                </span>
-                              ) : (
-                                <span
-                                  className={cn(
-                                    'absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full px-1 text-[9px] font-bold ring-2 ring-brand-900',
-                                    it.countTone === 'danger'
-                                      ? 'bg-danger-500 text-white'
-                                      : it.countTone === 'warning'
-                                      ? 'bg-warning-500 text-brand-950'
-                                      : isActive
-                                      ? 'bg-brand-600 text-white'
-                                      : 'bg-ids-400 text-brand-950',
-                                  )}
-                                  aria-label={`${count} waiting`}
-                                >
-                                  {count}
-                                </span>
-                              ))}
-                          </>
-                        )}
-                      </NavLink>
-                    </li>
-                  )
-                })}
+                {s.items.map((it) => (
+                  <li key={it.to}>
+                    <NavLink
+                      to={it.to}
+                      end={it.to === '/app/documents'}
+                      title={it.label}
+                      className={({ isActive }) =>
+                        cn(
+                          'group relative flex items-center rounded-xl text-sm font-semibold transition-all',
+                          isExpanded ? 'gap-3 px-3 py-2' : 'justify-center p-2.5',
+                          isActive
+                            ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
+                            : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
+                        )
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <it.icon
+                            className={cn(
+                              'size-[18px] shrink-0',
+                              isActive ? 'text-brand-700' : 'text-brand-300 group-hover:text-white',
+                            )}
+                          />
+                          {isExpanded && <span className="flex-1 truncate">{it.label}</span>}
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                ))}
               </ul>
             </div>
           ))}

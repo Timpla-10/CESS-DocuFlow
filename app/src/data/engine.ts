@@ -808,6 +808,34 @@ export function postNotice(
   return notice
 }
 
+export function updateNotice(
+  db: Database,
+  actor: User,
+  id: string,
+  input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string },
+) {
+  if (actor.role !== 'secretary' && actor.role !== 'dean')
+    throw new FriendlyError('Only the College Secretary and the College Dean can edit notices and minutes.')
+  if (!input.title.trim()) throw new FriendlyError('Please give the notice a title.')
+  const n = db.notices.find((x) => x.id === id)
+  if (!n) throw new FriendlyError('Notice not found.')
+  n.kind = input.kind
+  n.title = input.title.trim()
+  n.summary = input.summary.trim()
+  if (input.fileName.trim()) {
+    n.fileName = input.fileName.trim()
+  }
+  return n
+}
+
+export function deleteNotice(db: Database, actor: User, id: string) {
+  if (actor.role !== 'secretary' && actor.role !== 'dean')
+    throw new FriendlyError('Only the College Secretary and the College Dean can delete notices and minutes.')
+  const idx = db.notices.findIndex((x) => x.id === id)
+  if (idx === -1) throw new FriendlyError('Notice not found.')
+  db.notices.splice(idx, 1)
+}
+
 export function retryNotification(db: Database, actor: User, id: string) {
   if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can resend emails.')
   const n = db.notifications.find((x) => x.id === id)

@@ -55,12 +55,20 @@ export function HomePage() {
                 Faculty &amp; Syllabi
               </a>
             </nav>
-            <div className="flex sm:flex-1 justify-end">
+            <div className="flex sm:flex-1 justify-end items-center gap-3 sm:gap-4">
+              {user && (
+                <Link
+                  to={homeFor(user.role)}
+                  className="hidden md:inline-block text-xs sm:text-sm font-semibold text-white/90 hover:text-white transition-colors"
+                >
+                  My Dashboard
+                </Link>
+              )}
               <Link
-                to={primary.to}
-                className="rounded-full bg-white px-5 sm:px-6 py-2 text-xs sm:text-sm font-bold text-[#191970] shadow-md hover:bg-slate-100 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                to="/sign-in"
+                className="rounded-md bg-white px-5 sm:px-6 py-2 text-xs sm:text-sm font-bold text-[#191970] shadow-md hover:bg-slate-100 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
-                {user ? 'Dashboard' : 'Sign In'}
+                Sign In
               </Link>
             </div>
           </header>
@@ -106,18 +114,27 @@ export function HomePage() {
               </p>
               <div className="flex flex-wrap items-center gap-4 pt-2">
                 <Link
-                  to={primary.to}
+                  to="/sign-in"
                   className="inline-flex items-center gap-2 rounded-full bg-white px-6 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-bold text-[#191970] shadow-lg transition-transform hover:scale-[1.02] hover:bg-slate-50 active:scale-[0.98]"
                 >
-                  {primary.label}
+                  Sign In to DocuFlow
                   <ArrowRight className="size-4 text-[#191970]" />
                 </Link>
-                <a
-                  href="#how-it-works"
-                  className="inline-flex items-center rounded-full bg-white/10 px-6 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-semibold text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-white/15"
-                >
-                  See How It Works
-                </a>
+                {user ? (
+                  <Link
+                    to={homeFor(user.role)}
+                    className="inline-flex items-center rounded-full bg-white/10 px-6 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-semibold text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-white/15"
+                  >
+                    Go to My Dashboard
+                  </Link>
+                ) : (
+                  <a
+                    href="#how-it-works"
+                    className="inline-flex items-center rounded-full bg-white/10 px-6 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-semibold text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-white/15"
+                  >
+                    See How It Works
+                  </a>
+                )}
               </div>
             </div>
 

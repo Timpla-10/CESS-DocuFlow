@@ -1209,11 +1209,16 @@ export function DocumentDetailPage() {
                 setCheckErrors({})
               }}
               options={[
-                { value: 'complete', label: 'Complete — Content is Correct' },
-                { value: 'return', label: 'Return — Content Has Issues' },
-                { value: 'reject', label: 'Disapprove / Reject Submission' },
+                { value: 'complete', label: 'Complete', icon: CheckCircle2 },
+                { value: 'return', label: 'Return for Issues', icon: RotateCcw },
+                { value: 'reject', label: 'Disapprove', icon: XCircle },
               ]}
             />
+            <p className="mt-2 text-xs text-ink-600">
+              {checkDecision === 'complete' && 'All content and required attachments are accurate and meet institutional standards.'}
+              {checkDecision === 'return' && 'Document has content issues and will be returned to the requester for correction.'}
+              {checkDecision === 'reject' && 'Submission is invalid or disapproved; will not proceed further.'}
+            </p>
           </div>
 
           {checkDecision === 'return' && docType && (

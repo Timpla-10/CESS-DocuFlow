@@ -141,13 +141,13 @@ export function Badge({ tone = 'neutral', children, dot = true, className }: { t
   return (
     <span
       className={cn(
-        'inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg sm:rounded-full px-2 sm:px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset leading-snug break-words text-left',
+        'inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset leading-snug',
         badgeTones[tone],
         className,
       )}
     >
       {dot && <span className={cn('size-1.5 shrink-0 rounded-full', dotTones[tone])} aria-hidden />}
-      <span className="min-w-0 break-words leading-tight">{children}</span>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap leading-tight">{children}</span>
     </span>
   )
 }
@@ -273,7 +273,7 @@ export function InfoTooltip({ content }: { content: ReactNode }) {
               left: `${coords.left}px`,
               transform: coords.isAbove ? 'translateY(-100%)' : 'none',
             }}
-            className="pointer-events-none z-[9999] max-w-[280px] rounded-lg bg-ink-950 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-xl ring-1 ring-white/10 animate-fade-in"
+            className="pointer-events-none z-[9999] max-w-[280px] rounded-lg bg-ink-950 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-2xl ring-1 ring-white/20 border border-white/10 animate-fade-in"
           >
             {content}
           </div>,
@@ -801,7 +801,7 @@ export function Segmented<T extends string>({
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all',
+              'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all whitespace-nowrap',
               active ? 'bg-white text-brand-800 shadow-xs ring-1 ring-brand-200' : 'text-ink-600 hover:text-brand-700',
             )}
           >

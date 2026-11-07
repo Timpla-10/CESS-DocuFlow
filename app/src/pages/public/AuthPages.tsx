@@ -522,7 +522,7 @@ function AuthLayout({ children }: { children: ReactNode }) {
 }
 
 export function SignInPage() {
-  const { user, signIn } = useSession()
+  const { user, signIn, signOut } = useSession()
   const db = useDb()
   const navigate = useNavigate()
   const location = useLocation()
@@ -566,7 +566,8 @@ export function SignInPage() {
 
   const fromPath = typeof state.from === 'string' ? state.from : state.from?.pathname
 
-  if (user) return <Navigate to={fromPath ?? homeFor(user.role)} replace />
+  // Only auto-redirect if explicitly routed here from an attempted protected route
+  if (user && state.from) return <Navigate to={fromPath!} replace />
 
   const handleGoogleSignIn = async (targetEmail: string) => {
     setGoogleError(null)
@@ -687,6 +688,26 @@ export function SignInPage() {
             <p className="mt-1.5 text-sm font-medium text-[#6B7280]">
               Your documents, one clear path.
             </p>
+
+            {user && (
+              <Callout tone="brand" className="mt-5" title={`Currently signed in as ${user.name}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span>Role: <strong className="capitalize">{user.role}</strong> ({user.department ?? user.origin})</span>
+                  <div className="flex items-center gap-3">
+                    <Link to={homeFor(user.role)} className="font-semibold underline hover:text-brand-900">
+                      Go to Dashboard &rarr;
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => signOut()}
+                      className="font-semibold text-rose-700 underline hover:text-rose-900 cursor-pointer"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </Callout>
+            )}
 
             {regFeedback && (
               <Callout

@@ -49,9 +49,11 @@ export function StatusBadge({ doc, audience, db }: { doc: DocRecord; audience: '
 
 export function DelayedBadge({ audience }: { audience: 'requester' | 'staff' }) {
   return (
-    <Badge tone="warning" dot={false} className="max-w-full gap-1.5 break-words">
-      <Hourglass className="size-3 shrink-0" aria-hidden />
-      <span className="min-w-0 break-words">{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
+    <Badge tone="warning" dot={false} className="whitespace-nowrap shrink-0">
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <Hourglass className="size-3 shrink-0" aria-hidden />
+        <span>{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
+      </span>
     </Badge>
   )
 }

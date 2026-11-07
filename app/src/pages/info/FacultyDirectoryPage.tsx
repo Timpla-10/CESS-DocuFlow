@@ -204,7 +204,7 @@ export function FacultyDirectoryPage() {
 
       {/* Official Syllabus Template Card */}
       <div className="surface-brand-gradient relative overflow-hidden rounded-2xl p-6 text-white shadow-xl ring-1 ring-white/15">
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur-md">
               <FileText className="size-6 text-brand-200" />
@@ -233,35 +233,26 @@ export function FacultyDirectoryPage() {
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:flex-col sm:items-end">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPreviewTemplate(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
-                title="Preview official template on screen"
-              >
-                <Eye className="size-4 text-brand-200" />
-                <span>Preview Template</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDownloadTemplate}
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-brand-900 shadow-md transition hover:bg-brand-50 active:scale-95"
-              >
-                <Download className="size-4 text-brand-700" />
-                <span>Download Template</span>
-              </button>
-            </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPreviewTemplate(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
+              title="Preview official template on screen"
+            >
+              <Eye className="size-4 text-brand-200" />
+              <span>Preview</span>
+            </button>
 
             {isSecretary && (
               <label
-                className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 ${isUploadingTemplate ? 'opacity-60 pointer-events-none' : ''
-                  }`}
+                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95 ${
+                  isUploadingTemplate ? 'opacity-60 pointer-events-none' : ''
+                }`}
+                title="Upload or replace the institutional syllabus template"
               >
-                <UploadCloud className="size-3.5 text-brand-200" />
-                {isUploadingTemplate ? 'Uploading…' : 'Upload / Replace Template'}
+                <UploadCloud className="size-4 text-brand-200" />
+                <span>{isUploadingTemplate ? 'Uploading…' : 'Replace Template'}</span>
                 <input
                   type="file"
                   accept=".docx,.doc,.pdf"
@@ -271,6 +262,15 @@ export function FacultyDirectoryPage() {
                 />
               </label>
             )}
+
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-brand-900 shadow-md transition hover:bg-brand-50 active:scale-95"
+            >
+              <Download className="size-4 text-brand-700" />
+              <span>Download Template</span>
+            </button>
           </div>
         </div>
       </div>
