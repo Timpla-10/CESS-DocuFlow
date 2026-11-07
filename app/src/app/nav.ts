@@ -99,7 +99,7 @@ export function navFor(role: Role): NavSection[] {
           items: [
             { to: '/app/documents', label: 'All Documents', icon: Files },
             { to: '/app/archive', label: 'Archive', icon: Archive },
-            { to: '/app/email-log', label: 'Email Log', icon: Mail, count: (db) => db.notifications.filter((n) => n.result === 'failed').length, countTone: 'danger' },
+            { to: '/app/email-log', label: 'Email Log', icon: Mail },
           ],
         },
         {

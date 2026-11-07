@@ -1,17 +1,13 @@
 import {
   CheckCircle2,
   Mail,
-  RefreshCw,
   Search,
-  XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
-import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
-import { Input, Select } from '../../components/form'
-import { useToast } from '../../components/Toast'
+import { Input } from '../../components/form'
 import { Badge, Button, Card, EmptyState, PageHeader, Pagination } from '../../components/ui'
-import { api, useDb } from '../../data/store'
+import { useDb } from '../../data/store'
 import type { NotificationKind, NotificationLog } from '../../data/types'
 import { formatDateTime, timeAgo } from '../../lib/time'
 
@@ -26,19 +22,14 @@ const KIND_LABEL: Record<NotificationKind, string> = {
 }
 
 export function EmailLogPage() {
-  const user = useUser()
   const db = useDb()
-  const toast = useToast()
 
   const [search, setSearch] = useState('')
-  const [filterResult, setFilterResult] = useState<'all' | 'sent' | 'failed'>('all')
   const [inspecting, setInspecting] = useState<NotificationLog | null>(null)
-  const [retryingId, setRetryingId] = useState<string | null>(null)
   const [pageSize, setPageSize] = useState<number>(15)
   const [currentPage, setCurrentPage] = useState<number>(1)
 
   const notifications = db.notifications.filter((n) => {
-    if (filterResult !== 'all' && n.result !== filterResult) return false
     if (!search.trim()) return true
     const q = search.toLowerCase()
     return (
@@ -60,27 +51,9 @@ export function EmailLogPage() {
     setCurrentPage(1)
   }
 
-  const handleFilterChange = (result: 'all' | 'sent' | 'failed') => {
-    setFilterResult(result)
-    setCurrentPage(1)
-  }
-
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize)
     setCurrentPage(1)
-  }
-
-  const handleRetry = async (n: NotificationLog) => {
-    setRetryingId(n.id)
-    try {
-      await api.retryNotification(user, n.id)
-      toast.success('Email Resent', `Successfully dispatched email to ${n.recipientEmail}.`)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Resend failed.'
-      toast.error('Dispatch Failed', msg)
-    } finally {
-      setRetryingId(null)
-    }
   }
 
   return (
@@ -92,9 +65,9 @@ export function EmailLogPage() {
       />
 
       <Card>
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-ink-100 p-4">
-          <div className="relative min-w-[220px] flex-1">
+        {/* Search */}
+        <div className="border-b border-ink-100 p-4">
+          <div className="relative max-w-md">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-ink-400" />
             <Input
               type="search"
@@ -104,21 +77,12 @@ export function EmailLogPage() {
               className="pl-10 pr-4"
             />
           </div>
-          <Select
-            value={filterResult}
-            onChange={(e) => handleFilterChange(e.target.value as typeof filterResult)}
-            className="w-40"
-          >
-            <option value="all">All Dispatches</option>
-            <option value="sent">Delivered (Sent)</option>
-            <option value="failed">Failed Delivery</option>
-          </Select>
         </div>
 
         {/* Notification Table */}
         {notifications.length === 0 ? (
           <EmptyState icon={Mail} title="No notification records found">
-            Try adjusting your search query or filters.
+            Try adjusting your search query.
           </EmptyState>
         ) : (
           <>
@@ -163,37 +127,18 @@ export function EmailLogPage() {
                         {timeAgo(n.at)}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
-                        {n.result === 'sent' ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-success-700">
-                            <CheckCircle2 className="size-3.5 shrink-0" /> Delivered
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-danger-700">
-                            <XCircle className="size-3.5 shrink-0" /> Failed
-                          </span>
-                        )}
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-success-700">
+                          <CheckCircle2 className="size-3.5 shrink-0" /> Delivered
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setInspecting(n)}
-                          >
-                            View Email
-                          </Button>
-                          {n.result === 'failed' && (
-                            <Button
-                              size="sm"
-                              variant="danger-soft"
-                              loading={retryingId === n.id}
-                              onClick={() => handleRetry(n)}
-                              icon={RefreshCw}
-                            >
-                              Retry
-                            </Button>
-                          )}
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setInspecting(n)}
+                        >
+                          View Email
+                        </Button>
                       </td>
                     </tr>
                   ))}

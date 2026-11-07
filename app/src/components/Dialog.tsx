@@ -30,11 +30,17 @@ export function Dialog({
   const descId = useId()
   const panel = useRef<HTMLDivElement>(null)
 
+  // Stable references for callbacks to prevent re-running focus trap on re-renders
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const busyRef = useRef(busy)
+  busyRef.current = busy
+
   useEffect(() => {
     if (!open) return
     const prev = document.activeElement as HTMLElement | null
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onClose()
+      if (e.key === 'Escape' && !busyRef.current) onCloseRef.current()
       if (e.key === 'Tab' && panel.current) {
         const f = panel.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
         const list = Array.from(f).filter((el) => !el.hasAttribute('disabled'))
@@ -52,17 +58,22 @@ export function Dialog({
     }
     document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
+
+    // Initial autofocus only when opening, and only if focus is not already inside the dialog
     const t = window.setTimeout(() => {
-      const target = panel.current?.querySelector<HTMLElement>('[data-autofocus], textarea, input, select') ?? panel.current
-      target?.focus()
+      if (!panel.current?.contains(document.activeElement)) {
+        const target = panel.current?.querySelector<HTMLElement>('[data-autofocus], textarea, input, select') ?? panel.current
+        target?.focus()
+      }
     }, 30)
+
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
       window.clearTimeout(t)
       prev?.focus?.()
     }
-  }, [open, busy, onClose])
+  }, [open])
 
   if (!open) return null
   return createPortal(

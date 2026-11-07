@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import cessLogo from '../../assets/cess-logo.png'
 import heroImg from '../../assets/hero-documents.jpg'
@@ -19,9 +20,23 @@ import msunLogo from '../../assets/msun-logo.png'
 import { useSession } from '../../app/session'
 import { homeFor } from '../../app/nav'
 import { Logo } from '../../components/Logo'
-import { ButtonLink } from '../../components/ui'
+import { ButtonLink, cn } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { useDb } from '../../data/store'
+
+interface NavItem {
+  id: string
+  label: string
+  shortLabel?: string
+  href: string
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { id: 'home', label: 'Home', href: '#' },
+  { id: 'how-it-works', label: 'How It Works', href: '#how-it-works' },
+  { id: 'documents', label: 'Documents You Can Request', shortLabel: 'Documents', href: '#documents' },
+  { id: 'faculty-syllabi', label: 'Faculty & Syllabi', shortLabel: 'Faculty', href: '#faculty-syllabi' },
+]
 
 export function HomePage() {
   const { user } = useSession()
@@ -30,51 +45,159 @@ export function HomePage() {
   const facultyTypes = db.documentTypes.filter((t) => t.audience === 'faculty')
   const primary = user ? { to: homeFor(user.role), label: 'Go to My Dashboard' } : { to: '/sign-in', label: 'Sign In to DocuFlow' }
 
+  const [activeNav, setActiveNav] = useState<string>(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const h = window.location.hash.replace('#', '')
+      if (['how-it-works', 'documents', 'faculty-syllabi'].includes(h)) return h
+    }
+    return 'home'
+  })
+
+  const itemRefs = useRef<Record<string, HTMLAnchorElement | null>>({})
+  const [indicatorStyle, setIndicatorStyle] = useState<{ left: number; width: number; ready: boolean }>({
+    left: 0,
+    width: 0,
+    ready: false,
+  })
+
+  // Prevent scrollspy from conflicting and shaking indicator during smooth programmatic scroll
+  const isClickScrollingRef = useRef(false)
+  const scrollTimeoutRef = useRef<number | null>(null)
+
+  const selectNav = (id: string) => {
+    setActiveNav(id)
+    isClickScrollingRef.current = true
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current)
+    scrollTimeoutRef.current = window.setTimeout(() => {
+      isClickScrollingRef.current = false
+    }, 1000)
+  }
+
+  useEffect(() => {
+    const updateIndicator = () => {
+      const el = itemRefs.current[activeNav]
+      if (el) {
+        setIndicatorStyle({
+          left: el.offsetLeft,
+          width: el.offsetWidth,
+          ready: true,
+        })
+      }
+    }
+
+    updateIndicator()
+    const raf = requestAnimationFrame(updateIndicator)
+    window.addEventListener('resize', updateIndicator)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', updateIndicator)
+    }
+  }, [activeNav])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      // Don't interrupt or shake while smooth scroll is in progress from a click
+      if (isClickScrollingRef.current) return
+
+      const scrollY = window.scrollY
+      if (scrollY < 180) {
+        setActiveNav('home')
+        return
+      }
+
+      const sections = ['faculty-syllabi', 'documents', 'how-it-works']
+      for (const id of sections) {
+        const el = document.getElementById(id)
+        if (el) {
+          const rect = el.getBoundingClientRect()
+          if (rect.top <= 240) {
+            setActiveNav(id)
+            return
+          }
+        }
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
   return (
     <div className="min-h-dvh bg-white">
+      {/* Floating Sticky Top Navigation & Separate Sign In */}
+      <div className="fixed top-3 sm:top-5 inset-x-0 z-40 flex items-center justify-center gap-2.5 sm:gap-4 px-3 sm:px-6 pointer-events-none">
+        {/* Navigation Bar with Animated Morphing Selection Indicator */}
+        <header className="pointer-events-auto flex items-center rounded-full bg-white/95 p-1.5 shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/10 backdrop-blur-md">
+          <nav aria-label="Homepage" className="relative flex items-center gap-1 sm:gap-1.5">
+            {/* Morphing / Sliding Selection Rounded Rectangle */}
+            {indicatorStyle.ready && (
+              <span
+                className="pointer-events-none absolute inset-y-0 left-0 rounded-full bg-[#191970] shadow-sm transition-[transform,width] duration-350 ease-[cubic-bezier(0.25,1,0.5,1)] motion-reduce:transition-none"
+                style={{
+                  transform: `translate3d(${indicatorStyle.left}px, 0, 0)`,
+                  width: `${indicatorStyle.width}px`,
+                  willChange: 'transform, width',
+                }}
+                aria-hidden="true"
+              />
+            )}
+
+            {NAV_ITEMS.map((item) => {
+              const isActive = activeNav === item.id
+              return (
+                <a
+                  key={item.id}
+                  ref={(el) => {
+                    itemRefs.current[item.id] = el
+                  }}
+                  href={item.href}
+                  onClick={(e) => {
+                    selectNav(item.id)
+                    if (item.id === 'home') {
+                      e.preventDefault()
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                      history.replaceState(null, '', ' ')
+                    }
+                  }}
+                  className={cn(
+                    'relative z-10 rounded-full px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-colors duration-200 whitespace-nowrap',
+                    isActive
+                      ? 'text-white'
+                      : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100/60',
+                  )}
+                >
+                  <span className={item.shortLabel ? 'hidden sm:inline' : ''}>{item.label}</span>
+                  {item.shortLabel && <span className="sm:hidden">{item.shortLabel}</span>}
+                </a>
+              )
+            })}
+          </nav>
+        </header>
+
+        {/* Separate Sign In White Rectangle */}
+        <div className="pointer-events-auto flex items-center">
+          <Link
+            to={user ? homeFor(user.role) : '/sign-in'}
+            className="inline-flex items-center rounded-full bg-white/95 px-5 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-[#191970] shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/10 backdrop-blur-md hover:bg-slate-50 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+          >
+            {user ? 'Dashboard' : 'Sign In'}
+          </Link>
+        </div>
+      </div>
+
       {/* Hero & Top Navigation */}
-      <section className="surface-brand-gradient relative overflow-hidden pb-14 pt-3 sm:pb-20 sm:pt-4 text-white">
+      <section className="surface-brand-gradient relative overflow-hidden pb-14 pt-20 sm:pb-20 sm:pt-24 lg:pt-28 text-white">
         {/* Subtle dot matrix grid matching mockup */}
         <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
 
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          {/* Top Navbar */}
-          <header className="flex items-center justify-between gap-4 py-2 sm:py-3">
-            <div className="hidden sm:block sm:flex-1" />
-            <nav aria-label="Homepage" className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 md:gap-10 text-xs sm:text-sm font-semibold text-white/90">
-              <a href="#" className="hover:text-white transition-colors">
-                Home
-              </a>
-              <a href="#how-it-works" className="hover:text-white transition-colors">
-                How It Works
-              </a>
-              <a href="#documents" className="hover:text-white transition-colors">
-                Documents You Can Request
-              </a>
-              <a href="#faculty-syllabi" className="hover:text-white transition-colors">
-                Faculty &amp; Syllabi
-              </a>
-            </nav>
-            <div className="flex sm:flex-1 justify-end items-center gap-3 sm:gap-4">
-              {user && (
-                <Link
-                  to={homeFor(user.role)}
-                  className="hidden md:inline-block text-xs sm:text-sm font-semibold text-white/90 hover:text-white transition-colors"
-                >
-                  My Dashboard
-                </Link>
-              )}
-              <Link
-                to="/sign-in"
-                className="rounded-md bg-white px-5 sm:px-6 py-2 text-xs sm:text-sm font-bold text-[#191970] shadow-md hover:bg-slate-100 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
-                Sign In
-              </Link>
-            </div>
-          </header>
+        {/* Living Aurora ambient moving glow orbs in official CESS department colors (IDS Pink, DSEE Lavender, DSSH Violet) */}
+        <div className="pointer-events-none absolute -right-36 -top-36 size-[560px] rounded-full bg-dsee-300/45 blur-3xl animate-aurora-lavender" aria-hidden />
+        <div className="pointer-events-none absolute -bottom-28 -left-28 size-[520px] rounded-full bg-ids-400/50 blur-3xl animate-aurora-pink" aria-hidden />
+        <div className="pointer-events-none absolute right-1/3 top-1/2 size-[420px] -translate-y-1/2 rounded-full bg-dssh-500/40 blur-3xl animate-aurora-violet" aria-hidden />
 
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Centered Brand Emblem */}
-          <div className="mx-auto my-5 sm:my-8 flex max-w-4xl items-center justify-center gap-3 sm:gap-6 md:gap-8 px-2 text-center">
+          <div className="mx-auto mb-6 sm:mb-8 flex max-w-4xl items-center justify-center gap-3 sm:gap-6 md:gap-8 px-2 text-center">
             <img
               src={msunLogo}
               alt="MSU Naawan Seal"
@@ -98,8 +221,11 @@ export function HomePage() {
             />
           </div>
 
+          {/* Subtle separator matching mockup */}
+          <div className="mx-auto max-w-6xl border-b border-white/10 mb-8 sm:mb-12" />
+
           {/* 2-Column Hero Content */}
-          <div className="mt-4 grid items-center gap-8 lg:grid-cols-[1.05fr_1fr] lg:gap-12 pb-6">
+          <div className="grid items-center gap-8 lg:grid-cols-[1.05fr_1fr] lg:gap-12 pb-6">
             <div className="space-y-5 text-left">
               <h2 className="font-display text-3xl sm:text-4xl lg:text-[50px] font-bold leading-[1.14] tracking-tight text-white">
                 Know where<br />
@@ -130,6 +256,7 @@ export function HomePage() {
                 ) : (
                   <a
                     href="#how-it-works"
+                    onClick={() => selectNav('how-it-works')}
                     className="inline-flex items-center rounded-full bg-white/10 px-6 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-semibold text-white ring-1 ring-white/20 backdrop-blur-md transition-colors hover:bg-white/15"
                   >
                     See How It Works
@@ -174,7 +301,7 @@ export function HomePage() {
       </section>
 
       {/* How it works */}
-      <section id="how-it-works" className="relative -mt-12 scroll-mt-8">
+      <section id="how-it-works" className="relative -mt-12 scroll-mt-20 sm:scroll-mt-24">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
           <div className="rounded-3xl bg-white p-6 shadow-raised ring-1 ring-ink-100 sm:p-10">
             <div className="max-w-2xl">
@@ -224,7 +351,7 @@ export function HomePage() {
       </section>
 
       {/* Document types */}
-      <section id="documents" className="scroll-mt-8 bg-brand-50/70 py-20">
+      <section id="documents" className="scroll-mt-20 sm:scroll-mt-24 bg-brand-50/70 py-20">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
           <div className="max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.1em] text-brand-600">Documents you can request</p>
@@ -256,7 +383,7 @@ export function HomePage() {
       </section>
 
       {/* Faculty, Subject & Syllabus List (REQ-INFO-1..4) */}
-      <section id="faculty-syllabi" className="mx-auto max-w-6xl scroll-mt-8 px-5 py-20 sm:px-8">
+      <section id="faculty-syllabi" className="mx-auto max-w-6xl scroll-mt-20 sm:scroll-mt-24 px-5 py-20 sm:px-8">
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.1em] text-brand-600">College Directory &amp; Syllabi</p>
           <h2 className="mt-2 text-2xl font-extrabold text-brand-900 sm:text-3xl">
@@ -310,6 +437,8 @@ export function HomePage() {
       {/* CTA */}
       <section className="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
         <div className="surface-brand-gradient relative overflow-hidden rounded-3xl px-8 py-12 text-center sm:px-16 text-white shadow-xl">
+          <div className="pointer-events-none absolute -left-20 -top-20 size-72 rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-20 -right-20 size-72 rounded-full bg-ids-400/45 blur-2xl animate-aurora-pink" aria-hidden />
           <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
           <h2 className="relative text-balance font-display text-3xl font-semibold text-white">Ready to submit or check a request?</h2>
           <p className="relative mx-auto mt-3 max-w-xl text-indigo-100/90">Sign in with your MSU at Naawan email address.</p>
