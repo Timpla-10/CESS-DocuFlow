@@ -271,7 +271,7 @@ export function ArchivePage() {
       '',
       'CERTIFICATION OF INSTITUTIONAL ARCHIVE:',
       'This document has completed all required college reviews and is permanently',
-      'retained in the CESS DocuFlow Archive Vault for compliance and audit (REQ-REL-3).',
+      'retained in the CESS DocuFlow Archive Vault for compliance and audit.',
     ])
 
     toast.info('Archived PDF Downloaded', `Downloaded ${fileName}.`)
@@ -286,7 +286,7 @@ export function ArchivePage() {
       <PageHeader
         eyebrow="Compliance & Audit Vault"
         title="College Document Archive"
-        description="Completed and released documents permanently retained for institutional auditing, accreditation compliance, and academic records (REQ-REL-3)."
+        description="Completed and released documents permanently retained for institutional auditing, accreditation compliance, and academic records."
         actions={
           <Button
             variant="secondary"
@@ -626,7 +626,7 @@ export function ArchivePage() {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="h-9 w-40 text-xs"
+                  className="h-10 text-sm sm:w-44"
                 />
               </label>
               <label className="block">
@@ -637,7 +637,7 @@ export function ArchivePage() {
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="h-9 w-40 text-xs"
+                  className="h-10 text-sm sm:w-44"
                 />
               </label>
 
@@ -648,7 +648,7 @@ export function ArchivePage() {
                     clearAllFilters()
                     setSelectedTypeId(null)
                   }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-50 px-3 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-50 px-3.5 text-sm font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
                 >
                   <RotateCcw className="size-3.5" aria-hidden />
                   Reset all filters
@@ -690,7 +690,7 @@ export function ArchivePage() {
                         : 'Faculty Filing'}
                     </Badge>
                     <Badge tone="success" dot={false}>
-                      Permanent Retention (REQ-REL-3)
+                      Permanent Retention
                     </Badge>
                   </div>
                   <p className="mt-1 text-sm text-ink-600 max-w-2xl">

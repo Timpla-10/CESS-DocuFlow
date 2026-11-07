@@ -94,7 +94,7 @@ export function AccountPage() {
       <PageHeader
         eyebrow="My Account"
         title="Account & Notification Settings"
-        description="View your university account details, toggle your hybrid notification preferences (REQ-NOT-7), and update your security settings."
+        description="View your university account details, toggle your hybrid notification preferences, and update your security settings."
       />
 
       {/* Profile Overview */}
@@ -154,7 +154,7 @@ export function AccountPage() {
                 : []),
               { label: 'Department / Academic Program', value: user.department },
               { label: 'Official Position', value: user.position },
-              { label: 'University Email (REQ-AUTH-9)', value: user.email },
+              { label: 'University Email', value: user.email },
               {
                 label: 'Notification Delivery Mode',
                 value: NOTIFICATION_PREF_LABEL[user.notificationPreference ?? 'both'],
@@ -164,11 +164,11 @@ export function AccountPage() {
         </div>
       </Card>
 
-      {/* Hybrid Notification Preferences (REQ-NOT-7) */}
+      {/* Hybrid Notification Preferences */}
       <Card className="p-6">
         <CardHeader
           icon={Bell}
-          title="Hybrid Notification Preferences (REQ-NOT-7)"
+          title="Hybrid Notification Preferences"
           description="Choose how you want to receive alerts when a document is returned, ready for release, or pending for 3 days."
         />
 

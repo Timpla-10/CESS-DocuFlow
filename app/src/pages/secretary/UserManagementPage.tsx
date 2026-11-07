@@ -1058,7 +1058,7 @@ export function UserManagementPage() {
       <Dialog
         open={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
-        size="md"
+        size="lg"
         title={editingUserId ? 'Edit User Account & Role' : 'Create User Account'}
         description="Configure university email, assign official roles, and designate CESS or IDS origin."
         busy={userBusy}
@@ -1073,7 +1073,7 @@ export function UserManagementPage() {
           </>
         }
       >
-        <form onSubmit={handleSaveUser} className="space-y-4">
+        <form onSubmit={handleSaveUser} className="space-y-5">
           <Field label="Full Name" required error={userErrors.name}>
             <Input
               value={uName}
@@ -1099,7 +1099,7 @@ export function UserManagementPage() {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-5">
             <Field label="Official Role" required>
               <Select value={uRole} onChange={(e) => setURole(e.target.value as Role)}>
                 {ALL_ROLES.map((r) => (
@@ -1111,7 +1111,7 @@ export function UserManagementPage() {
             </Field>
 
             {(uRole === 'student' || uRole === 'faculty') && (
-              <Field label="Unit / Origin (REQ-SUB-6)" required>
+              <Field label="Unit / Origin" hint="Designate campus affiliation for document routing." required>
                 <Select value={uOrigin} onChange={(e) => setUOrigin(e.target.value as Origin)}>
                   <option value="CESS">CESS Main Campus</option>
                   <option value="IDS">Integrated Developmental School (IDS)</option>
@@ -1167,7 +1167,7 @@ export function UserManagementPage() {
       <Dialog
         open={!!approveDialogReg}
         onClose={() => setApproveDialogReg(null)}
-        size="md"
+        size="lg"
         title="Approve & Activate Account"
         description="Confirm or adjust the assigned role and department before activating this university user."
         busy={approveBusy}
@@ -1183,8 +1183,8 @@ export function UserManagementPage() {
         }
       >
         {approveDialogReg && (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-ink-50 p-3 text-xs space-y-1">
+          <div className="space-y-5">
+            <div className="rounded-xl bg-ink-50 p-4 text-xs space-y-1.5 border border-ink-100">
               <div>
                 <span className="font-semibold text-ink-700">Applicant: </span>
                 <span className="text-ink-900 font-bold">{approveDialogReg.name}</span>
@@ -1249,7 +1249,7 @@ export function UserManagementPage() {
         }
       >
         {rejectDialogReg && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <p className="text-xs text-ink-600">
               Rejecting will notify <span className="font-bold">{rejectDialogReg.name}</span> ({rejectDialogReg.email}).
             </p>

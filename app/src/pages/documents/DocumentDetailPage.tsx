@@ -31,7 +31,7 @@ import {
   formatSize,
   sessionFiles,
 } from '../../components/documents'
-import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
+import { Checkbox, Field, InfoTooltip, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
 import {
   Badge,
@@ -690,7 +690,7 @@ export function DocumentDetailPage() {
                     }`}
                   />
                   <span className="text-xs font-bold uppercase tracking-wider text-ink-900">
-                    Content Verification Record (REQ-REQT-4)
+                    Content Verification Record
                   </span>
                 </div>
                 <Badge
@@ -813,7 +813,7 @@ export function DocumentDetailPage() {
             <DefinitionList
               items={[
                 {
-                  label: 'Control Number & Revision (REQ-REC-2)',
+                  label: 'Control Number & Revision',
                   value: <span className="font-mono font-bold text-brand-900">{controlNumber(doc)}</span>,
                   hint: `Revision ${String(doc.revision).padStart(2, '0')}${doc.encodedBySecretary ? ' · Walk-in encoded by College Secretary' : ''}`,
                 },
@@ -827,7 +827,7 @@ export function DocumentDetailPage() {
                   value: <span className="font-semibold text-ink-900">{doc.title}</span>,
                 },
                 {
-                  label: 'Institutional Origin (REQ-SUB-6)',
+                  label: 'Institutional Origin',
                   value: (
                     <Badge tone={doc.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
                       {doc.origin === 'IDS' ? 'IDS (Integrated Developmental School)' : 'CESS (College of Education and Social Sciences)'}
@@ -853,7 +853,7 @@ export function DocumentDetailPage() {
                 {
                   label: 'Date & Time Received',
                   value: formatDateTime(doc.submittedAt),
-                  hint: 'Sealed automatic timestamp (REQ-REC-1)',
+                  hint: 'Sealed automatic timestamp',
                 },
                 {
                   label: 'Last Updated Time',
@@ -1007,7 +1007,7 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2.5 text-xs text-ink-700 border border-slate-200">
             <div className="flex items-center gap-1.5">
               <span className="font-semibold text-ink-900">Control Number:</span>
@@ -1051,7 +1051,7 @@ export function DocumentDetailPage() {
 
           <div>
             <label className="block text-sm font-semibold text-ink-800">Attach Corrected Files</label>
-            <div className="mt-2">
+            <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-4">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100">
                 <Paperclip className="size-3.5" aria-hidden /> Attach File
                 <input
@@ -1098,11 +1098,11 @@ export function DocumentDetailPage() {
         </form>
       </Dialog>
 
-      {/* 2. Secretary Content Verification & Completeness Check Dialog (REQ-REQT-4, REQ-REQT-5, REQ-REQT-6) */}
+      {/* 2. Secretary Content Verification & Completeness Check Dialog */}
       <Dialog
         open={isCheckOpen}
         onClose={() => setIsCheckOpen(false)}
-        size="lg"
+        size="xl"
         title="Verify Content & Log Submission"
         description="The automatic completeness checker has verified that all required attachments are present. Review the uploaded files for content correctness, then mark Complete to log and route, Return if content issues are found, or Disapprove / Reject if the submission is invalid."
         busy={checkBusy}
@@ -1126,9 +1126,9 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
-          {/* Automatic Completeness Check Result Banner (REQ-REQT-4) */}
-          <div className="flex items-center justify-between rounded-xl bg-success-50 p-3.5 text-xs text-success-700 ring-1 ring-inset ring-success-100">
+        <form className="space-y-6">
+          {/* Automatic Completeness Check Result Banner */}
+          <div className="flex items-center justify-between rounded-xl bg-success-50 p-4 text-xs text-success-700 ring-1 ring-inset ring-success-100">
             <div className="flex items-center gap-2 font-semibold">
               <FileCheck2 className="size-4 shrink-0" />
               <span>Automatic Completeness Check Result: All required attachments are present</span>
@@ -1199,7 +1199,7 @@ export function DocumentDetailPage() {
           {/* Verification Result Selector */}
           <div>
             <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-ink-500">
-              Content Verification Result (REQ-REQT-4)
+              Content Verification Result
             </p>
             <Segmented
               label="Verification Result"
@@ -1256,7 +1256,7 @@ export function DocumentDetailPage() {
             error={checkErrors.reasons}
             hint={
               checkDecision === 'return'
-                ? 'Required (REQ-REQT-5): Explain what information inside the document or attachments is incorrect or incomplete.'
+                ? 'Required: Explain what information inside the document or attachments is incorrect or incomplete.'
                 : checkDecision === 'reject'
                 ? 'Required: Explain why this submission is disapproved/rejected. The requester will receive this notification.'
                 : 'Optional note recorded with your content verification.'
@@ -1281,10 +1281,11 @@ export function DocumentDetailPage() {
         </form>
       </Dialog>
 
-      {/* 3. Reviewing Office Action Dialog (REQ-ROUTE-5, REQ-ROUTE-6) */}
+      {/* 3. Reviewing Office Action Dialog */}
       <Dialog
         open={isReviewOpen}
         onClose={() => setIsReviewOpen(false)}
+        size="lg"
         title={`Review Document — ${currentStep?.label ?? OFFICE_LABEL[user.role as keyof typeof OFFICE_LABEL]}`}
         description="Record your decision on this document. You can endorse it, approve it, return it for revisions, or disapprove/reject it."
         busy={reviewBusy}
@@ -1311,7 +1312,7 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-6">
           {/* Pre-Action Document Inspection */}
           <div className="flex items-center justify-between rounded-xl bg-brand-50/70 p-3.5 ring-1 ring-inset ring-brand-200 text-xs">
             <div className="flex items-center gap-2.5">
@@ -1478,7 +1479,7 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-5">
           <Field label="External University Office" required>
             <Select
               value={externalOffice}
@@ -1532,7 +1533,7 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-5">
           <Field label="Return Remarks" optional>
             <Textarea
               rows={3}
@@ -1544,7 +1545,7 @@ export function DocumentDetailPage() {
         </form>
       </Dialog>
 
-      {/* 6. Secretary Release Dialog (REQ-REL-1..4) */}
+      {/* 6. Secretary Release Dialog */}
       <Dialog
         open={isReleaseOpen}
         onClose={() => setIsReleaseOpen(false)}
@@ -1562,9 +1563,9 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-6">
           <Field
-            label="Name of Person Who Received Document (REQ-REL-2)"
+            label="Name of Person Who Received Document"
             required
             error={releaseErrors.receivedBy}
             hint="Enter the full name of the student, faculty member, or authorized representative."
@@ -1580,15 +1581,13 @@ export function DocumentDetailPage() {
             />
           </Field>
 
-          {/* REQ-REL-4: Attach scanned copy of final signed document */}
+          {/* Attach scanned copy of final signed document */}
           <div>
-            <label className="block text-sm font-semibold text-ink-800">
-              Scanned Copy of Final Signed Document (REQ-REL-4)
-            </label>
-            <p className="mt-0.5 text-xs text-ink-500">
-              Attach a scanned PDF or image of the final signed document for the permanent archive record.
-            </p>
-            <div className="mt-2">
+            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink-800">
+              <span>Scanned Copy of Final Signed Document</span>
+              <InfoTooltip content="Attach a scanned PDF or image of the final signed document for the permanent archive record." />
+            </div>
+            <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-4">
               {releaseSignedFile ? (
                 <div className="flex items-center justify-between rounded-lg bg-success-50/60 px-3 py-2 text-xs ring-1 ring-success-200">
                   <span className="flex items-center gap-2 font-semibold text-ink-900">
@@ -1605,7 +1604,7 @@ export function DocumentDetailPage() {
                   </button>
                 </div>
               ) : (
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-50 shadow-xs transition-colors">
                   <UploadCloud className="size-4" aria-hidden /> Attach Scanned Signed Document
                   <input
                     type="file"

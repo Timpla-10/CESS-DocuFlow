@@ -88,7 +88,7 @@ export function EmailLogPage() {
       <PageHeader
         eyebrow="Communications Audit"
         title="Email Notifications Log"
-        description="A complete audit record of automated emails dispatched to requesters and reviewing offices, including status updates, return reasons, and reminders (REQ-NOT-4)."
+        description="A complete audit record of automated emails dispatched to requesters and reviewing offices, including status updates, return reasons, and reminders."
       />
 
       <Card>
@@ -217,6 +217,7 @@ export function EmailLogPage() {
       <Dialog
         open={!!inspecting}
         onClose={() => setInspecting(null)}
+        size="lg"
         title={inspecting?.subject || 'Email Preview'}
         description={`Dispatched to ${inspecting?.recipientEmail} on ${
           inspecting ? formatDateTime(inspecting.at) : ''
@@ -228,13 +229,13 @@ export function EmailLogPage() {
         }
       >
         {inspecting && (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-ink-100 bg-ink-50/70 p-4">
-              <div className="flex justify-between text-xs text-ink-600 pb-2 border-b border-ink-200">
+          <div className="space-y-5">
+            <div className="rounded-xl border border-ink-100 bg-ink-50/70 p-5">
+              <div className="flex justify-between text-xs text-ink-600 pb-2.5 border-b border-ink-200">
                 <span><strong>To:</strong> {inspecting.recipientLabel} &lt;{inspecting.recipientEmail}&gt;</span>
                 <span><strong>Category:</strong> {KIND_LABEL[inspecting.kind]}</span>
               </div>
-              <p className="mt-3 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink-900">
+              <p className="mt-4 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink-900">
                 {inspecting.body}
               </p>
             </div>

@@ -2,15 +2,18 @@
  * Core UI primitives for CESS DocuFlow.
  * All colours come from the tokens in index.css — no raw hex values here.
  */
-import { ChevronDown, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, HelpCircle, Loader2 } from 'lucide-react'
 import {
+  useEffect,
   useId,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type ComponentType,
   type HTMLAttributes,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import type { Tone } from '../content/language'
 
@@ -28,7 +31,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dang
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 const buttonBase =
-  'inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-center leading-snug transition-all duration-150 ' +
+  'inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-center leading-none transition-all duration-150 ' +
   'disabled:cursor-not-allowed disabled:opacity-55 active:translate-y-px select-none break-words min-w-0'
 
 const buttonVariants: Record<ButtonVariant, string> = {
@@ -173,10 +176,10 @@ export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivEle
 
 export function CardHeader({ title, description, action, icon: Icon }: { title: ReactNode; description?: ReactNode; action?: ReactNode; icon?: IconType }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 px-6 py-4.5">
-      <div className="flex min-w-0 items-start gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-5 py-4 sm:px-6 sm:py-4.5">
+      <div className="flex min-w-0 items-center gap-3">
         {Icon && (
-          <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
             <Icon className="size-4" aria-hidden />
           </span>
         )}
@@ -185,8 +188,98 @@ export function CardHeader({ title, description, action, icon: Icon }: { title: 
           {description && <p className="mt-0.5 text-sm text-ink-500">{description}</p>}
         </div>
       </div>
-      {action}
+      {action && <div className="flex items-center gap-2">{action}</div>}
     </div>
+  )
+}
+
+/**
+ * Compact accessible info tooltip. Renders via Portal at document.body with fixed
+ * positioning and automatic viewport clamping to avoid clipping inside modals/containers.
+ */
+export function InfoTooltip({ content }: { content: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [coords, setCoords] = useState<{ top: number; left: number; isAbove: boolean } | null>(null)
+
+  const updatePosition = () => {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    // Center horizontally above the trigger, clamped within viewport bounds
+    const tooltipWidth = 280
+    const idealLeft = rect.left + rect.width / 2 - tooltipWidth / 2
+    const clampedLeft = Math.max(16, Math.min(window.innerWidth - tooltipWidth - 16, idealLeft))
+    // Prefer above, fallback to below if close to viewport top
+    const spaceAbove = rect.top
+    const isAbove = spaceAbove > 70
+    const top = isAbove ? rect.top - 8 : rect.bottom + 8
+    setCoords({ top, left: clampedLeft, isAbove })
+  }
+
+  const handleOpen = () => {
+    updatePosition()
+    setOpen(true)
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const onScrollOrResize = () => updatePosition()
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        ref={triggerRef}
+        type="button"
+        onMouseEnter={handleOpen}
+        onMouseLeave={handleClose}
+        onFocus={handleOpen}
+        onBlur={handleClose}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (open) handleClose()
+          else handleOpen()
+        }}
+        className="inline-flex size-4 items-center justify-center rounded-full text-ink-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500/40 transition-colors"
+        aria-label="More information"
+      >
+        <HelpCircle className="size-3.5" aria-hidden />
+      </button>
+
+      {open &&
+        coords &&
+        createPortal(
+          <div
+            role="tooltip"
+            style={{
+              position: 'fixed',
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              transform: coords.isAbove ? 'translateY(-100%)' : 'none',
+            }}
+            className="pointer-events-none z-[9999] max-w-[280px] rounded-lg bg-ink-950 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-xl ring-1 ring-white/10 animate-fade-in"
+          >
+            {content}
+          </div>,
+          document.body,
+        )}
+    </span>
   )
 }
 

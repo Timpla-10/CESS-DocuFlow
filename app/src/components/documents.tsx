@@ -223,14 +223,14 @@ export function FilterBar({
       </div>
 
       {showDateRange && (
-        <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 pt-1 sm:gap-3">
+        <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 pt-1 sm:gap-3.5">
           <label className="block w-full min-w-0 sm:w-auto">
             <span className="mb-1 block text-xs font-semibold text-ink-600">Submitted from date</span>
             <Input
               type="date"
               value={filters.dateFrom}
               onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-              className="h-9 w-full min-w-0 text-xs sm:w-40"
+              className="h-10 w-full min-w-0 text-sm sm:w-44"
             />
           </label>
           <label className="block w-full min-w-0 sm:w-auto">
@@ -239,7 +239,7 @@ export function FilterBar({
               type="date"
               value={filters.dateTo}
               onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-              className="h-9 w-full min-w-0 text-xs sm:w-40"
+              className="h-10 w-full min-w-0 text-sm sm:w-44"
             />
           </label>
           {(filters.dateFrom || filters.dateTo || filters.office || filters.status || filters.type || filters.origin || filters.q) && (
@@ -257,7 +257,7 @@ export function FilterBar({
                   dateTo: '',
                 })
               }
-              className="h-9 rounded-lg px-2.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-50/70 px-3.5 text-sm font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
             >
               Reset filters
             </button>
@@ -443,7 +443,7 @@ export function DocumentList({
                     )}
                   </td>
                   <td className="whitespace-nowrap min-w-[170px] px-6 py-4.5">
-                    <div className="flex flex-col items-start gap-1.5">
+                    <div className="inline-flex flex-wrap items-center gap-1.5">
                       <StatusBadge doc={d} audience={audience} db={db} />
                       {delayed && <DelayedBadge audience={audience} />}
                     </div>
@@ -825,7 +825,7 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
       `Document Type: ${type?.name ?? doc.typeId}`,
       `Origin: ${doc.origin}`,
       `Requester: ${requester?.name ?? 'Unknown'} (${requester?.department ?? ''})`,
-      `Attachment Category: ${a.isSignedCopy ? 'Final Signed Release Copy (REQ-REL-4)' : (req?.label ?? 'Supporting Attachment')}`,
+      `Attachment Category: ${a.isSignedCopy ? 'Final Signed Release Copy' : (req?.label ?? 'Supporting Attachment')}`,
       `Uploaded By: ${a.uploadedBy}`,
       `Uploaded At: ${formatDateTime(a.uploadedAt)}`,
       `Revision: ${revisionLabel(a.revision)}`,

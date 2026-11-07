@@ -127,7 +127,7 @@ export function DocumentPreviewModal({
         `Document Type: ${docType?.name ?? doc.typeId}`,
         `Origin: ${doc.origin}`,
         `Requester: ${requester?.name ?? 'Unknown'} (${requester?.department ?? ''})`,
-        `Attachment Category: ${activeAttachment.isSignedCopy ? 'Final Signed Release Copy (REQ-REL-4)' : (activeReq?.label ?? 'Supporting Attachment')}`,
+        `Attachment Category: ${activeAttachment.isSignedCopy ? 'Final Signed Release Copy' : (activeReq?.label ?? 'Supporting Attachment')}`,
         `Uploaded By: ${activeAttachment.uploadedBy}`,
         `Uploaded At: ${formatDateTime(activeAttachment.uploadedAt)}`,
         `Revision: ${revisionLabel(activeAttachment.revision)}`,

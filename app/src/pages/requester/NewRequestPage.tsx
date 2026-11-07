@@ -1085,11 +1085,11 @@ export function NewRequestPage() {
             </div>
           }
         >
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Control Number Hero Card */}
             <div className="rounded-2xl border-2 border-brand-200 bg-gradient-to-br from-brand-50/70 via-white to-brand-50/30 p-5 text-center">
               <span className="text-2xs font-extrabold uppercase tracking-wider text-brand-700">
-                Assigned Official Control Number (REQ-REC-2)
+                Assigned Official Control Number
               </span>
               <div className="mt-1.5 flex flex-wrap items-center justify-center gap-2.5">
                 <span className="font-mono text-2xl sm:text-3xl font-black tracking-tight text-brand-950 selection:bg-brand-200">

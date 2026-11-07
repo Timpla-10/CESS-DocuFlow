@@ -4,7 +4,9 @@
  */
 import { AlertCircle, ChevronDown } from 'lucide-react'
 import { cloneElement, forwardRef, isValidElement, useId, useState, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { cn } from './ui'
+import { cn, InfoTooltip } from './ui'
+
+export { InfoTooltip }
 
 export function Field({
   label,
@@ -28,21 +30,20 @@ export function Field({
   const errId = `${id}-err`
   const describedBy = [hint ? hintId : null, error ? errId : null].filter(Boolean).join(' ') || undefined
   const control = isValidElement(children)
-    ? cloneElement(children, { id, 'aria-describedby': describedBy, 'aria-invalid': !!error })
+  ? cloneElement(children, { id, 'aria-describedby': describedBy, 'aria-invalid': !!error })
     : children
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-ink-800">
-        {label}
-        {required && <span className="text-xs font-semibold text-brand-700">Required</span>}
-        {optional && <span className="text-xs font-medium text-ink-500">Optional</span>}
+      <label htmlFor={id} className="mb-2 flex min-h-[22px] items-center justify-between gap-2 text-sm font-semibold text-ink-800">
+        <span className="inline-flex items-center gap-1.5 min-w-0">
+          <span>{label}</span>
+          {hint && <InfoTooltip content={hint} />}
+        </span>
+        {required && <span className="shrink-0 text-xs font-semibold text-brand-700">Required</span>}
+        {optional && <span className="shrink-0 text-xs font-medium text-ink-500">Optional</span>}
       </label>
       {control}
-      {hint && !error && (
-        <p id={hintId} className="mt-1.5 text-[13px] leading-snug text-ink-500">
-          {hint}
-        </p>
-      )}
+      {hint && <span id={hintId} className="sr-only">{hint}</span>}
       {error && (
         <p id={errId} className="mt-1.5 flex items-start gap-1.5 text-[13px] font-medium text-danger-700" role="alert">
           <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden />

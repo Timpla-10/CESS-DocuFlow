@@ -199,7 +199,7 @@ export function FacultyDirectoryPage() {
       <PageHeader
         eyebrow="Academic Directory"
         title="Faculty Members, Subjects & Course Syllabi"
-        description="Browse College of Education and Social Sciences faculty members, their assigned teaching subjects, and official course syllabi (REQ-INFO-2, REQ-INFO-3, REQ-INFO-4)."
+        description="Browse College of Education and Social Sciences faculty members, their assigned teaching subjects, and official course syllabi."
       />
 
       {/* Official Syllabus Template Card */}

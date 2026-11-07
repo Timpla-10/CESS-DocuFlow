@@ -64,7 +64,7 @@ export function NoticesPage() {
       <PageHeader
         eyebrow="College Announcements"
         title="Notices & Minutes of Meetings"
-        description="Official college notices, meeting announcements, and approved minutes released for faculty and staff review (REQ-NOT-6)."
+        description="Official college notices, meeting announcements, and approved minutes released for faculty and staff review."
         actions={
           canPost ? (
             <Button onClick={() => setIsPostOpen(true)} icon={Plus}>
@@ -145,6 +145,7 @@ export function NoticesPage() {
       <Dialog
         open={isPostOpen}
         onClose={() => setIsPostOpen(false)}
+        size="lg"
         title="Publish Notice or Minutes"
         description="Share official college notices or approved meeting minutes. All active faculty members will receive an automated email alert."
         busy={isPosting}
@@ -159,7 +160,7 @@ export function NoticesPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-5">
           <Field label="Category" required>
             <Select
               value={kind}

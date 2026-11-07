@@ -736,12 +736,12 @@ export function AllDocumentsPage() {
         </div>
       )}
 
-      {/* Walk-In Document Encoding Dialog (REQ-REC-8) */}
+      {/* Walk-In Document Encoding Dialog */}
       <Dialog
         open={isWalkInOpen}
         onClose={() => setIsWalkInOpen(false)}
-        size="lg"
-        title="Encode Document Received in Person (REQ-REC-8)"
+        size="xl"
+        title="Encode Document Received in Person"
         description="Create an official CESS DocuFlow record for a physical document packet submitted at the counter. The record will be marked as encoded by the College Secretary."
         busy={walkInBusy}
         footer={
@@ -759,9 +759,13 @@ export function AllDocumentsPage() {
           </>
         }
       >
-        <form className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Requester (Student, Faculty, or Principal)" required>
+        <form className="space-y-6">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              label="Requester"
+              required
+              hint="Select the student, faculty member, or principal submitting the physical packet."
+            >
               <Select
                 value={requesterId}
                 onChange={(e) => handleRequesterChange(e.target.value)}
