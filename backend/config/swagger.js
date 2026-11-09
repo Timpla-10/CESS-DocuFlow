@@ -355,6 +355,9 @@ Mindanao State University at Naawan
           { name: 'office', in: 'query', schema: { type: 'string' }, description: 'PB-28: Filter by current holding office name (e.g. chairperson, dean, secretary)' },
           { name: 'officeId', in: 'query', schema: { type: 'integer' }, description: 'PB-28: Filter by current holding office ID' },
           { name: 'overdue', in: 'query', schema: { type: 'boolean' }, description: 'PB-28: Filter documents exceeding standard turnaround time' },
+          { name: 'sort', in: 'query', schema: { type: 'string', enum: ['oldest', 'newest', 'waiting_longest'], default: 'oldest' }, description: 'PB-29: Queue ordering (default oldest eligible first / FIFO per SRS 3.9)' },
+          { name: 'priority', in: 'query', schema: { type: 'string', enum: ['Urgent', 'Standard'] }, description: 'PB-29: Filter by priority' },
+          { name: 'is_expedited', in: 'query', schema: { type: 'boolean' }, description: 'PB-29: Filter approved expedited exception requests only' },
         ],
         responses: {
           200: { description: 'List of accessible document requests' },
@@ -473,6 +476,35 @@ Mindanao State University at Naawan
         responses: {
           200: { description: 'Completeness check recorded; document routed to first reviewing office' },
           403: { description: 'Forbidden: Only College Secretary can perform completeness check' },
+        },
+      },
+    },
+    '/api/documents/{id}/flag-exception': {
+      post: {
+        summary: 'Flag approved exception for expedited queue priority (PB-29, SRS 3.9)',
+        tags: ['Reviewer Decisions'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['reason'],
+                properties: {
+                  reason: { type: 'string', example: 'Graduation clearance deadline: Registrar requires immediate endorsement.' },
+                  priority: { type: 'string', enum: ['Urgent', 'Standard'], default: 'Urgent' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Approved exception flagged and prioritized in FIFO queue' },
+          400: { description: 'Missing required reason' },
+          403: { description: 'Forbidden: Requires Secretary or Reviewer role' },
+          404: { description: 'Document not found' },
         },
       },
     },

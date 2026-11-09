@@ -263,6 +263,46 @@ function normalizeDoc(raw) {
   }
   const officeSinceDate = officeSince ? new Date(officeSince) : new Date();
   const timeWaitingMs = Math.max(0, Date.now() - officeSinceDate.getTime());
+  const daysWaiting = Math.floor(timeWaitingMs / (1000 * 60 * 60 * 24));
+
+  // PB-29 / SRS 3.9: Approved Exceptions and Priority Flagging
+  let is_expedited = Boolean(raw.is_expedited);
+  let priority = raw.priority || 'Standard';
+  let exception_info = null;
+
+  const exceptionEntry = [...history].reverse().find(
+    (h) => (h.action_remarks && h.action_remarks.includes('[EXPEDITED EXCEPTION]')) ||
+           (h.remarks && h.remarks.includes('[EXPEDITED EXCEPTION]')) ||
+           h.action_type === 'Exception_Flagged' ||
+           h.action_type === 'Expedited' ||
+           h.action_type === 'Exception_Granted'
+  );
+
+  const titleOrDescHasExpedited =
+    /\[(EXPEDITED|URGENT|EXCEPTION)\]/i.test(raw.title || '') ||
+    /\[(EXPEDITED|URGENT|EXCEPTION)\]/i.test(raw.description || '');
+
+  if (exceptionEntry) {
+    is_expedited = true;
+    priority = 'Urgent';
+    exception_info = {
+      isApproved: true,
+      reason: exceptionEntry.action_remarks || 'Official priority exception granted.',
+      approvedBy: exceptionEntry.actor_name || 'Approving Authority',
+      approvedAt: exceptionEntry.action_timestamp,
+      actorId: exceptionEntry.action_by_user_id || null,
+    };
+  } else if (titleOrDescHasExpedited || is_expedited) {
+    is_expedited = true;
+    priority = 'Urgent';
+    exception_info = {
+      isApproved: true,
+      reason: raw.description || 'Priority processing requested.',
+      approvedBy: 'Staff',
+      approvedAt: raw.submitted_at,
+      actorId: null,
+    };
+  }
 
   return {
     ...raw,
@@ -274,6 +314,10 @@ function normalizeDoc(raw) {
     office,
     officeSince,
     timeWaitingMs,
+    daysWaiting,
+    is_expedited,
+    priority,
+    exception_info,
     is_deleted,
     returnReason,
     returnInfo,
@@ -316,15 +360,42 @@ function mapPreferenceRow(row) {
 }
 
 const DocumentModel = {
-  async findAll() {
+  async findAll(options = {}) {
     await ensureOfficesLoaded();
+    const sort = options.sort || 'oldest';
+    const ascending = sort === 'oldest' || sort === 'asc';
+
     const { data, error } = await supabase
       .from('document_request')
       .select(DOC_SELECT)
       .eq('is_deleted', false)
-      .order('submitted_at', { ascending: false });
+      .order('submitted_at', { ascending });
     if (error) throw error;
-    return (data || []).map(normalizeDoc).filter((d) => !d.is_deleted);
+
+    let docs = (data || []).map(normalizeDoc).filter((d) => !d.is_deleted);
+
+    // Apply in-memory cached properties (e.g. exception flags, decisions, fallback updates)
+    docs = docs.map((d) => {
+      const cached = docCache.get(d.document_id);
+      if (cached) {
+        const officeId = cached.current_office_id !== undefined ? cached.current_office_id : d.current_office_id;
+        const officeObj = (officeId && officeLookupById[officeId]) || (officeId ? cached.office : null) || d.office;
+        const status = cached.current_status || d.current_status;
+        return {
+          ...d,
+          current_status: status,
+          statusLabel: STATUS_LABELS[status] || d.statusLabel,
+          current_office_id: officeId,
+          office: officeObj,
+          is_expedited: cached.is_expedited !== undefined ? cached.is_expedited : d.is_expedited,
+          priority: cached.priority || d.priority,
+          exception_info: cached.exception_info || d.exception_info,
+        };
+      }
+      return d;
+    });
+
+    return docs;
   },
 
   async findById(id, { includeDeleted = false } = {}) {
@@ -360,6 +431,9 @@ const DocumentModel = {
         history: doc.history,
         timeline: doc.timeline,
         attachments: doc.attachments,
+        is_expedited: cached.is_expedited !== undefined ? cached.is_expedited : doc.is_expedited,
+        priority: cached.priority || doc.priority,
+        exception_info: cached.exception_info || doc.exception_info,
       };
     }
     return doc;
@@ -417,6 +491,14 @@ const DocumentModel = {
       if (error.code === '42703') {
         const current = await this.findById(id);
         const merged = { ...current, ...updates };
+        if (updates.current_office_id !== undefined) {
+          merged.current_office_id = updates.current_office_id;
+          merged.office = (updates.current_office_id && officeLookupById[updates.current_office_id]) || null;
+        }
+        if (updates.current_status !== undefined) {
+          merged.current_status = updates.current_status;
+          merged.statusLabel = STATUS_LABELS[updates.current_status] || updates.current_status;
+        }
         docCache.set(id, merged);
         return merged;
       }
@@ -537,7 +619,87 @@ const DocumentModel = {
       });
     }
   },
-/**
+  /**
+   * PB-29 / SRS 3.9: Flag approved exception for expedited processing
+   * Records immutable audit milestone and surfaces document to top of FIFO queue.
+   */
+  async flagException(documentId, user, { reason, priority = 'Urgent' }) {
+    await ensureOfficesLoaded();
+    const doc = await this.findById(documentId);
+    if (!doc) {
+      const err = new Error('Document record not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    const trimmedReason = String(reason || '').trim();
+    if (!trimmedReason) {
+      const err = new Error('A detailed reason is required to approve and flag an expedited exception.');
+      err.status = 400;
+      throw err;
+    }
+
+    const timestamp = new Date().toISOString();
+    const actorName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.name || user.email;
+
+    // Insert audit history milestone (PB-48 compliance)
+    // Note: Postgres enum action_type restricts values to ['Submitted', 'Content_Verified', 'Routed', 'Endorsed', 'Approved', 'Returned', 'Rejected', 'Ready_for_Release', 'Released', 'Archived']
+    const latestAction = doc.document_history && doc.document_history.length > 0
+      ? doc.document_history[doc.document_history.length - 1].action_type
+      : 'Submitted';
+
+    const validActionType = ['Submitted', 'Content_Verified', 'Routed', 'Endorsed', 'Approved', 'Returned', 'Ready_for_Release'].includes(latestAction)
+      ? latestAction
+      : 'Submitted';
+
+    const { error: histErr } = await supabase.from('document_history').insert({
+      document_id: documentId,
+      revision_no: doc.current_revision_no || 1,
+      action_type: validActionType,
+      action_remarks: `[EXPEDITED EXCEPTION] ${trimmedReason}`,
+      action_by_user_id: user.id,
+      action_office_id: doc.current_office_id || null,
+      action_timestamp: timestamp,
+    });
+    if (histErr) throw histErr;
+
+    const exceptionInfo = {
+      isApproved: true,
+      reason: trimmedReason,
+      approvedBy: actorName,
+      approvedAt: timestamp,
+      actorId: user.id,
+    };
+
+    // Cache updated state
+    const cached = docCache.get(documentId) || {};
+    docCache.set(documentId, {
+      ...cached,
+      is_expedited: true,
+      priority: priority || 'Urgent',
+      exception_info: exceptionInfo,
+    });
+
+    // Notify requester of approved expedited processing (PB-06)
+    if (doc.requester_id) {
+      try {
+        await NotificationModel.createLog({
+          recipientId: doc.requester_id,
+          documentId,
+          notificationType: 'Action_Taken',
+          title: `[Priority Approved] Exception Flagged: ${doc.control_number}`,
+          message: `Your request (${doc.control_number}) has been granted approved priority processing. Reason: ${trimmedReason}`,
+          deliveryMethod: 'Both',
+        });
+      } catch (e) {
+        // Notification logging does not block exception approval
+      }
+    }
+
+    return this.findById(documentId);
+  },
+
+  /**
    * PB-28: Secretary Workflow Map and Live Office Counts (SRS 3.11)
    * Guaranteed Zero Double-Counting: Every document belongs to strictly one stage
    * and at most one active holding office at any instant.

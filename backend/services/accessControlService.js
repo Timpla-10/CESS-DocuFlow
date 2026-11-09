@@ -187,6 +187,38 @@ const AccessControlService = {
       docs = docs.filter((d) => d.origin === orig);
     }
 
+    // PB-29: Filter by priority (?priority=urgent or ?priority=standard)
+    if (options.priority) {
+      const p = String(options.priority).toLowerCase();
+      docs = docs.filter((d) => (d.priority || 'standard').toLowerCase() === p);
+    }
+
+    // PB-29: Filter by expedited flag (?is_expedited=true or ?expedited=true)
+    if (options.is_expedited === 'true' || options.is_expedited === true || options.expedited === 'true' || options.expedited === true) {
+      docs = docs.filter((d) => Boolean(d.is_expedited));
+    }
+
+    // PB-29: First-Come, First-Served Queue Ordering (FIFO / Oldest First) with Exception Prioritization
+    const sort = options.sort ? String(options.sort).toLowerCase() : 'oldest';
+
+    if (sort === 'newest' || sort === 'desc') {
+      docs.sort((a, b) => new Date(b.submitted_at || 0).getTime() - new Date(a.submitted_at || 0).getTime());
+    } else if (sort === 'waiting_longest') {
+      docs.sort((a, b) => (b.timeWaitingMs || 0) - (a.timeWaitingMs || 0));
+    } else {
+      // Default: FIFO (Oldest first: submitted_at ASC) with approved exceptions pinned to top
+      docs.sort((a, b) => {
+        const aExp = a.is_expedited ? 1 : 0;
+        const bExp = b.is_expedited ? 1 : 0;
+        if (aExp !== bExp) return bExp - aExp;
+
+        const aTime = new Date(a.submitted_at || 0).getTime();
+        const bTime = new Date(b.submitted_at || 0).getTime();
+        if (aTime !== bTime) return aTime - bTime;
+        return (a.control_number || '').localeCompare(b.control_number || '');
+      });
+    }
+
     return docs;
   },
 
@@ -218,6 +250,25 @@ const AccessControlService = {
     const rejected = allDocs.filter((d) => d.current_status === 'Rejected');
     const ids_handoff = allDocs.filter((d) => d.origin === 'IDS');
 
+    // PB-29 / SRS 3.9: Order all queues strictly by First-Come, First-Served (FIFO) with exceptions first
+    function fifoQueueSort(a, b) {
+      const aExp = a.is_expedited ? 1 : 0;
+      const bExp = b.is_expedited ? 1 : 0;
+      if (aExp !== bExp) return bExp - aExp;
+
+      const aTime = new Date(a.submitted_at || 0).getTime();
+      const bTime = new Date(b.submitted_at || 0).getTime();
+      if (aTime !== bTime) return aTime - bTime;
+      return (a.control_number || '').localeCompare(b.control_number || '');
+    }
+
+    awaiting_verification.sort(fifoQueueSort);
+    in_review.sort(fifoQueueSort);
+    ready_for_release.sort(fifoQueueSort);
+    returned.sort(fifoQueueSort);
+    rejected.sort(fifoQueueSort);
+    ids_handoff.sort(fifoQueueSort);
+
     return {
       counts: {
         awaiting_verification: awaiting_verification.length,
@@ -237,6 +288,39 @@ const AccessControlService = {
         ids_handoff,
       },
     };
+  },
+
+  /**
+   * PB-29 / SRS 3.9: Flag approved exception for expedited processing
+   * Requires authorized staff role (Secretary, Reviewer, Admin)
+   */
+  async flagDocumentException(user, documentId, { reason, priority = 'Urgent' }) {
+    const ALLOWED_STAFF_ROLES = [
+      ROLES.SECRETARY,
+      ROLES.CHAIRPERSON,
+      ROLES.DEAN,
+      ROLES.PRINCIPAL,
+      ROLES.OVCAA,
+      ROLES.VCAF,
+      ROLES.CHANCELLOR,
+      'admin',
+    ];
+
+    if (!ALLOWED_STAFF_ROLES.includes(user.role)) {
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not permitted to approve or flag priority exceptions.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    if (!reason || !String(reason).trim()) {
+      const err = new Error('Reason is required when approving an expedited exception.');
+      err.status = 400;
+      throw err;
+    }
+
+    return DocumentModel.flagException(documentId, user, { reason, priority });
   },
 
   /**

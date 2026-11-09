@@ -220,6 +220,9 @@ const DocumentController = {
         officeId: req.query.officeId,
         overdue: req.query.overdue,
         origin: req.query.origin,
+        sort: req.query.sort,
+        priority: req.query.priority,
+        is_expedited: req.query.is_expedited || req.query.expedited,
       });
       res.json({
         viewer: {
@@ -386,6 +389,26 @@ const DocumentController = {
       res.json({
         document: updated,
         notification: updated?.notification || null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/documents/:id/flag-exception
+   * PB-29 / SRS 3.9: Flag approved exception for expedited processing
+   */
+  async flagException(req, res, next) {
+    try {
+      const updated = await AccessControlService.flagDocumentException(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({
+        message: 'Approved exception flagged successfully. Document prioritized in queue.',
+        document: updated,
       });
     } catch (err) {
       next(err);

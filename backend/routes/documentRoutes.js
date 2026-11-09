@@ -72,6 +72,9 @@ router.post('/', requireAction('submit_document'), DocumentController.submitDocu
 // PB-02 & PB-22: Completeness check (Secretary only)
 router.post('/:id/check', requireAction('check_requirements'), DocumentController.checkRequirements);
 
+// PB-29 / SRS 3.9: Flag approved exception for expedited processing (Secretary / Reviewer)
+router.post('/:id/flag-exception', DocumentController.flagException);
+
 // PB-02, PB-22, PB-23 & PB-24: Record endorsement, approval, and office decision (Reviewers only)
 router.post('/:id/review', DocumentController.reviewDocument);
 router.post('/:id/decision', DocumentController.reviewDocument);

@@ -119,6 +119,9 @@ async function runTests() {
     const testControlNumber = testDoc.control_number || testDoc.trackingNumber || testDoc.controlNumber;
     assert(testDocId, 'testDocId must be present');
 
+    // Allow background submission confirmation email dispatch to settle cleanly
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
     // -------------------------------------------------------------
     // Test Case 1: In-System Notification with Related Request Details (AC 1)
     // -------------------------------------------------------------
