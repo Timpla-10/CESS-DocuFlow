@@ -40,6 +40,9 @@ function load(): Database {
           if (u.role === 'ids_principal' && !u.origin) {
             u.origin = 'IDS'
           }
+          if (!u.notificationPreference) {
+            u.notificationPreference = 'both'
+          }
         }
         if (!parsed.users.some((u) => u.role === 'vcaf')) {
           const fresh = createSeed()
@@ -422,6 +425,7 @@ export const api = {
       origin?: Origin
       department: string
       position: string
+      notificationPreference?: NotificationPreference
     },
   ) =>
     mutate((d) => {
@@ -446,6 +450,9 @@ export const api = {
         existing.origin = origin
         existing.department = input.department.trim() || existing.department
         existing.position = input.position.trim() || existing.position
+        if (input.notificationPreference) {
+          existing.notificationPreference = input.notificationPreference
+        }
         return existing
       } else {
         const created: User = {
@@ -457,7 +464,7 @@ export const api = {
           department: input.department.trim() || 'College of Education and Social Sciences',
           position: input.position.trim() || (input.role === 'student' ? 'Student' : 'Faculty'),
           active: true,
-          notificationPreference: 'both',
+          notificationPreference: input.notificationPreference ?? 'both',
         }
         d.users.push(created)
         return created
@@ -607,6 +614,10 @@ export const api = {
       }
 
       // Add notification log
+      const pref = existing.notificationPreference ?? 'both'
+      const channels: ('email' | 'in_system')[] =
+        pref === 'email_only' ? ['email'] : pref === 'in_system_only' ? ['in_system'] : ['email', 'in_system']
+
       d.notifications.unshift({
         id: engine.nextId(d, 'n'),
         kind: 'update',
@@ -618,7 +629,7 @@ export const api = {
         at,
         result: 'sent',
         readBy: [],
-        channels: ['email', 'in_system'],
+        channels,
       })
 
       return existing

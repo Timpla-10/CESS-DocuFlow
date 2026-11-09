@@ -8,6 +8,7 @@ import { myNotifications, unreadCount } from '../data/selectors'
 import { api, useDb } from '../data/store'
 import { timeAgo } from '../lib/time'
 import { Logo, LogoMark } from './Logo'
+import { useToast } from './Toast'
 import { Avatar, cn } from './ui'
 
 export function AppShell() {
@@ -312,6 +313,7 @@ function NotificationBell() {
   const user = useUser()
   const db = useDb()
   const navigate = useNavigate()
+  const toast = useToast()
   const { open, setOpen, ref } = usePopover()
   const items = myNotifications(db, user).slice(0, 8)
   const unread = unreadCount(db, user)
@@ -325,13 +327,15 @@ function NotificationBell() {
     }
   }
 
+  const currentPref = user.notificationPreference ?? 'both'
+
   return (
     <div className="relative shrink-0" ref={ref}>
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        aria-label={unread ? `Email updates — ${unread} new` : 'Email updates'}
+        aria-label={unread ? `Notifications — ${unread} new` : 'Notifications'}
         className="relative grid size-8 sm:size-10 place-items-center rounded-lg text-ink-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
       >
         <Bell className="size-4.5 sm:size-5" aria-hidden />
@@ -343,29 +347,72 @@ function NotificationBell() {
       </button>
       {open && (
         <div className="absolute right-0 top-11 sm:top-12 z-30 w-[min(calc(100vw-16px),380px)] origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white shadow-raised ring-1 ring-ink-100">
-          <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-            <div>
-              <p className="text-sm font-bold text-ink-900">Notifications & Email Updates</p>
-              <p className="text-xs text-ink-500">
-                {user.notificationPreference === 'email_only'
-                  ? `External email only (${user.email})`
-                  : user.notificationPreference === 'in_system_only'
-                  ? 'In-system notifications only'
-                  : `In-system & sent to ${user.email}`}
-              </p>
+          <div className="border-b border-ink-100 bg-brand-50/50 p-3 sm:p-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-ink-900">Notifications &amp; Alerts</p>
+                <p className="text-xs text-ink-500">
+                  {currentPref === 'email_only'
+                    ? `External email only (${user.email})`
+                    : currentPref === 'in_system_only'
+                    ? 'In-system notifications only'
+                    : `In-system & sent to ${user.email}`}
+                </p>
+              </div>
+              <Link
+                to="/app/account"
+                onClick={() => setOpen(false)}
+                className="text-xs font-semibold text-brand-700 hover:underline"
+              >
+                Settings →
+              </Link>
             </div>
-            <Link
-              to="/app/account"
-              onClick={() => setOpen(false)}
-              className="text-xs font-semibold text-brand-700 hover:underline"
-            >
-              Preferences
-            </Link>
+            {/* Quick 3-mode preference switcher */}
+            <div className="mt-2.5 flex rounded-lg bg-white p-0.5 ring-1 ring-inset ring-ink-200">
+              {(
+                [
+                  { id: 'both', label: 'Both' },
+                  { id: 'in_system_only', label: 'In-System Only' },
+                  { id: 'email_only', label: 'Email Only' },
+                ] as const
+              ).map((opt) => {
+                const active = currentPref === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      if (active) return
+                      await api.updateNotificationPreference(user, opt.id)
+                      toast.success(
+                        'Delivery Preference Saved',
+                        `Notifications will now be delivered via: ${
+                          opt.id === 'both'
+                            ? 'Both In-System Bell & University Email'
+                            : opt.id === 'in_system_only'
+                            ? 'In-System Bell Only'
+                            : 'University Email Only'
+                        }.`,
+                      )
+                    }}
+                    className={cn(
+                      'flex-1 rounded-md py-1 text-[11px] font-semibold transition-all',
+                      active
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-ink-600 hover:text-ink-900 hover:bg-ink-50',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
           {items.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-ink-500">
               <Mail className="mx-auto mb-2 size-6 text-brand-300" aria-hidden />
-              {user.notificationPreference === 'email_only'
+              {currentPref === 'email_only'
                 ? 'In-system alerts are muted because your preference is set to External Email Only.'
                 : 'No notifications yet. We’ll let you know when something changes.'}
             </div>

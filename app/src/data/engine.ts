@@ -132,8 +132,12 @@ function requesterLink(doc: DocRecord) {
   return `/app/documents/${doc.id}`
 }
 
+function officeAccount(db: Database, office: OfficeId): User | undefined {
+  return db.users.find((u) => ROLE_OFFICE[u.role] === office && u.active)
+}
+
 function resolveChannels(db: Database, recipientId: string): ('email' | 'in_system')[] {
-  const u = getUser(db, recipientId)
+  const u = getUser(db, recipientId) || officeAccount(db, recipientId as OfficeId)
   const pref = u?.notificationPreference ?? 'both'
   if (pref === 'email_only') return ['email']
   if (pref === 'in_system_only') return ['in_system']
@@ -178,10 +182,6 @@ function firstName(u: User) {
 }
 
 const SIGNOFF = '\n\n— CESS DocuFlow\nCollege of Education and Social Sciences, MSU at Naawan'
-
-function officeAccount(db: Database, office: OfficeId): User | undefined {
-  return db.users.find((u) => ROLE_OFFICE[u.role] === office && u.active)
-}
 
 /* ------------------------------------------------------------------------ */
 /* Requester & Walk-in Submission actions                                    */

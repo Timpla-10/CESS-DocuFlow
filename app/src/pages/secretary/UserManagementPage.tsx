@@ -21,7 +21,7 @@ import { useToast } from '../../components/Toast'
 import { Badge, Button, Card, CardHeader, EmptyState, PageHeader, Segmented, cn } from '../../components/ui'
 import { ROLE_LABEL } from '../../content/language'
 import { api, useDb } from '../../data/store'
-import type { Origin, PendingRegistration, Role, User, WhitelistEntry } from '../../data/types'
+import type { NotificationPreference, Origin, PendingRegistration, Role, User, WhitelistEntry } from '../../data/types'
 import { formatDate } from '../../lib/time'
 
 const ALL_ROLES: Role[] = ['student', 'faculty', 'secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
@@ -62,6 +62,7 @@ export function UserManagementPage() {
   const [uOrigin, setUOrigin] = useState<Origin>('CESS')
   const [uDept, setUDept] = useState('')
   const [uPos, setUPos] = useState('')
+  const [uNotifPref, setUNotifPref] = useState<NotificationPreference>('both')
   const [userBusy, setUserBusy] = useState(false)
   const [userErrors, setUserErrors] = useState<Record<string, string>>({})
 
@@ -151,6 +152,7 @@ export function UserManagementPage() {
     setUOrigin('CESS')
     setUDept('BSEd English')
     setUPos('Student')
+    setUNotifPref('both')
     setUserErrors({})
     setIsUserModalOpen(true)
   }
@@ -163,6 +165,7 @@ export function UserManagementPage() {
     setUOrigin(u.origin ?? 'CESS')
     setUDept(u.department)
     setUPos(u.position)
+    setUNotifPref(u.notificationPreference ?? 'both')
     setUserErrors({})
     setIsUserModalOpen(true)
   }
@@ -203,6 +206,7 @@ export function UserManagementPage() {
         origin: uRole === 'student' || uRole === 'faculty' ? uOrigin : undefined,
         department: uDept.trim(),
         position: uPos.trim(),
+        notificationPreference: uNotifPref,
       })
       toast.success(
         editingUserId ? 'Account Updated' : 'Account Created',
@@ -659,7 +663,17 @@ export function UserManagementPage() {
                           <span className="font-semibold text-ink-800">{ROLE_LABEL[u.role]}</span>
                           {u.origin && <Badge tone="neutral">{u.origin}</Badge>}
                         </div>
-                        <div className="mt-0.5 text-xs text-ink-500">{u.position}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
+                          <span>{u.position}</span>
+                          <span>·</span>
+                          <span className="font-medium text-ink-600">
+                            {u.notificationPreference === 'email_only'
+                              ? '📧 Email Only'
+                              : u.notificationPreference === 'in_system_only'
+                              ? '🔔 In-System Only'
+                              : '🔔+📧 Both'}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 font-mono text-xs text-ink-600">{u.email}</td>
                       <td className="px-5 py-3.5 whitespace-nowrap">
@@ -1142,6 +1156,17 @@ export function UserManagementPage() {
               placeholder="e.g. Student, Assistant Professor, Instructor"
               required
             />
+          </Field>
+
+          <Field label="Notification Delivery Preference" hint="User can also change this anytime from their Account Settings.">
+            <Select
+              value={uNotifPref}
+              onChange={(e) => setUNotifPref(e.target.value as NotificationPreference)}
+            >
+              <option value="both">Both External Email &amp; In-System Bell (Default)</option>
+              <option value="email_only">External Email Only (In-System Bell Muted)</option>
+              <option value="in_system_only">In-System Bell Only (External Email Muted)</option>
+            </Select>
           </Field>
 
           {!editingUserId && (
