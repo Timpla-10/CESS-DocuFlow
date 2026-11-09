@@ -190,10 +190,10 @@ export function HomePage() {
         {/* Subtle dot matrix grid matching mockup */}
         <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
 
-        {/* Living Aurora ambient moving glow orbs in official CESS department colors (IDS Pink, DSEE Lavender, DSSH Violet) */}
-        <div className="pointer-events-none absolute -right-36 -top-36 size-[560px] rounded-full bg-dsee-300/45 blur-3xl animate-aurora-lavender" aria-hidden />
-        <div className="pointer-events-none absolute -bottom-28 -left-28 size-[520px] rounded-full bg-ids-400/50 blur-3xl animate-aurora-pink" aria-hidden />
-        <div className="pointer-events-none absolute right-1/3 top-1/2 size-[420px] -translate-y-1/2 rounded-full bg-dssh-500/40 blur-3xl animate-aurora-violet" aria-hidden />
+        {/* Ambient atmospheric glow in institutional midnight blue (#191970) */}
+        <div className="pointer-events-none absolute -right-36 -top-36 size-[560px] rounded-full bg-[#191970]/50 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute -bottom-28 -left-28 size-[520px] rounded-full bg-[#191970]/60 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute right-1/3 top-1/2 size-[420px] -translate-y-1/2 rounded-full bg-[#191970]/40 blur-3xl" aria-hidden />
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           {/* Centered Brand Emblem */}
@@ -278,8 +278,8 @@ export function HomePage() {
               </div>
 
               {/* Ready to collect badge */}
-              <div className="absolute -top-3.5 right-4 sm:-top-4 sm:right-6 flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-lg ring-1 ring-black/10 animate-float">
-                <FileCheck2 className="size-4 text-[#16a34a]" aria-hidden="true" />
+              <div className="absolute -top-3.5 right-4 sm:-top-4 sm:right-6 z-20 flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-lg ring-1 ring-black/10 animate-float whitespace-nowrap">
+                <FileCheck2 className="size-4 shrink-0 text-[#16a34a]" aria-hidden="true" />
                 <span className="text-xs sm:text-sm font-bold text-[#15803d]">Ready to collect</span>
               </div>
 
@@ -437,8 +437,8 @@ export function HomePage() {
       {/* CTA */}
       <section className="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
         <div className="surface-brand-gradient relative overflow-hidden rounded-3xl px-8 py-12 text-center sm:px-16 text-white shadow-xl">
-          <div className="pointer-events-none absolute -left-20 -top-20 size-72 rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" aria-hidden />
-          <div className="pointer-events-none absolute -bottom-20 -right-20 size-72 rounded-full bg-ids-400/45 blur-2xl animate-aurora-pink" aria-hidden />
+          <div className="pointer-events-none absolute -left-20 -top-20 size-72 rounded-full bg-[#191970]/40 blur-2xl" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-20 -right-20 size-72 rounded-full bg-[#191970]/50 blur-2xl" aria-hidden />
           <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
           <h2 className="relative text-balance font-display text-3xl font-semibold text-white">Ready to submit or check a request?</h2>
           <p className="relative mx-auto mt-3 max-w-xl text-indigo-100/90">Sign in with your MSU at Naawan email address.</p>

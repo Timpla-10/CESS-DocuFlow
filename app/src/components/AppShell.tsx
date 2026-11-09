@@ -115,10 +115,10 @@ function Sidebar({
 
   return (
     <nav aria-label="Main navigation" className="surface-brand-gradient relative flex h-full flex-col overflow-hidden text-white">
-      {/* Living Aurora ambient moving glow orbs in official CESS department colors (IDS Pink, DSEE Lavender, DSSH Purple) */}
-      <div className="pointer-events-none absolute -bottom-16 -right-16 size-80 rounded-full bg-ids-400/50 blur-2xl animate-aurora-pink" aria-hidden />
-      <div className="pointer-events-none absolute -top-16 -left-16 size-72 rounded-full bg-dsee-300/45 blur-2xl animate-aurora-lavender" aria-hidden />
-      <div className="pointer-events-none absolute top-1/2 -right-12 size-64 -translate-y-1/2 rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" aria-hidden />
+      {/* Subtle atmospheric ambient glow matching #191970 */}
+      <div className="pointer-events-none absolute -bottom-16 -right-16 size-80 rounded-full bg-[#191970]/50 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute -top-16 -left-16 size-72 rounded-full bg-[#191970]/40 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute top-1/2 -right-12 size-64 -translate-y-1/2 rounded-full bg-[#191970]/30 blur-2xl" aria-hidden />
 
       <div className="relative z-10 flex h-full min-h-0 flex-col">
         {/* Header */}

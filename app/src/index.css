@@ -304,11 +304,11 @@
 }
 
 /* Multi-stop institutional ambient gradient:
-   Base Midnight Blue (#191970) foundation; animated living aurora orbs supply the dynamic roaming CESS purple and pink lighting */
+   Base Midnight Blue (#191970) foundation with matching midnight blue ambient radiance */
 @utility surface-brand-gradient {
   background:
-    /* Center ambient CESS purple radiance */
-    radial-gradient(85% 60% at 50% 20%, rgb(110 59 191 / 0.32) 0%, transparent 70%),
+    /* Center ambient Midnight Blue radiance (#191970) */
+    radial-gradient(85% 60% at 50% 20%, rgb(25 25 112 / 0.45) 0%, transparent 70%),
     /* Base deep Midnight Blue flow */
     linear-gradient(155deg, #191970 0%, #111452 50%, #0a0b33 100%);
 }
