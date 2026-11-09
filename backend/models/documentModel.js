@@ -537,6 +537,165 @@ const DocumentModel = {
       });
     }
   },
+/**
+   * PB-28: Secretary Workflow Map and Live Office Counts (SRS 3.11)
+   * Guaranteed Zero Double-Counting: Every document belongs to strictly one stage
+   * and at most one active holding office at any instant.
+   */
+  async getWorkflowMapData() {
+    await ensureOfficesLoaded();
+    const WorkflowRouteModel = require('./workflowRouteModel');
+    const allDocs = await this.findAll();
+    const { data: allOffices } = await supabase
+      .from('office')
+      .select('office_id, office_name, office_type, is_active')
+      .order('office_id', { ascending: true });
+
+    const offices = (allOffices && allOffices.length > 0) ? allOffices : Object.values(officeLookupById);
+
+    // 1. Mutually Exclusive Lifecycle Stages
+    const awaiting_verification = allDocs.filter((d) => d.current_status === 'Submitted');
+    const in_review = allDocs.filter((d) => d.current_status === 'Under_Review');
+    const with_external = allDocs.filter((d) => d.current_status === 'With_External_Office');
+    const ready_for_release = allDocs.filter((d) => d.current_status === 'Ready_for_Release');
+    const returned = allDocs.filter((d) => d.current_status === 'Returned');
+    const rejected = allDocs.filter((d) => d.current_status === 'Rejected');
+    const released = allDocs.filter((d) => d.current_status === 'Released');
+
+    // Helper to calculate if document has exceeded standard turnaround time
+    const isOverdue = (d) => {
+      const stdDays = d.document_type?.standard_processing_days || 3;
+      const stdMs = stdDays * 24 * 60 * 60 * 1000;
+      return (d.timeWaitingMs || 0) > stdMs;
+    };
+
+    // 2. Compute counts by Office (Zero Double-Counting)
+    const officeCounts = offices.map((off) => {
+      let holdingDocs = [];
+      let awaitingCount = 0;
+      let readyCount = 0;
+      let inReviewCount = 0;
+      let externalCount = 0;
+
+      if (off.office_name === 'College Secretary') {
+        awaitingCount = awaiting_verification.length;
+        readyCount = ready_for_release.length;
+        const secInReview = in_review.filter(
+          (d) => d.current_office_id === off.office_id || d.office?.office_name === off.office_name
+        );
+        inReviewCount = secInReview.length;
+        holdingDocs = [...awaiting_verification, ...secInReview, ...ready_for_release];
+      } else if (off.office_type === 'External_Office') {
+        holdingDocs = with_external.filter(
+          (d) => d.current_office_id === off.office_id || d.office?.office_name === off.office_name
+        );
+        externalCount = holdingDocs.length;
+      } else {
+        // Internal Review offices (Chairperson, Dean, Principal, etc.)
+        holdingDocs = in_review.filter(
+          (d) => d.current_office_id === off.office_id || d.office?.office_name === off.office_name
+        );
+        inReviewCount = holdingDocs.length;
+      }
+
+      const overdueCount = holdingDocs.filter(isOverdue).length;
+
+      return {
+        officeId: off.office_id,
+        officeName: off.office_name,
+        officeType: off.office_type,
+        count: holdingDocs.length,
+        overdueCount,
+        stages: {
+          awaiting_verification: awaitingCount,
+          in_review: inReviewCount,
+          with_external: externalCount,
+          ready_for_release: readyCount,
+        },
+      };
+    });
+
+    // 3. Stage metadata
+    const stages = [
+      {
+        key: 'awaiting_verification',
+        label: 'Awaiting Verification',
+        count: awaiting_verification.length,
+        holdingOffice: 'College Secretary',
+        overdueCount: awaiting_verification.filter(isOverdue).length,
+        description: 'Passed completeness check; awaiting content check and initial routing.',
+      },
+      {
+        key: 'in_review',
+        label: 'In Office Review',
+        count: in_review.length + with_external.length,
+        internalReviewCount: in_review.length,
+        externalReviewCount: with_external.length,
+        holdingOffice: 'Reviewing Bodies',
+        overdueCount: [...in_review, ...with_external].filter(isOverdue).length,
+        description: 'Currently under endorsement or approval review across academic offices.',
+      },
+      {
+        key: 'ready_for_release',
+        label: 'Ready for Release',
+        count: ready_for_release.length,
+        holdingOffice: 'College Secretary',
+        overdueCount: ready_for_release.filter(isOverdue).length,
+        description: 'Approved documents awaiting requester collection at the counter.',
+      },
+      {
+        key: 'returned',
+        label: 'Returned for Revision',
+        count: returned.length,
+        holdingOffice: 'Requester',
+        overdueCount: 0,
+        description: 'With requesters for corrections (missing files or required updates).',
+      },
+      {
+        key: 'rejected',
+        label: 'Disapproved / Rejected',
+        count: rejected.length,
+        holdingOffice: null,
+        overdueCount: 0,
+        description: 'Officially disapproved and closed records.',
+      },
+      {
+        key: 'released',
+        label: 'Released & Completed',
+        count: released.length,
+        holdingOffice: null,
+        overdueCount: 0,
+        description: 'Successfully collected by requester.',
+      },
+    ];
+
+    // 4. Active Workflow Routes
+    let routes = {};
+    try {
+      routes = await WorkflowRouteModel.getAllRoutes();
+    } catch (e) {
+      routes = {
+        CESS: { sequence: ['College Secretary', 'Department Chairperson', 'College Dean', 'College Secretary'] },
+        IDS: { sequence: ['College Secretary', 'Department Chairperson', 'IDS Principal', 'College Dean', 'College Secretary'] },
+      };
+    }
+
+    return {
+      timestamp: new Date().toISOString(),
+      summary: {
+        totalActive: awaiting_verification.length + in_review.length + with_external.length + ready_for_release.length,
+        totalInReview: in_review.length + with_external.length,
+        totalReturned: returned.length,
+        totalRejected: rejected.length,
+        totalReleased: released.length,
+        totalRecords: allDocs.length,
+      },
+      stages,
+      officeCounts,
+      routes,
+    };
+  },
 };
 
 module.exports = DocumentModel;
+

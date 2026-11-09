@@ -130,6 +130,63 @@ const AccessControlService = {
       }
     }
 
+    // PB-28: Filter by lifecycle stage (?stage=awaiting_verification, in_review, ready_for_release, returned, rejected, released)
+    if (options.stage) {
+      const s = String(options.stage).toLowerCase();
+      if (s === 'awaiting_verification' || s === 'submitted') {
+        docs = docs.filter((d) => d.current_status === 'Submitted');
+      } else if (s === 'in_review' || s === 'under_review') {
+        docs = docs.filter((d) => d.current_status === 'Under_Review' || d.current_status === 'With_External_Office');
+      } else if (s === 'ready_for_release' || s === 'ready') {
+        docs = docs.filter((d) => d.current_status === 'Ready_for_Release');
+      } else if (s === 'returned') {
+        docs = docs.filter((d) => d.current_status === 'Returned');
+      } else if (s === 'rejected') {
+        docs = docs.filter((d) => d.current_status === 'Rejected');
+      } else if (s === 'released') {
+        docs = docs.filter((d) => d.current_status === 'Released');
+      }
+    }
+
+    // PB-28: Filter by holding office (?office=chairperson, ?office=dean, ?officeId=2)
+    if (options.office || options.officeId) {
+      const targetOffice = options.office ? String(options.office).toLowerCase().trim() : null;
+      const targetId = options.officeId ? Number(options.officeId) : null;
+
+      docs = docs.filter((d) => {
+        if (targetId && (d.current_office_id === targetId || d.office?.office_id === targetId)) {
+          return true;
+        }
+        if (targetOffice) {
+          const offName = (d.office?.office_name || '').toLowerCase();
+          if (offName === targetOffice) return true;
+          if (targetOffice === 'secretary' && offName.includes('secretary')) return true;
+          if (targetOffice === 'chairperson' && offName.includes('chairperson')) return true;
+          if (targetOffice === 'dean' && offName.includes('dean')) return true;
+          if ((targetOffice === 'ids_principal' || targetOffice === 'principal') && offName.includes('principal')) return true;
+          if (targetOffice === 'ovcaa' && offName.includes('ovcaa')) return true;
+          if (targetOffice === 'vcaf' && offName.includes('vcaf')) return true;
+          if ((targetOffice === 'chancellor' || targetOffice === 'office of the chancellor') && offName.includes('chancellor')) return true;
+        }
+        return false;
+      });
+    }
+
+    // PB-28: Filter by overdue status (?overdue=true)
+    if (options.overdue === 'true' || options.overdue === true) {
+      docs = docs.filter((d) => {
+        const stdDays = d.document_type?.standard_processing_days || 3;
+        const stdMs = stdDays * 24 * 60 * 60 * 1000;
+        return (d.timeWaitingMs || 0) > stdMs;
+      });
+    }
+
+    // Filter by origin (?origin=CESS or ?origin=IDS)
+    if (options.origin) {
+      const orig = String(options.origin).toUpperCase();
+      docs = docs.filter((d) => d.origin === orig);
+    }
+
     return docs;
   },
 
@@ -180,6 +237,33 @@ const AccessControlService = {
         ids_handoff,
       },
     };
+  },
+
+  /**
+   * PB-28: Secretary Workflow Map & Live Office Counts
+   * Authorized for College Secretary, Admin, and Academic Reviewers
+   */
+  async getWorkflowMap(user) {
+    const ALLOWED_VIEWER_ROLES = [
+      ROLES.SECRETARY,
+      ROLES.CHAIRPERSON,
+      ROLES.DEAN,
+      ROLES.PRINCIPAL,
+      ROLES.OVCAA,
+      ROLES.VCAF,
+      ROLES.CHANCELLOR,
+      'admin',
+    ];
+
+    if (!ALLOWED_VIEWER_ROLES.includes(user.role)) {
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not authorized to view the Secretary Workflow Map.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    return DocumentModel.getWorkflowMapData();
   },
 
   async getDocumentByIdForUser(user, docId, options = {}) {

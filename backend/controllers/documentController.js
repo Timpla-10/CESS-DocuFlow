@@ -215,6 +215,11 @@ const DocumentController = {
     try {
       const docs = await AccessControlService.getVisibleDocumentsForUser(req.user, {
         queue: req.query.queue,
+        stage: req.query.stage,
+        office: req.query.office,
+        officeId: req.query.officeId,
+        overdue: req.query.overdue,
+        origin: req.query.origin,
       });
       res.json({
         viewer: {
@@ -226,6 +231,28 @@ const DocumentController = {
         },
         count: docs.length,
         documents: docs,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/workflow-map
+   * PB-28: Secretary Workflow Map & Live Office Counts (SRS 3.11)
+   */
+  async getWorkflowMap(req, res, next) {
+    try {
+      const mapData = await AccessControlService.getWorkflowMap(req.user);
+      res.json({
+        viewer: {
+          id: req.user.id,
+          name: req.user.name,
+          role: req.user.role,
+          origin: req.user.origin,
+          roleLabel: req.user.roleLabel,
+        },
+        ...mapData,
       });
     } catch (err) {
       next(err);

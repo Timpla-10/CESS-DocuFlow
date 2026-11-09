@@ -350,6 +350,11 @@ Mindanao State University at Naawan
           { name: 'status', in: 'query', schema: { type: 'string' }, description: 'Filter by status (Submitted, Under_Review, Returned, Rejected, Released)' },
           { name: 'origin', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS'] } },
           { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'queue', in: 'query', schema: { type: 'string' }, description: 'PB-20: Filter by workstation queue' },
+          { name: 'stage', in: 'query', schema: { type: 'string' }, description: 'PB-28: Filter by lifecycle stage (awaiting_verification, in_review, ready_for_release, returned, rejected, released)' },
+          { name: 'office', in: 'query', schema: { type: 'string' }, description: 'PB-28: Filter by current holding office name (e.g. chairperson, dean, secretary)' },
+          { name: 'officeId', in: 'query', schema: { type: 'integer' }, description: 'PB-28: Filter by current holding office ID' },
+          { name: 'overdue', in: 'query', schema: { type: 'boolean' }, description: 'PB-28: Filter documents exceeding standard turnaround time' },
         ],
         responses: {
           200: { description: 'List of accessible document requests' },
@@ -468,6 +473,18 @@ Mindanao State University at Naawan
         responses: {
           200: { description: 'Completeness check recorded; document routed to first reviewing office' },
           403: { description: 'Forbidden: Only College Secretary can perform completeness check' },
+        },
+      },
+    },
+    '/api/documents/workflow-map': {
+      get: {
+        summary: 'Get Secretary visual workflow map, live office counts, and bottleneck analysis (PB-28, SRS 3.11)',
+        tags: ['Secretary Workstation'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Institutional workflow map with zero double-counting office & stage counts, overdue metrics, and active route topologies' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Requires Secretary or Reviewer role' },
         },
       },
     },

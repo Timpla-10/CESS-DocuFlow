@@ -26,6 +26,9 @@ router.delete('/types/:id/requirements/:formId', requireAction('manage_requireme
 // PB-02: Role-filtered document listing (Requester -> own, Reviewer -> routed, Secretary -> all)
 router.get('/', DocumentController.listDocuments);
 
+// PB-28 / SRS 3.11: Secretary Workflow Map & Live Office Counts (Mutually exclusive stages & offices)
+router.get('/workflow-map', DocumentController.getWorkflowMap);
+
 // PB-20 / SRS 3.11: Secretary Verification Queue & Workstation (Agreed states & exact counts)
 router.get('/queues', DocumentController.getSecretaryQueues);
 
