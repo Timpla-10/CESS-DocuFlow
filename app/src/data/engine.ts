@@ -13,12 +13,14 @@
  */
 import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel, isRequester } from '../content/language'
 import { daysSince, plural } from '../lib/time'
+import { EXTERNAL_RETURN_OUTCOMES } from './types'
 import type {
   Attachment,
   Database,
   DocRecord,
   DocumentType,
   ExternalOfficeId,
+  ExternalReturnOutcome,
   HistoryEntry,
   NotificationKind,
   NotificationLog,
@@ -467,15 +469,32 @@ export function sendToExternal(
   db: Database,
   actor: User,
   docId: string,
-  input: { office: ExternalOfficeId; handedBy: string; remarks: string },
+  input: {
+    office: ExternalOfficeId
+    transferDate?: string
+    handedBy: string
+    referenceNumber?: string
+    remarks: string
+  },
   at: string,
 ): DocRecord {
   if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can record office transfers.')
   const doc = getDoc(db, docId)
   if (!(doc.status === 'with_office' && doc.route[doc.routeIndex]?.stage === 'final'))
     throw new FriendlyError(MESSAGES.notAllowedToAct)
+  const targetLabel = externalOfficeLabel(input.office, db)
+  const transferDate = input.transferDate?.trim() || at.slice(0, 10)
   doc.status = 'with_external'
   doc.externalOffice = input.office
+  doc.externalTransfer = {
+    office: input.office,
+    officeName: targetLabel,
+    transferredAt: at,
+    transferDate,
+    handedBy: input.handedBy.trim(),
+    referenceNumber: input.referenceNumber?.trim() || undefined,
+    notes: input.remarks.trim() || undefined,
+  }
   doc.currentOffice = null
   doc.officeSince = at
   addHistory(
@@ -485,26 +504,66 @@ export function sendToExternal(
       office: OFFICE_LABEL.secretary,
       actorName: actor.name,
       action: 'sent_external',
-      target: externalOfficeLabel(input.office, db),
-      remarks: [input.handedBy.trim() && `Handed over by ${input.handedBy.trim()}.`, input.remarks.trim()].filter(Boolean).join(' ') || undefined,
+      target: targetLabel,
+      remarks: [
+        `Transfer Date: ${transferDate}.`,
+        input.handedBy.trim() && `Handed over by ${input.handedBy.trim()}.`,
+        input.referenceNumber?.trim() && `Ref: ${input.referenceNumber.trim()}.`,
+        input.remarks.trim() && `Notes: ${input.remarks.trim()}`,
+      ].filter(Boolean).join(' ') || undefined,
     },
     db,
   )
   return doc
 }
 
-export function recordExternalReturn(db: Database, actor: User, docId: string, input: { remarks: string }, at: string) {
+export function recordExternalReturn(
+  db: Database,
+  actor: User,
+  docId: string,
+  input: {
+    returnDate?: string
+    outcome?: ExternalReturnOutcome
+    remarks: string
+  },
+  at: string,
+) {
   if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can record office transfers.')
   const doc = getDoc(db, docId)
   if (doc.status !== 'with_external' || !doc.externalOffice) throw new FriendlyError(MESSAGES.notAllowedToAct)
   const ext = externalOfficeLabel(doc.externalOffice, db)
+  const returnDate = input.returnDate?.trim() || at.slice(0, 10)
+  const outcomeItem = EXTERNAL_RETURN_OUTCOMES.find((o) => o.value === input.outcome)
+  const outcomeLabel = outcomeItem?.label ?? 'Completed'
+
+  if (doc.externalTransfer) {
+    doc.externalTransfer.returnedAt = at
+    doc.externalTransfer.returnDate = returnDate
+    doc.externalTransfer.returnRecordedBy = actor.name
+    doc.externalTransfer.returnOutcome = input.outcome ?? 'signed'
+    doc.externalTransfer.returnOutcomeLabel = outcomeLabel
+    doc.externalTransfer.returnNotes = input.remarks.trim() || undefined
+  }
+
   doc.status = 'with_office'
   doc.externalOffice = undefined
   doc.currentOffice = 'secretary'
   doc.officeSince = at
   addHistory(
     doc,
-    { at, office: OFFICE_LABEL.secretary, actorName: actor.name, action: 'returned_external', target: ext, remarks: input.remarks.trim() || undefined },
+    {
+      at,
+      office: OFFICE_LABEL.secretary,
+      actorName: actor.name,
+      action: 'returned_external',
+      target: ext,
+      remarks: [
+        `Return Date: ${returnDate}.`,
+        `Outcome: ${outcomeLabel}.`,
+        doc.externalTransfer?.referenceNumber && `Ref: ${doc.externalTransfer.referenceNumber}.`,
+        input.remarks.trim() && `Notes: ${input.remarks.trim()}`,
+      ].filter(Boolean).join(' ') || undefined,
+    },
     db,
   )
   return doc

@@ -24,6 +24,7 @@ import {
   STATUS_FILTER_LABEL,
   controlNumber,
   downloadGeneratedPdf,
+  externalOfficeLabel,
   historyTitle,
   historyTone,
   locationLabelForStaff,
@@ -590,13 +591,17 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
       s.stage === 'check'
         ? 'Content & Completeness Check (College Secretary)'
         : s.stage === 'final'
-          ? 'Release & Archive (College Secretary)'
+          ? (doc.status === 'with_external' && doc.externalOffice
+              ? `External Office: ${externalOfficeLabel(doc.externalOffice, db)}`
+              : 'Release & Archive (College Secretary)')
           : s.label ?? OFFICE_LABEL[s.office]
     const help =
       s.stage === 'check'
         ? 'Automatic completeness check passed; the College Secretary verifies document content.'
         : s.stage === 'final'
-          ? 'The College Secretary prepares and releases the signed document.'
+          ? (doc.status === 'with_external' && doc.externalOffice
+              ? `Transferred to ${externalOfficeLabel(doc.externalOffice, db)} for university processing.`
+              : 'The College Secretary prepares and releases the signed document.')
           : OFFICE_HELP[s.office]
     let state: 'done' | 'current' | 'next' | 'returned' | 'rejected' = i < doc.routeIndex ? 'done' : i === doc.routeIndex ? 'current' : 'next'
     if (done) state = 'done'
@@ -750,10 +755,14 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                         </span>
                         <div className="min-w-0 flex-1 pt-0.5">
                           <p className="text-xs font-semibold text-brand-900">
-                            Currently under review at this office
+                            {doc.status === 'with_external'
+                              ? `Currently with ${doc.externalOffice ? externalOfficeLabel(doc.externalOffice, db) : 'External Office'}`
+                              : 'Currently under review at this office'}
                           </p>
                           <p className="text-[11px] text-ink-500">
-                            Awaiting recorded review decision or release action
+                            {doc.status === 'with_external'
+                              ? 'Awaiting recorded return from external university office'
+                              : 'Awaiting recorded review decision or release action'}
                           </p>
                         </div>
                       </div>

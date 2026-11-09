@@ -26,6 +26,37 @@ export interface ExternalOfficeItem {
   shortLabel: string
 }
 
+export type ExternalReturnOutcome =
+  | 'signed'
+  | 'endorsed'
+  | 'needs_clarification'
+  | 'returned_without_action'
+  | 'other'
+
+export const EXTERNAL_RETURN_OUTCOMES: { value: ExternalReturnOutcome; label: string }[] = [
+  { value: 'signed', label: 'Signed / Completed' },
+  { value: 'endorsed', label: 'Endorsed with Action / Comments' },
+  { value: 'needs_clarification', label: 'Needs Additional Requirements / Clarification' },
+  { value: 'returned_without_action', label: 'Returned Without Action' },
+  { value: 'other', label: 'Other (see notes)' },
+]
+
+export interface ExternalTransferInfo {
+  office: ExternalOfficeId
+  officeName: string
+  transferredAt: string
+  transferDate?: string
+  handedBy: string
+  referenceNumber?: string
+  notes?: string
+  returnedAt?: string
+  returnDate?: string
+  returnRecordedBy?: string
+  returnOutcome?: ExternalReturnOutcome
+  returnOutcomeLabel?: string
+  returnNotes?: string
+}
+
 export type Origin = 'CESS' | 'IDS'
 
 /** Hybrid notification preference toggleable by each user in settings (REQ-NOT-7). */
@@ -162,6 +193,7 @@ export interface DocRecord {
   status: Status
   currentOffice: OfficeId | null
   externalOffice?: ExternalOfficeId
+  externalTransfer?: ExternalTransferInfo
   route: RouteStep[]
   routeIndex: number
   submittedAt: string

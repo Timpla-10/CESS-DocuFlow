@@ -16,6 +16,7 @@ import type {
   DocumentType,
   ExternalOfficeId,
   ExternalOfficeItem,
+  ExternalReturnOutcome,
   FacultyEntry,
   NotificationPreference,
   Origin,
@@ -370,11 +371,27 @@ export const api = {
   recordReview: (user: User, docId: string, input: { kind: engine.ReviewKind; remarks: string }) =>
     mutate((d, at) => engine.recordReview(d, user, docId, input, at)),
 
-  sendToExternal: (user: User, docId: string, input: { office: ExternalOfficeId; handedBy: string; remarks: string }) =>
-    mutate((d, at) => engine.sendToExternal(d, user, docId, input, at)),
+  sendToExternal: (
+    user: User,
+    docId: string,
+    input: {
+      office: ExternalOfficeId
+      transferDate?: string
+      handedBy: string
+      referenceNumber?: string
+      remarks: string
+    },
+  ) => mutate((d, at) => engine.sendToExternal(d, user, docId, input, at)),
 
-  recordExternalReturn: (user: User, docId: string, input: { remarks: string }) =>
-    mutate((d, at) => engine.recordExternalReturn(d, user, docId, input, at)),
+  recordExternalReturn: (
+    user: User,
+    docId: string,
+    input: {
+      returnDate?: string
+      outcome?: ExternalReturnOutcome
+      remarks: string
+    },
+  ) => mutate((d, at) => engine.recordExternalReturn(d, user, docId, input, at)),
 
   markReady: (user: User, docId: string) => mutate((d, at) => engine.markReady(d, user, docId, at)),
 

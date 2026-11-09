@@ -378,7 +378,7 @@ export function createSeed(): Database {
     review(d.id, 'chairperson', 'endorse', ago(14, 3))
     review(d.id, 'ids_principal', 'endorse', ago(12, 6))
     review(d.id, 'dean', 'approve', ago(10, 2))
-    sendToExternal(db, sec, d.id, { office: 'hrmo', handedBy: 'Carmela Ortiz', remarks: 'For updating of service record.' }, ago(9, 6))
+    sendToExternal(db, sec, d.id, { office: 'hrmo', transferDate: ago(9, 6).slice(0, 10), handedBy: 'Carmela Ortiz', referenceNumber: 'HRMO-2026-0419', remarks: 'For updating of service record.' }, ago(9, 6))
   }
   // 12. Faculty CESS — FTL with the Office of the Chancellor.
   {
@@ -413,8 +413,8 @@ export function createSeed(): Database {
     checkRequirements(db, sec, d.id, { decision: 'complete', missing: [], reasons: '' }, ago(20, 20))
     review(d.id, 'chairperson', 'endorse', ago(19))
     review(d.id, 'dean', 'approve', ago(17, 4))
-    sendToExternal(db, sec, d.id, { office: 'registrar', handedBy: 'Carmela Ortiz', remarks: 'For grade encoding.' }, ago(17))
-    recordExternalReturn(db, sec, d.id, { remarks: 'Grade encoded by the Registrar.' }, ago(14, 3))
+    sendToExternal(db, sec, d.id, { office: 'registrar', transferDate: ago(17).slice(0, 10), handedBy: 'Carmela Ortiz', referenceNumber: 'REG-2026-0812', remarks: 'For grade encoding.' }, ago(17))
+    recordExternalReturn(db, sec, d.id, { returnDate: ago(14, 3).slice(0, 10), outcome: 'signed', remarks: 'Grade encoded by the Registrar.' }, ago(14, 3))
     markReady(db, sec, d.id, ago(14, 2))
     recordRelease(db, sec, d.id, { receivedBy: 'Paolo Reyes', signedFile: { name: 'INC_SOCSCI220_Signed_Release.pdf', sizeKb: 410 } }, ago(13))
   }

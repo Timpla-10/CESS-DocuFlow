@@ -55,9 +55,9 @@ import {
   revisionLabel,
 } from '../../content/language'
 import { ACCEPTED_EXT, MAX_FILE_MB, reviewOptions, type NewFile, type ReviewKind } from '../../data/engine'
-import { canView, isDelayed, typeOf, userById } from '../../data/selectors'
+import { canView, daysWaiting, isDelayed, typeOf, userById } from '../../data/selectors'
 import { api, useDb } from '../../data/store'
-import type { ExternalOfficeId } from '../../data/types'
+import { EXTERNAL_RETURN_OUTCOMES, type ExternalOfficeId, type ExternalReturnOutcome } from '../../data/types'
 import { formatDate, formatDateTime, plural } from '../../lib/time'
 
 export function DocumentDetailPage() {
@@ -101,14 +101,18 @@ export function DocumentDetailPage() {
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewErrors, setReviewErrors] = useState<{ remarks?: string }>({})
 
-  // External Office form state
+  // External Office form state (Record transfer to HRMO, Registrar, Budget, etc.)
   const [externalOffice, setExternalOffice] = useState<ExternalOfficeId>(db.externalOffices[0]?.id ?? 'hrmo')
+  const [externalTransferDate, setExternalTransferDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [externalHandedBy, setExternalHandedBy] = useState(user.name)
+  const [externalReference, setExternalReference] = useState('')
   const [externalRemarks, setExternalRemarks] = useState('')
   const [externalBusy, setExternalBusy] = useState(false)
   const [externalErrors, setExternalErrors] = useState<{ handedBy?: string }>({})
 
-  // External Return form state
+  // External Return form state (Record return date, outcome, notes)
+  const [extReturnDate, setExtReturnDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [extReturnOutcome, setExtReturnOutcome] = useState<ExternalReturnOutcome>('signed')
   const [extReturnRemarks, setExtReturnRemarks] = useState('')
   const [extReturnBusy, setExtReturnBusy] = useState(false)
 
@@ -382,7 +386,9 @@ export function DocumentDetailPage() {
     try {
       await api.sendToExternal(user, doc.id, {
         office: externalOffice,
+        transferDate: externalTransferDate,
         handedBy: externalHandedBy,
+        referenceNumber: externalReference,
         remarks: externalRemarks,
       })
       toast.success('Office Transfer Recorded', `Document recorded as sent to ${externalOfficeLabel(externalOffice, db)}.`)
@@ -400,6 +406,8 @@ export function DocumentDetailPage() {
     setExtReturnBusy(true)
     try {
       await api.recordExternalReturn(user, doc.id, {
+        returnDate: extReturnDate,
+        outcome: extReturnOutcome,
         remarks: extReturnRemarks,
       })
       toast.success('Return Recorded', 'Document return recorded. It is now back with the College Secretary.')
@@ -638,6 +646,102 @@ export function DocumentDetailPage() {
             </div>
           )}
 
+          {/* External Office Transfer Status Card (REQ-EXT-1, REQ-EXT-2, REQ-EXT-3) */}
+          {doc.status === 'with_external' && (
+            <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/70 p-4 shadow-2xs">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+                  <Building2 className="size-4.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-ink-950">
+                        Transferred to {doc.externalOffice ? externalOfficeLabel(doc.externalOffice, db) : 'External Office'}
+                      </h4>
+                      <span className="inline-flex items-center rounded-md bg-brand-100 px-2 py-0.5 text-2xs font-bold text-brand-800 ring-1 ring-inset ring-brand-300">
+                        External University Office
+                      </span>
+                    </div>
+                    {doc.externalTransfer?.referenceNumber && (
+                      <span className="font-mono text-xs font-semibold text-ink-700 bg-white px-2.5 py-0.5 rounded border border-brand-200">
+                        Ref: {doc.externalTransfer.referenceNumber}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-ink-700">
+                    <div>
+                      <span className="font-semibold text-ink-500">Transfer Date:</span>{' '}
+                      <span className="font-medium text-ink-900">
+                        {doc.externalTransfer?.transferDate
+                          ? formatDate(doc.externalTransfer.transferDate)
+                          : formatDate(doc.officeSince)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-ink-500">Handed Over By:</span>{' '}
+                      <span className="font-medium text-ink-900">{doc.externalTransfer?.handedBy ?? 'College Secretary'}</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-ink-500">Waiting Time:</span>{' '}
+                      <span className="font-medium text-ink-900">{plural(daysWaiting(doc), 'day')}</span>
+                    </div>
+                  </div>
+                  {doc.externalTransfer?.notes && (
+                    <div className="mt-2 text-xs text-ink-700 bg-white/80 p-2.5 rounded-lg border border-brand-100">
+                      <span className="font-semibold text-ink-800">Transfer Notes: </span>
+                      {doc.externalTransfer.notes}
+                    </div>
+                  )}
+                  {canSecretaryRecordExternalReturn && (
+                    <div className="mt-3 flex items-center justify-end">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setExtReturnDate(new Date().toISOString().slice(0, 10))
+                          setExtReturnOutcome('signed')
+                          setExtReturnRemarks('')
+                          setIsExternalReturnOpen(true)
+                        }}
+                        icon={CheckCircle2}
+                      >
+                        Record Return from {doc.externalOffice ? externalOfficeLabel(doc.externalOffice, db) : 'External Office'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Historical External Transfer Summary (if completed) */}
+          {doc.status !== 'with_external' && doc.externalTransfer && doc.externalTransfer.returnedAt && (
+            <div className="mt-4 rounded-xl border border-ink-200 bg-ink-50/70 p-3.5 text-xs text-ink-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Building2 className="size-4 text-brand-600 shrink-0" />
+                  <span>
+                    <strong>External Office Transfer:</strong> Returned from {doc.externalTransfer.officeName} on{' '}
+                    {formatDate(doc.externalTransfer.returnDate ?? doc.externalTransfer.returnedAt)}.
+                  </span>
+                </div>
+                <Badge tone="success">
+                  Outcome: {doc.externalTransfer.returnOutcomeLabel ?? 'Completed'}
+                </Badge>
+              </div>
+              {doc.externalTransfer.referenceNumber && (
+                <p className="mt-1 pl-6 text-[11px] text-ink-500 font-mono">
+                  Reference: {doc.externalTransfer.referenceNumber}
+                </p>
+              )}
+              {doc.externalTransfer.returnNotes && (
+                <p className="mt-1 pl-6 text-[11px] text-ink-600">
+                  Notes: {doc.externalTransfer.returnNotes}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Automatic Completeness & Content Verification Status Strip (REQ-REQT-3, REQ-REQT-4) */}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="flex items-start gap-3 rounded-xl bg-success-50/50 p-3.5 ring-1 ring-inset ring-success-100">
@@ -781,7 +885,9 @@ export function DocumentDetailPage() {
                     <Button
                       onClick={() => {
                         setExternalOffice(db.externalOffices[0]?.id ?? 'hrmo')
+                        setExternalTransferDate(new Date().toISOString().slice(0, 10))
                         setExternalHandedBy(user.name)
+                        setExternalReference('')
                         setExternalRemarks('')
                         setIsExternalOpen(true)
                       }}
@@ -794,7 +900,15 @@ export function DocumentDetailPage() {
                 )}
 
                 {canSecretaryRecordExternalReturn && (
-                  <Button onClick={() => setIsExternalReturnOpen(true)} icon={CheckCircle2}>
+                  <Button
+                    onClick={() => {
+                      setExtReturnDate(new Date().toISOString().slice(0, 10))
+                      setExtReturnOutcome('signed')
+                      setExtReturnRemarks('')
+                      setIsExternalReturnOpen(true)
+                    }}
+                    icon={CheckCircle2}
+                  >
                     Record Return from External Office
                   </Button>
                 )}
@@ -1471,7 +1585,7 @@ export function DocumentDetailPage() {
         open={isExternalOpen}
         onClose={() => setIsExternalOpen(false)}
         title="Record Transfer to External Office"
-        description="Record the transfer of physical or electronic documents to an external university office so its location and waiting days remain visible."
+        description="Record the transfer of physical or electronic documents to an external university office (HRMO, Registrar, Budget/Accounting) with transfer date, hand-off person, and reference numbers."
         busy={externalBusy}
         footer={
           <>
@@ -1484,7 +1598,7 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-5">
+        <form className="space-y-4">
           <Field label="External University Office" required>
             <Select
               value={externalOffice}
@@ -1498,23 +1612,43 @@ export function DocumentDetailPage() {
             </Select>
           </Field>
 
-          <Field label="Handed Over By" required error={externalErrors.handedBy}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Transfer Date" required>
+              <Input
+                type="date"
+                value={externalTransferDate}
+                onChange={(e) => setExternalTransferDate(e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Handed Over By" required error={externalErrors.handedBy}>
+              <Input
+                type="text"
+                value={externalHandedBy}
+                onChange={(e) => {
+                  setExternalHandedBy(e.target.value)
+                  if (externalErrors.handedBy) setExternalErrors({})
+                }}
+              />
+            </Field>
+          </div>
+
+          <Field label="Notes / Reference Number" optional hint="Tracking slip, transmittal number, or endorsement memo reference">
             <Input
               type="text"
-              value={externalHandedBy}
-              onChange={(e) => {
-                setExternalHandedBy(e.target.value)
-                if (externalErrors.handedBy) setExternalErrors({})
-              }}
+              value={externalReference}
+              onChange={(e) => setExternalReference(e.target.value)}
+              placeholder="e.g. HRMO-2026-0891 or Transmittal Slip #42"
             />
           </Field>
 
-          <Field label="Transfer Remarks" optional>
+          <Field label="Transfer Notes & Instructions" optional>
             <Textarea
               rows={2}
               value={externalRemarks}
               onChange={(e) => setExternalRemarks(e.target.value)}
-              placeholder="e.g. Sent for verification of service credits..."
+              placeholder="e.g. Sent for verification of service credits and step increment endorsement..."
             />
           </Field>
         </form>
@@ -1525,7 +1659,7 @@ export function DocumentDetailPage() {
         open={isExternalReturnOpen}
         onClose={() => setIsExternalReturnOpen(false)}
         title="Record Return from External Office"
-        description="Record that the document has been returned by the external office back to the College Secretary."
+        description="Record that the document has returned from the external office back to the College Secretary, including return date and processing outcome."
         busy={extReturnBusy}
         footer={
           <>
@@ -1538,13 +1672,37 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-5">
-          <Field label="Return Remarks" optional>
+        <form className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Return Date" required>
+              <Input
+                type="date"
+                value={extReturnDate}
+                onChange={(e) => setExtReturnDate(e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Outcome / Result" required>
+              <Select
+                value={extReturnOutcome}
+                onChange={(e) => setExtReturnOutcome(e.target.value as ExternalReturnOutcome)}
+              >
+                {EXTERNAL_RETURN_OUTCOMES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+
+          <Field label="Return Notes & Findings" optional>
             <Textarea
               rows={3}
               value={extReturnRemarks}
               onChange={(e) => setExtReturnRemarks(e.target.value)}
-              placeholder="e.g. Processed and signed by HRMO representative..."
+              placeholder="e.g. Processed and signed by HRMO representative; service record verified."
             />
           </Field>
         </form>
