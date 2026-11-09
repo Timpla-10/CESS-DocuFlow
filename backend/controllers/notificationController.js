@@ -72,9 +72,11 @@ const NotificationController = {
   async markAsRead(req, res, next) {
     try {
       const updated = await NotificationModel.markAsRead(req.params.id, req.user.id);
+      const unreadCount = await NotificationModel.getUnreadCount(req.user.id);
       res.json({
         message: 'Notification marked as read.',
         notification: updated,
+        unreadCount,
       });
     } catch (err) {
       next(err);
@@ -88,8 +90,34 @@ const NotificationController = {
     try {
       await NotificationModel.markAllAsRead(req.user.id);
       res.json({
+        success: true,
         message: 'All notifications marked as read.',
+        unreadCount: 0,
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * PB-06: Clear a single notification from personal inbox
+   */
+  async clearNotification(req, res, next) {
+    try {
+      const result = await NotificationModel.clearNotification(req.params.id, req.user.id);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * PB-06: Clear all read notifications from personal inbox
+   */
+  async clearReadNotifications(req, res, next) {
+    try {
+      const result = await NotificationModel.clearAllReadNotifications(req.user.id);
+      res.json(result);
     } catch (err) {
       next(err);
     }
@@ -147,4 +175,3 @@ const NotificationController = {
 };
 
 module.exports = NotificationController;
-

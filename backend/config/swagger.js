@@ -682,6 +682,112 @@ Mindanao State University at Naawan
         },
       },
     },
+    '/api/notifications': {
+      get: {
+        summary: 'List in-system notifications with related request details (PB-06)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'unread', in: 'query', schema: { type: 'boolean' }, description: 'Filter unread only' },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } },
+          { name: 'documentId', in: 'query', schema: { type: 'string' }, description: 'Filter by document ID' },
+        ],
+        responses: {
+          200: { description: 'User notifications list with unreadCount and relatedRequest links' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/notifications/unread-count': {
+      get: {
+        summary: 'Get total unread in-system notifications count for navigation badge (PB-06)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Unread notifications count' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/notifications/{id}/read': {
+      patch: {
+        summary: 'Mark single notification as read (PB-06)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Notification marked as read' },
+          403: { description: 'Forbidden: Cannot mark another user notification' },
+          404: { description: 'Notification not found' },
+        },
+      },
+    },
+    '/api/notifications/mark-all-read': {
+      post: {
+        summary: 'Mark all unread notifications as read for current user (PB-06)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'All notifications marked as read' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/notifications/clear-read': {
+      delete: {
+        summary: 'Clear all read notifications from personal inbox (PB-06 PO Note)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'All read notifications cleared from inbox' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/notifications/{id}': {
+      delete: {
+        summary: 'Clear single notification from personal inbox (PB-06 PO Note)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Notification cleared from inbox' },
+          403: { description: 'Forbidden: Cannot clear another user notification' },
+          404: { description: 'Notification not found' },
+        },
+      },
+    },
+    '/api/notifications/preferences': {
+      get: {
+        summary: 'Get user notification delivery preferences (PB-05)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'User notification delivery preference' },
+        },
+      },
+      put: {
+        summary: 'Update notification delivery preferences (PB-05)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  preference: { type: 'string', enum: ['both', 'email_only', 'in_system_only'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Preference updated successfully' },
+        },
+      },
+    },
     '/api/workflow/routes/history': {
       get: {
         summary: 'Get chronological audit log of route sequence modifications (PB-45)',

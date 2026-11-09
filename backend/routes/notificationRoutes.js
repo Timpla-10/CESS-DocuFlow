@@ -18,8 +18,11 @@ router.patch('/:id/read', verifyUser, NotificationController.markAsRead);
 router.put('/:id/read', verifyUser, NotificationController.markAsRead);
 router.post('/mark-all-read', verifyUser, NotificationController.markAllAsRead);
 
+// PB-06: Clear notifications from inbox (Note: /clear-read mounted before /:id)
+router.delete('/clear-read', verifyUser, NotificationController.clearReadNotifications);
+router.delete('/:id', verifyUser, NotificationController.clearNotification);
+
 // PB-42 & PB-49: System-wide Email & Notification Logs (College Secretary only)
 router.get('/logs', verifyUser, requireRole(ROLES.SECRETARY), NotificationController.getNotificationLogs);
 
 module.exports = router;
-

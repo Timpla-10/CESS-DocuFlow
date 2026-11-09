@@ -1,6 +1,8 @@
 const supabase = require('../config/database');
 
 const prefCache = new Map(); // userId -> { user_id, receive_email, receive_in_system }
+const userClearedMap = new Map(); // userId -> Set of cleared notification_ids
+const RETENTION_DAYS = 90; // Default 90-day retention policy (SRS 3.10)
 
 function mapPreferenceRow(row = {}) {
   const receiveEmail = row.receive_email !== false;
@@ -40,6 +42,8 @@ function mapPreferenceRow(row = {}) {
 }
 
 const NotificationModel = {
+  RETENTION_DAYS,
+
   /**
    * PB-05: Get user's notification preferences (backed by `notification_preference` table)
    */
@@ -179,6 +183,7 @@ const NotificationModel = {
 
   /**
    * PB-06: Get user's in-system notifications (filtered by recipient, read status, documentId)
+   * Enriches records with relatedRequest details and filters out user-cleared items.
    */
   async getNotificationsForUser(recipientId, options = {}) {
     let query = supabase
@@ -195,27 +200,64 @@ const NotificationModel = {
       query = query.eq('is_read', false);
     }
 
+    // Active retention filter: default to RETENTION_DAYS (90 days)
+    const retentionDays = options.retentionDays !== undefined ? options.retentionDays : RETENTION_DAYS;
+    if (retentionDays > 0) {
+      const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte('created_at', cutoffDate);
+    }
+
     if (options.limit) {
       query = query.limit(Number(options.limit));
     }
 
     const { data, error } = await query;
     if (error) return [];
-    return data || [];
+    let list = data || [];
+
+    // Filter out notifications cleared from personal inbox view
+    const cleared = userClearedMap.get(recipientId);
+    if (cleared && cleared.size > 0) {
+      list = list.filter((n) => !cleared.has(n.notification_id));
+    }
+
+    // AC 1: Enrich with relatedRequest details if document_id is present
+    const docIds = [...new Set(list.map((n) => n.document_id).filter(Boolean))];
+    if (docIds.length > 0) {
+      const { data: docs } = await supabase
+        .from('document_request')
+        .select('document_id, control_number, title, current_status')
+        .in('document_id', docIds);
+
+      const docMap = new Map();
+      if (docs) {
+        for (const d of docs) {
+          docMap.set(d.document_id, {
+            documentId: d.document_id,
+            controlNumber: d.control_number,
+            title: d.title,
+            status: d.current_status,
+          });
+        }
+      }
+
+      list = list.map((n) => ({
+        ...n,
+        relatedRequest: n.document_id ? (docMap.get(n.document_id) || { documentId: n.document_id }) : null,
+      }));
+    } else {
+      list = list.map((n) => ({ ...n, relatedRequest: null }));
+    }
+
+    return list;
   },
 
   /**
    * PB-06: Count unread in-system notifications for user badge
    */
   async getUnreadCount(recipientId) {
-    const { count, error } = await supabase
-      .from('notification_log')
-      .select('*', { count: 'exact', head: true })
-      .eq('recipient_id', recipientId)
-      .eq('is_read', false);
-
-    if (error) return 0;
-    return count || 0;
+    const notifications = await this.getNotificationsForUser(recipientId, { unreadOnly: true });
+    return notifications.length;
   },
 
   /**
@@ -263,6 +305,93 @@ const NotificationModel = {
 
     if (error) throw error;
     return { success: true };
+  },
+
+  /**
+   * PB-06: Clear a single notification from caller's inbox
+   */
+  async clearNotification(notificationId, recipientId) {
+    const { data: existing, error: findErr } = await supabase
+      .from('notification_log')
+      .select('*')
+      .eq('notification_id', notificationId)
+      .maybeSingle();
+
+    if (findErr || !existing) {
+      const err = new Error('Notification not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    if (existing.recipient_id !== recipientId) {
+      const err = new Error('Forbidden: You can only clear your own notifications.');
+      err.status = 403;
+      throw err;
+    }
+
+    if (!userClearedMap.has(recipientId)) {
+      userClearedMap.set(recipientId, new Set());
+    }
+    userClearedMap.get(recipientId).add(notificationId);
+
+    return {
+      success: true,
+      message: 'Notification cleared from inbox.',
+      notificationId,
+    };
+  },
+
+  /**
+   * PB-06: Clear all read notifications for user
+   */
+  async clearAllReadNotifications(recipientId) {
+    const { data: readList, error } = await supabase
+      .from('notification_log')
+      .select('notification_id')
+      .eq('recipient_id', recipientId)
+      .eq('is_read', true);
+
+    if (error) throw error;
+
+    if (!userClearedMap.has(recipientId)) {
+      userClearedMap.set(recipientId, new Set());
+    }
+    const set = userClearedMap.get(recipientId);
+    let clearedCount = 0;
+    for (const item of (readList || [])) {
+      if (!set.has(item.notification_id)) {
+        set.add(item.notification_id);
+        clearedCount++;
+      }
+    }
+
+    return {
+      success: true,
+      clearedCount,
+      message: 'All read notifications have been cleared from your inbox.',
+    };
+  },
+
+  /**
+   * PB-06: Purge expired notifications past retention window (System maintenance)
+   */
+  async purgeExpiredNotifications(retentionDays = RETENTION_DAYS) {
+    const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const { error, count } = await supabase
+      .from('notification_log')
+      .delete({ count: 'exact' })
+      .lt('created_at', cutoffDate);
+
+    if (error) return 0;
+    return count || 0;
+  },
+
+  /**
+   * Reset in-memory caches (for clean integration test runs)
+   */
+  clearCache() {
+    userClearedMap.clear();
+    prefCache.clear();
   },
 
   /**
@@ -320,4 +449,3 @@ const NotificationModel = {
 };
 
 module.exports = NotificationModel;
-
