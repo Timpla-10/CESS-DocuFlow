@@ -7,7 +7,7 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "node tests/test-pb02-rbac.js && node tests/test-pb03-password-reset-security.js && node tests/test-pb10-document-types.js && node tests/test-pb11-requirements.js && node tests/test-pb18-prevent-editing.js && node tests/test-pb19-resubmit-history.js && node tests/test-pb20-secretary-queue.js && node tests/test-pb22-return-request.js && node tests/test-pb23-reject-request.js && node tests/test-pb24-office-decision.js && node tests/test-pb25-cess-vs-ids-routes.js && node tests/test-pb26-timeline-history.js && node tests/test-pb44-manage-doctypes.js && node tests/test-pb45-workflow-routes.js && node tests/test-pb48-audit-integrity.js && node tests/test-pb49-security.js",
+    "test": "node tests/test-pb02-rbac.js && node tests/test-pb03-password-reset-security.js && node tests/test-pb04-session-remember-me.js && node tests/test-pb10-document-types.js && node tests/test-pb11-requirements.js && node tests/test-pb18-prevent-editing.js && node tests/test-pb19-resubmit-history.js && node tests/test-pb20-secretary-queue.js && node tests/test-pb22-return-request.js && node tests/test-pb23-reject-request.js && node tests/test-pb24-office-decision.js && node tests/test-pb25-cess-vs-ids-routes.js && node tests/test-pb26-timeline-history.js && node tests/test-pb44-manage-doctypes.js && node tests/test-pb45-workflow-routes.js && node tests/test-pb48-audit-integrity.js && node tests/test-pb49-security.js",
     "test:rbac": "node tests/test-pb02-rbac.js",
     "test:pb03": "node tests/test-pb03-password-reset-security.js",
     "test:pb10": "node tests/test-pb10-document-types.js",
@@ -26,7 +26,8 @@
     "test:email": "node tests/test-nodemailer.js",
     "start": "node server.js",
     "test:pb48": "node tests/test-pb48-audit-integrity.js",
-    "test:pb49": "node tests/test-pb49-security.js"
+    "test:pb49": "node tests/test-pb49-security.js",
+    "test:pb04": "node tests/test-pb04-session-remember-me.js"
   },
   "keywords": [],
   "author": "",

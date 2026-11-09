@@ -44,6 +44,9 @@ router.get('/:id/actions', DocumentController.getPermittedActions);
 router.get('/:id/history', DocumentController.getDocumentHistory);
 
 // PB-48 AC 2: History immutability guards (Ordinary users and callers cannot edit or delete history)
+router.post('/:id/history', (req, res) => {
+  res.status(403).json({ error: 'Forbidden: Document processing history is append-only and cannot be manually inserted.' });
+});
 router.put('/:id/history', (req, res) => {
   res.status(403).json({ error: 'Forbidden: Document processing history is immutable and cannot be modified.' });
 });

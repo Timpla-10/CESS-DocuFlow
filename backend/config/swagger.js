@@ -66,6 +66,11 @@ Mindanao State University at Naawan
             format: 'password',
             example: 'secretary123',
           },
+          rememberMe: {
+            type: 'boolean',
+            example: true,
+            description: 'PB-04: Optional Remember-me keeping active session for 7 days',
+          },
         },
       },
       LoginResponse: {
@@ -296,6 +301,30 @@ Mindanao State University at Naawan
         responses: {
           201: { description: 'Registered or pending secretary approval' },
           400: { description: 'Validation error' },
+        },
+      },
+    },
+    '/api/auth/logout': {
+      post: {
+        summary: 'Log out and invalidate the active session (PB-04)',
+        tags: ['Auth'],
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Session terminated and logged out successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string', example: 'Logged out successfully. Session terminated.' },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: 'Missing or invalid session credentials' },
         },
       },
     },

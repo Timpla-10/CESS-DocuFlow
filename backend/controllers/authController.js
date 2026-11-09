@@ -6,8 +6,8 @@ const AuthController = {
   /** POST /api/auth/login — Sign In with Email & Password */
   async login(req, res, next) {
     try {
-      const { email, password } = req.body;
-      const result = await AuthService.loginUser(email, password);
+      const { email, password, rememberMe } = req.body;
+      const result = await AuthService.loginUser(email, password, rememberMe);
       res.json(result);
     } catch (err) {
       next(err);
@@ -17,8 +17,8 @@ const AuthController = {
   /** POST /api/auth/google — Sign In with University Google Workspace */
   async loginGoogle(req, res, next) {
     try {
-      const { email } = req.body;
-      const result = await AuthService.loginWithGoogle(email);
+      const { email, rememberMe } = req.body;
+      const result = await AuthService.loginWithGoogle(email, rememberMe);
       res.json(result);
     } catch (err) {
       next(err);
@@ -31,6 +31,17 @@ const AuthController = {
       const result = await AuthService.registerUser(req.body);
       const statusCode = result.status === 'activated' ? 201 : 202;
       res.status(statusCode).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /** POST /api/auth/logout — Explicit logout ending the session (PB-04) */
+  async logout(req, res, next) {
+    try {
+      const token = req.headers.authorization || req.headers['x-session-token'];
+      const result = await AuthService.logoutUser(token, req.user);
+      res.json(result);
     } catch (err) {
       next(err);
     }

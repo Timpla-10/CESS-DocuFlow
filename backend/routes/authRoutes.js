@@ -14,6 +14,7 @@ router.post('/reset-password', AuthController.confirmPasswordReset);
 router.post('/password-reset/confirm', AuthController.confirmPasswordReset);
 
 // Authenticated endpoints: Verify current role & profile, and Change Password (PB-03)
+router.post('/logout', verifyUser, AuthController.logout);
 router.get('/me', verifyUser, AuthController.me);
 router.post('/change-password', verifyUser, AuthController.changePassword);
 router.put('/password', verifyUser, AuthController.changePassword);

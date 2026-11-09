@@ -1,29 +1,49 @@
 const supabase = require('../config/database');
 const UserModel = require('../models/userModel');
+const SessionModel = require('../models/sessionModel');
 const { getRoleLabel, canPerformAction } = require('../utils/roles');
 
 /**
- * PB-02 Middleware: Authenticates the request and verifies user role & active status.
+ * PB-02 & PB-04 Middleware: Authenticates the request and verifies user role & active status.
  * Supports:
- * 1. Supabase Auth JWT token via `Authorization: Bearer <token>`
- * 2. Institutional user lookup via `x-user-id` or `x-user-email` header
+ * 1. DocuFlow Session token via `Authorization: Bearer <sess_...>` or `x-session-token`
+ * 2. Supabase Auth JWT token via `Authorization: Bearer <token>`
+ * 3. Institutional user lookup via `x-user-id` or `x-user-email` header
  */
 async function verifyUser(req, res, next) {
   try {
     let profile = null;
     const authHeader = req.headers.authorization;
+    const sessionTokenHeader = req.headers['x-session-token'];
     const headerUserId = req.headers['x-user-id'];
     const headerUserEmail = req.headers['x-user-email'];
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '').trim();
-      const { data, error } = await supabase.auth.getUser(token);
-      if (error || !data?.user) {
-        return res.status(401).json({
-          error: 'Unauthorized: Invalid or expired authentication token.',
-        });
+    const bearerToken = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.replace(/^Bearer\s+/i, '').trim()
+      : null;
+    const directToken = bearerToken || (sessionTokenHeader ? sessionTokenHeader.trim() : null);
+
+    if (directToken) {
+      // Check if this is a DocuFlow session token (PB-04)
+      if (directToken.startsWith('sess_')) {
+        const validation = SessionModel.validateSession(directToken);
+        if (!validation.valid) {
+          return res.status(validation.status || 401).json({
+            error: `Unauthorized: ${validation.reason || 'Invalid or expired session.'}`,
+          });
+        }
+        profile = await UserModel.findById(validation.session.userId);
+        req.session = validation.session;
+      } else {
+        // Fallback to Supabase JWT verification
+        const { data, error } = await supabase.auth.getUser(directToken);
+        if (error || !data?.user) {
+          return res.status(401).json({
+            error: 'Unauthorized: Invalid or expired authentication token.',
+          });
+        }
+        profile = await UserModel.findById(data.user.id);
       }
-      profile = await UserModel.findById(data.user.id);
     } else if (headerUserId) {
       profile = await UserModel.findById(headerUserId);
     } else if (headerUserEmail) {
@@ -101,4 +121,3 @@ module.exports = {
   requireRole,
   requireAction,
 };
-

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const supabase = require('../config/database');
 const UserModel = require('../models/userModel');
+const SessionModel = require('../models/sessionModel');
 const EmailService = require('./emailService');
 const {
   ROLES,
@@ -260,7 +261,7 @@ const AuthService = {
   /**
    * PB-02: Sign In with Institutional Email & Role Password + Whitelist/Admin Verification Check
    */
-  async loginUser(email, password) {
+  async loginUser(email, password, rememberMe = true) {
     const cleanEmail = (email || '').trim().toLowerCase();
 
     if (!isInstitutionalEmail(cleanEmail)) {
@@ -342,9 +343,26 @@ const AuthService = {
       secretsToRedact: [password],
     });
 
+    // PB-04 (SRS 3.1 REQ-AUTH-14): Issue session token with Remember-Me lifecycle (7 days vs 1 day)
+    const session = SessionModel.createSession({
+      userId: profile.id,
+      email: cleanEmail,
+      role: profile.role,
+      origin: profile.origin,
+      rememberMe: Boolean(rememberMe),
+    });
+
     return {
       verified: true,
       user: profile,
+      token: session.token,
+      rememberMe: session.rememberMe,
+      session: {
+        sessionId: session.sessionId,
+        rememberMe: session.rememberMe,
+        expiresAt: session.expiresAt,
+        ttlMs: session.ttlMs,
+      },
     };
   },
 
@@ -806,7 +824,7 @@ const AuthService = {
   /**
    * PB-02: Sign In with University Google Workspace (@msunaawan.edu.ph)
    */
-  async loginWithGoogle(email) {
+  async loginWithGoogle(email, rememberMe = true) {
     const cleanEmail = (email || '').trim().toLowerCase();
 
     if (!isInstitutionalEmail(cleanEmail)) {
@@ -830,9 +848,48 @@ const AuthService = {
       throw err;
     }
 
+    const session = SessionModel.createSession({
+      userId: profile.id,
+      email: cleanEmail,
+      role: profile.role,
+      origin: profile.origin,
+      rememberMe: Boolean(rememberMe),
+    });
+
     return {
       verified: true,
       user: profile,
+      token: session.token,
+      rememberMe: session.rememberMe,
+      session: {
+        sessionId: session.sessionId,
+        rememberMe: session.rememberMe,
+        expiresAt: session.expiresAt,
+        ttlMs: session.ttlMs,
+      },
+    };
+  },
+
+  /**
+   * PB-04: Explicit logout ends the session
+   */
+  async logoutUser(token, user) {
+    const cleanToken = token ? token.replace(/^Bearer\s+/i, '').trim() : null;
+    if (cleanToken) {
+      SessionModel.revokeSession(cleanToken);
+    }
+    if (user?.id) {
+      recordSecurityEvent({
+        event: 'logout',
+        email: user.email,
+        userId: user.id,
+        status: 'success',
+        message: 'User logged out successfully. Session terminated.',
+      });
+    }
+    return {
+      success: true,
+      message: 'Logged out successfully. Session terminated.',
     };
   },
 
