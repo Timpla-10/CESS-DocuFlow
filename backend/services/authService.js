@@ -1125,21 +1125,25 @@ const AuthService = {
       throw err;
     }
 
-    if (!isInstitutionalEmail(input.email)) {
+    const cleanEmail = (input.email || '').trim().toLowerCase();
+    if (!isInstitutionalEmail(cleanEmail)) {
       const err = new Error('Email must end with @msunaawan.edu.ph.');
       err.status = 400;
       throw err;
     }
 
+    const accountStatus = input.accountStatus || (input.active === false ? 'Inactive' : 'Active');
+    const isWhitelisted = input.isWhitelisted !== undefined ? input.isWhitelisted : (accountStatus === 'Active');
+
     return provisionVerifiedUser({
-      email: input.email,
+      email: cleanEmail,
       password: input.password,
       name: input.name,
       role: input.role,
       origin: input.origin,
       department: input.department,
-      accountStatus: 'Active',
-      isWhitelisted: true,
+      accountStatus,
+      isWhitelisted,
     });
   },
 };

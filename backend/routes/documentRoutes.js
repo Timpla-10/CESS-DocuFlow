@@ -88,6 +88,12 @@ router.post('/:id/reject', DocumentController.rejectDocument);
 // PB-23: Approved reopen path for rejected documents (College Secretary or College Dean only)
 router.post('/:id/reopen', DocumentController.reopenDocument);
 
+// PB-33: Mark processed document ready for release (College Secretary only)
+router.post('/:id/ready', requireAction('mark_ready'), DocumentController.markReady);
+
+// PB-33: Record document release to requester (College Secretary only)
+router.post('/:id/release', requireAction('release_document'), DocumentController.recordRelease);
+
 // PB-18 / REQ-SUB-7: Prevent editing while in process; edit allowed only when Returned
 router.put('/:id', DocumentController.editDocument);
 

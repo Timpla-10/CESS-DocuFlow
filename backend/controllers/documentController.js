@@ -494,6 +494,49 @@ const DocumentController = {
   },
 
   /**
+   * POST /api/documents/:id/ready
+   * PB-33: Mark a processed document ready for release (College Secretary only)
+   */
+  async markReady(req, res, next) {
+    try {
+      const updated = await AccessControlService.markReady(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({
+        message: 'Document successfully marked ready for release.',
+        document: updated,
+        notification: updated?.notification || null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/documents/:id/release
+   * PB-33: Record document release to requester (College Secretary only)
+   */
+  async recordRelease(req, res, next) {
+    try {
+      const updated = await AccessControlService.recordRelease(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({
+        message: 'Document release successfully recorded.',
+        document: updated,
+        releaseInfo: updated?.releaseInfo || null,
+        notification: updated?.notification || null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
    * PUT /api/documents/:id
    * PB-18 / REQ-SUB-7: Prevent editing while request is in process.
    * Only allowed when current_status === 'Returned'.

@@ -1025,6 +1025,178 @@ const AccessControlService = {
   },
 
   /**
+   * PB-33: Mark a processed document ready for release (Secretary only)
+   * Acceptance Criteria:
+   * 1. Only authorized staff (College Secretary) can mark ready
+   * 2. Release date/time recorded; status set to Ready_for_Release
+   * 3. Requester status updates with notification
+   */
+  async markReady(user, docId, payload = {}) {
+    if (!canPerformAction(user, 'mark_ready')) {
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not authorized to mark documents ready for release. Only the College Secretary can perform this action.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    const doc = await DocumentModel.findById(docId);
+    if (!doc) {
+      const err = new Error('Document not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    const secOfficeId = await UserModel.getOfficeIdByName('College Secretary');
+    const nowIso = new Date().toISOString();
+    const cleanRemarks = (payload.remarks || payload.reason || '').trim() || 'Document processed and marked ready for release by the College Secretary.';
+
+    await DocumentModel.update(docId, {
+      current_status: 'Ready_for_Release',
+      current_office_id: secOfficeId,
+      last_updated_at: nowIso,
+    });
+
+    const historyEntry = await DocumentModel.addHistory({
+      document_id: docId,
+      revision_no: doc.current_revision_no,
+      action_by_user_id: user.id,
+      action_office_id: secOfficeId,
+      action_type: 'Ready_for_Release',
+      action_remarks: cleanRemarks,
+    });
+
+    const pref = await DocumentModel.getNotificationPreference(doc.requester_id);
+    const notification = await DocumentModel.createNotification({
+      recipientId: doc.requester_id,
+      documentId: docId,
+      notificationType: 'Status_Update',
+      deliveryMethod: pref.deliveryMethod,
+      title: `Your document is ready for pickup: ${doc.title}`,
+      message: `Good news! Your document request (${doc.control_number}) has been approved and is now ready for pickup at the College Secretary's office.`,
+    });
+
+    if (pref.receive_email) {
+      UserModel.findById(doc.requester_id).then((reqUser) => {
+        if (!reqUser?.email) return;
+        EmailService.sendReadyForReleaseEmail({
+          to: reqUser.email,
+          name: reqUser.name,
+          controlNumber: doc.control_number,
+          title: doc.title,
+          documentId: docId,
+          recipientId: doc.requester_id,
+        }).catch(() => null);
+      }).catch(() => null);
+    }
+
+    const updatedDoc = await DocumentModel.findById(docId);
+    return {
+      ...updatedDoc,
+      markedReadyAt: historyEntry.action_timestamp,
+      notification,
+    };
+  },
+
+  /**
+   * PB-33: Record document release to requester (Secretary only)
+   * Acceptance Criteria:
+   * 1. Only authorized staff (College Secretary) can record release
+   * 2. Release date/time, recipient name, recorded_by, and optional signed copy scan saved
+   * 3. Requester status updates to Released
+   * 4. Final document view/download respects permissions
+   */
+  async recordRelease(user, docId, payload = {}) {
+    if (!canPerformAction(user, 'release_document')) {
+      const err = new Error(
+        `Forbidden: Role '${getRoleLabel(user.role, user.origin)}' is not authorized to record document releases. Only the College Secretary can record releases.`
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    const doc = await DocumentModel.findById(docId);
+    if (!doc) {
+      const err = new Error('Document not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    if (doc.current_status !== 'Ready_for_Release' && doc.current_status !== 'Under_Review') {
+      const err = new Error(
+        `Document '${doc.control_number}' is currently '${doc.current_status}' and cannot be released. Documents must be marked ready for release first.`
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const receivedBy = (payload.receivedBy || payload.received_by || '').trim();
+    if (!receivedBy) {
+      const err = new Error('The name of the recipient (person receiving the document) is required.');
+      err.status = 400;
+      throw err;
+    }
+
+    const secOfficeId = await UserModel.getOfficeIdByName('College Secretary');
+    const nowIso = new Date().toISOString();
+
+    let signedAttachment = null;
+    const incomingFile = payload.signedFile || payload.signed_file || payload.attachment;
+    if (incomingFile) {
+      validateAttachmentFiles([incomingFile]);
+      signedAttachment = await DocumentModel.addAttachment({
+        document_id: doc.document_id,
+        revision_no: doc.current_revision_no,
+        file_name: incomingFile.file_name || incomingFile.name || 'Signed_Final_Copy.pdf',
+        file_url: incomingFile.file_url || incomingFile.url || `/uploads/${doc.document_id}_signed_${Date.now()}.pdf`,
+        file_type: resolveSafeFileType(incomingFile),
+        file_size_kb: incomingFile.file_size_kb || incomingFile.sizeKb || 250,
+      });
+    }
+
+    const releaseRemarks = signedAttachment
+      ? `Released to ${receivedBy}. Final signed copy attached (${signedAttachment.file_name}).`
+      : `Released to ${receivedBy}.`;
+
+    await DocumentModel.update(docId, {
+      current_status: 'Released',
+      current_office_id: null,
+      last_updated_at: nowIso,
+    });
+
+    const historyEntry = await DocumentModel.addHistory({
+      document_id: docId,
+      revision_no: doc.current_revision_no,
+      action_by_user_id: user.id,
+      action_office_id: secOfficeId,
+      action_type: 'Released',
+      action_remarks: releaseRemarks,
+    });
+
+    const pref = await DocumentModel.getNotificationPreference(doc.requester_id);
+    const notification = await DocumentModel.createNotification({
+      recipientId: doc.requester_id,
+      documentId: docId,
+      notificationType: 'Status_Update',
+      deliveryMethod: pref.deliveryMethod,
+      title: `Document Released: ${doc.title}`,
+      message: `Your document (${doc.control_number}) was officially released to ${receivedBy}. Thank you!`,
+    });
+
+    const updatedDoc = await DocumentModel.findById(docId);
+    return {
+      ...updatedDoc,
+      releaseInfo: {
+        receivedBy,
+        releasedAt: historyEntry.action_timestamp,
+        recordedBy: user.name,
+        signedAttachment,
+      },
+      notification,
+    };
+  },
+
+  /**
    * PB-18 / REQ-SUB-7 & PB-23: Prevent editing while request is in process or rejected.
    * Only documents in 'Returned' status can be modified by the requester.
    */
