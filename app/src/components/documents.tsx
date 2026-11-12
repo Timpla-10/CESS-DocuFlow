@@ -27,6 +27,7 @@ import {
   externalOfficeLabel,
   historyTitle,
   historyTone,
+  locationLabel,
   locationLabelForStaff,
   revisionLabel,
   statusView,
@@ -440,7 +441,9 @@ export function DocumentList({
                     <div className="mt-0.5 text-[11px] text-ink-400">Updated {timeAgo(d.updatedAt)}</div>
                   </td>
                   <td className="min-w-[190px] px-6 py-4.5">
-                    <div className="font-medium text-ink-800">{audience === 'requester' && d.status === 'returned' ? 'With you' : locationLabelForStaff(d, db)}</div>
+                    <div className="font-medium text-ink-800">
+                      {audience === 'requester' ? locationLabel(d, db) : locationLabelForStaff(d, db)}
+                    </div>
                     {showWaiting && (d.status === 'with_office' || d.status === 'with_external' || d.status === 'submitted') && (
                       <div className="mt-0.5 text-xs text-ink-500">Waiting {plural(daysWaiting(d), 'day')}</div>
                     )}
@@ -463,12 +466,34 @@ export function DocumentList({
         {docs.map((d) => {
           const type = typeOf(db, d)
           const req = userById(db, d.requesterId)
+          const highlight = audience === 'requester' && (d.status === 'returned' || d.status === 'ready')
           return (
-            <li key={d.id} className="w-full min-w-0 max-w-full overflow-hidden">
+            <li
+              key={d.id}
+              className={cn(
+                'w-full min-w-0 max-w-full overflow-hidden transition-colors',
+                highlight && d.status === 'returned' && 'bg-danger-50/30',
+                highlight && d.status === 'ready' && 'bg-success-50/40',
+              )}
+            >
               <Link to={`/app/documents/${d.id}`} className="block w-full min-w-0 max-w-full px-3 py-3.5 hover:bg-brand-50/70 sm:px-4 sm:py-4">
-                <div className="flex w-full min-w-0 items-start justify-between gap-2 sm:gap-3">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="font-mono text-xs font-bold text-brand-900 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-200">
+                    {controlNumber(d)}
+                  </span>
+                  <Badge tone="neutral" dot={false}>
+                    {revisionLabel(d.revision)}
+                  </Badge>
+                  {d.encodedBySecretary && (
+                    <Badge tone="brand" dot={false}>
+                      Walk-in
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="mt-1.5 flex w-full min-w-0 items-start justify-between gap-2 sm:gap-3">
                   <div className="min-w-0 flex-1 break-words">
-                    <p className="font-semibold text-ink-900 break-words">{d.title}</p>
+                    <p className="font-bold text-ink-950 break-words">{d.title}</p>
                     <p className="mt-0.5 text-xs text-ink-500 break-words">
                       {type?.name}
                       {showRequester && req ? ` · ${req.name}` : ''}
@@ -476,11 +501,29 @@ export function DocumentList({
                   </div>
                   <ArrowRight className="mt-1 size-4 shrink-0 text-ink-400" aria-hidden />
                 </div>
-                <div className="mt-2 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
+
+                <div className="mt-2.5 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
                   <StatusBadge doc={d} audience={audience} db={db} />
                   {isDelayed(db, d) && <DelayedBadge audience={audience} />}
-                  <span className="min-w-0 break-words text-xs text-ink-500">Submitted {formatDate(lastSubmittedAt(d))}</span>
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100/70 pt-2 text-2xs text-ink-500">
+                  <div className="font-medium text-ink-700">
+                    <span className="text-ink-400">Location: </span>
+                    {audience === 'requester' ? locationLabel(d, db) : locationLabelForStaff(d, db)}
+                  </div>
+                  <div className="text-right">
+                    <span>Submitted {formatDate(lastSubmittedAt(d))}</span>
+                    <span className="ml-1.5 text-ink-400">· Updated {timeAgo(d.updatedAt)}</span>
+                  </div>
+                </div>
+
+                {audience === 'requester' && d.status === 'returned' && d.returnInfo && (
+                  <div className="mt-2.5 rounded-lg border border-danger-200 bg-danger-50/90 p-2.5 text-xs text-danger-900">
+                    <span className="font-bold">Return reason: </span>
+                    <span>{d.returnInfo.reasons}</span>
+                  </div>
+                )}
               </Link>
             </li>
           )

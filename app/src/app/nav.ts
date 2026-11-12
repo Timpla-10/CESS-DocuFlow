@@ -51,8 +51,10 @@ export function navFor(role: Role): NavSection[] {
             },
             {
               to: '/app/my-documents',
-              label: 'Document Repository',
+              label: 'My Documents',
               icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
+              countTone: 'brand',
             },
           ],
         },
@@ -74,8 +76,10 @@ export function navFor(role: Role): NavSection[] {
             },
             {
               to: '/app/my-documents',
-              label: 'Document Repository',
+              label: 'My Documents',
               icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
+              countTone: 'brand',
             },
           ],
         },

@@ -166,6 +166,8 @@ export const STATUS_FILTER_LABEL: Record<Status, string> = {
 /** Where the document is right now, in plain words. */
 export function locationLabel(doc: DocRecord, db?: Pick<Database, 'externalOffices'>): string {
   if (doc.status === 'returned') return 'With you (the requester)'
+  if (doc.status === 'ready') return 'College Secretary (Ready for Release)'
+  if (doc.status === 'submitted') return 'College Secretary (Completeness Check)'
   if (doc.status === 'rejected') return `Disapproved by ${doc.rejectionInfo?.office ?? 'Office'}`
   if (doc.status === 'with_external' && doc.externalOffice) return externalOfficeLabel(doc.externalOffice, db)
   if (doc.status === 'released') return 'Released to requester'

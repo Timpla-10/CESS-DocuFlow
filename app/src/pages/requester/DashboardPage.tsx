@@ -62,9 +62,14 @@ function RequesterDashboard() {
         title="Dashboard"
         description="Track the real-time routing progress, current reviewing office, and status of all your submitted documents."
         actions={
-          <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-            Submit Document Request
-          </ButtonLink>
+          <div className="flex flex-wrap items-center gap-2">
+            <ButtonLink to="/app/my-documents" variant="secondary" icon={FolderOpen} size="md">
+              My Documents
+            </ButtonLink>
+            <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+              Submit Document Request
+            </ButtonLink>
+          </div>
         }
       />
 
@@ -183,19 +188,29 @@ function RequesterDashboard() {
 
       {/* Main Flat Table with Search & Filters */}
       <Card>
-        <div className="border-b border-ink-100 p-4 sm:px-6 sm:py-4">
-          <h2 className="text-base font-bold text-ink-950">
-            All Submitted Requests
-          </h2>
-          <p className="text-xs text-ink-500">
-            Search, filter, and track where your documents currently are in the college routing pipeline.
-          </p>
+        <div className="flex flex-wrap items-center justify-between border-b border-ink-100 p-4 sm:px-6 sm:py-4 gap-3">
+          <div>
+            <h2 className="text-base font-bold text-ink-950">
+              All Submitted Requests
+            </h2>
+            <p className="text-xs text-ink-500">
+              Search, filter, and track where your documents currently are in the college routing pipeline.
+            </p>
+          </div>
+          <Link
+            to="/app/my-documents"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900"
+          >
+            <span>Open in My Documents</span>
+            <FolderOpen className="size-3.5" />
+          </Link>
         </div>
 
         <FilterBar
           db={db}
           filters={filters}
           setFilters={setFilters}
+          showDateRange={true}
           audience={user.role === 'student' ? 'student' : 'faculty'}
           searchLabel="Search by title, control number, or type…"
         />
