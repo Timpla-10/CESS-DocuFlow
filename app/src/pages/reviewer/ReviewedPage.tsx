@@ -46,7 +46,7 @@ export function ReviewedPage() {
         if (user.role === 'dean') {
           return true // Dean oversees all college documents
         }
-        if (user.role === 'ovcaa' || user.role === 'chancellor') {
+        if (user.role === 'ovcaa' || user.role === 'vcaf' || user.role === 'chancellor') {
           return true
         }
         return false

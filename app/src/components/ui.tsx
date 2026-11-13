@@ -2,15 +2,18 @@
  * Core UI primitives for CESS DocuFlow.
  * All colours come from the tokens in index.css — no raw hex values here.
  */
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, HelpCircle, Loader2 } from 'lucide-react'
 import {
+  useEffect,
   useId,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type ComponentType,
   type HTMLAttributes,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import type { Tone } from '../content/language'
 
@@ -28,8 +31,8 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dang
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 const buttonBase =
-  'inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-all duration-150 ' +
-  'disabled:cursor-not-allowed disabled:opacity-55 active:translate-y-px select-none'
+  'inline-flex items-center justify-center gap-2 rounded-lg font-semibold text-center leading-none transition-all duration-150 ' +
+  'disabled:cursor-not-allowed disabled:opacity-55 active:translate-y-px select-none break-words min-w-0'
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary:
@@ -42,9 +45,9 @@ const buttonVariants: Record<ButtonVariant, string> = {
 }
 
 const buttonSizes: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-[13px]',
-  md: 'h-10 px-4 text-sm',
-  lg: 'h-12 px-6 text-[15px]',
+  sm: 'min-h-8 py-1.5 px-3 text-[13px]',
+  md: 'min-h-10 py-2 px-4 text-sm',
+  lg: 'min-h-12 py-2.5 px-6 text-[15px]',
 }
 
 export function buttonClass(variant: ButtonVariant = 'primary', size: ButtonSize = 'md', extra?: string) {
@@ -75,9 +78,9 @@ export function Button({
 }: ButtonProps) {
   return (
     <button type={type} className={buttonClass(variant, size, className)} disabled={disabled || loading} aria-busy={loading} {...rest}>
-      {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : Icon ? <Icon className="size-4" aria-hidden /> : null}
-      <span>{loading && loadingText ? loadingText : children}</span>
-      {IconRight && !loading ? <IconRight className="size-4" aria-hidden /> : null}
+      {loading ? <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden /> : Icon ? <Icon className="size-4 shrink-0" aria-hidden /> : null}
+      <span className="min-w-0 max-w-full text-center leading-snug">{loading && loadingText ? loadingText : children}</span>
+      {IconRight && !loading ? <IconRight className="size-4 shrink-0" aria-hidden /> : null}
     </button>
   )
 }
@@ -101,9 +104,9 @@ export function ButtonLink({
 }) {
   return (
     <Link to={to} className={buttonClass(variant, size, className)}>
-      {Icon ? <Icon className="size-4" aria-hidden /> : null}
-      <span>{children}</span>
-      {IconRight ? <IconRight className="size-4" aria-hidden /> : null}
+      {Icon ? <Icon className="size-4 shrink-0" aria-hidden /> : null}
+      <span className="min-w-0 max-w-full text-center leading-snug">{children}</span>
+      {IconRight ? <IconRight className="size-4 shrink-0" aria-hidden /> : null}
     </Link>
   )
 }
@@ -138,13 +141,13 @@ export function Badge({ tone = 'neutral', children, dot = true, className }: { t
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset',
+        'inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset leading-snug',
         badgeTones[tone],
         className,
       )}
     >
       {dot && <span className={cn('size-1.5 shrink-0 rounded-full', dotTones[tone])} aria-hidden />}
-      <span className="inline-flex items-center gap-1">{children}</span>
+      <span className="inline-flex items-center gap-1 whitespace-nowrap leading-tight">{children}</span>
     </span>
   )
 }
@@ -165,7 +168,7 @@ export function DepartmentBadge(_props?: {
 
 export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('rounded-xl bg-white shadow-card ring-1 ring-ink-100', className)} {...rest}>
+    <div className={cn('w-full min-w-0 max-w-full overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-ink-100', className)} {...rest}>
       {children}
     </div>
   )
@@ -173,10 +176,10 @@ export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivEle
 
 export function CardHeader({ title, description, action, icon: Icon }: { title: ReactNode; description?: ReactNode; action?: ReactNode; icon?: IconType }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-ink-100 px-6 py-4.5">
-      <div className="flex min-w-0 items-start gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 px-5 py-4 sm:px-6 sm:py-4.5">
+      <div className="flex min-w-0 items-center gap-3">
         {Icon && (
-          <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
             <Icon className="size-4" aria-hidden />
           </span>
         )}
@@ -185,8 +188,98 @@ export function CardHeader({ title, description, action, icon: Icon }: { title: 
           {description && <p className="mt-0.5 text-sm text-ink-500">{description}</p>}
         </div>
       </div>
-      {action}
+      {action && <div className="flex items-center gap-2">{action}</div>}
     </div>
+  )
+}
+
+/**
+ * Compact accessible info tooltip. Renders via Portal at document.body with fixed
+ * positioning and automatic viewport clamping to avoid clipping inside modals/containers.
+ */
+export function InfoTooltip({ content }: { content: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [coords, setCoords] = useState<{ top: number; left: number; isAbove: boolean } | null>(null)
+
+  const updatePosition = () => {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    // Center horizontally above the trigger, clamped within viewport bounds
+    const tooltipWidth = 280
+    const idealLeft = rect.left + rect.width / 2 - tooltipWidth / 2
+    const clampedLeft = Math.max(16, Math.min(window.innerWidth - tooltipWidth - 16, idealLeft))
+    // Prefer above, fallback to below if close to viewport top
+    const spaceAbove = rect.top
+    const isAbove = spaceAbove > 70
+    const top = isAbove ? rect.top - 8 : rect.bottom + 8
+    setCoords({ top, left: clampedLeft, isAbove })
+  }
+
+  const handleOpen = () => {
+    updatePosition()
+    setOpen(true)
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const onScrollOrResize = () => updatePosition()
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        ref={triggerRef}
+        type="button"
+        onMouseEnter={handleOpen}
+        onMouseLeave={handleClose}
+        onFocus={handleOpen}
+        onBlur={handleClose}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (open) handleClose()
+          else handleOpen()
+        }}
+        className="inline-flex size-4 items-center justify-center rounded-full text-ink-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500/40 transition-colors"
+        aria-label="More information"
+      >
+        <HelpCircle className="size-3.5" aria-hidden />
+      </button>
+
+      {open &&
+        coords &&
+        createPortal(
+          <div
+            role="tooltip"
+            style={{
+              position: 'fixed',
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              transform: coords.isAbove ? 'translateY(-100%)' : 'none',
+            }}
+            className="pointer-events-none z-[9999] max-w-[280px] rounded-lg bg-ink-950 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-2xl ring-1 ring-white/20 border border-white/10 animate-fade-in"
+          >
+            {content}
+          </div>,
+          document.body,
+        )}
+    </span>
   )
 }
 
@@ -202,13 +295,13 @@ export function PageHeader({
   eyebrow?: ReactNode
 }) {
   return (
-    <header className="mb-6 flex animate-fade-up flex-wrap items-end justify-between gap-4">
-      <div className="min-w-0 max-w-3xl">
-        {eyebrow && <div className="mb-1.5 text-xs font-bold uppercase tracking-[0.08em] text-brand-600">{eyebrow}</div>}
-        <h1 className="text-balance text-2xl font-extrabold tracking-tight text-brand-900 sm:text-[28px]">{title}</h1>
-        {description && <p className="mt-1.5 text-[15px] leading-relaxed text-ink-600">{description}</p>}
+    <header className="mb-4 sm:mb-6 flex w-full min-w-0 max-w-full animate-fade-up flex-wrap items-end justify-between gap-3 sm:gap-4">
+      <div className="w-full min-w-0 max-w-3xl flex-1 sm:w-auto">
+        {eyebrow && <div className="mb-1 truncate text-2xs font-bold uppercase tracking-[0.08em] text-brand-600 sm:text-xs">{eyebrow}</div>}
+        <h1 className="text-balance break-words text-xl font-extrabold tracking-tight text-brand-900 sm:text-2xl lg:text-[28px]">{title}</h1>
+        {description && <p className="mt-1 break-words text-xs leading-relaxed text-ink-600 sm:text-[15px]">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </header>
   )
 }
@@ -708,7 +801,7 @@ export function Segmented<T extends string>({
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all',
+              'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition-all whitespace-nowrap',
               active ? 'bg-white text-brand-800 shadow-xs ring-1 ring-brand-200' : 'text-ink-600 hover:text-brand-700',
             )}
           >
@@ -802,6 +895,7 @@ export function Pagination({
   itemLabel = 'logs',
   className,
 }: PaginationProps) {
+  const [isRowsFocused, setIsRowsFocused] = useState(false)
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const end = Math.min(currentPage * pageSize, totalItems)
@@ -834,18 +928,41 @@ export function Pagination({
           <label htmlFor="rows-select" className="text-ink-600">
             Rows:
           </label>
-          <select
-            id="rows-select"
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-8 rounded-lg border border-ink-200 bg-white !pl-2.5 !pr-7 py-0 text-xs font-semibold text-ink-800 shadow-2xs hover:border-ink-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer"
-          >
-            {pageSizeOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
+          <div className="group relative">
+            <select
+              id="rows-select"
+              value={pageSize}
+              onChange={(e) => {
+                setIsRowsFocused(false)
+                e.currentTarget.blur()
+                onPageSizeChange(Number(e.target.value))
+              }}
+              onFocus={() => setIsRowsFocused(true)}
+              onBlur={() => setIsRowsFocused(false)}
+              className="h-8 appearance-none rounded-lg border border-ink-200 bg-white pl-2.5 pr-7 py-0 text-xs font-semibold text-ink-800 shadow-2xs hover:border-ink-300 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 cursor-pointer"
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+              <ChevronDown
+                className={cn(
+                  'size-3.5 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+                  isRowsFocused
+                    ? 'text-brand-600'
+                    : 'text-ink-500 group-hover:translate-y-0.5 group-hover:text-brand-600',
+                )}
+                style={{
+                  transform: isRowsFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transformOrigin: 'center',
+                }}
+                aria-hidden="true"
+              />
+            </div>
+          </div>
         </div>
       </div>
 

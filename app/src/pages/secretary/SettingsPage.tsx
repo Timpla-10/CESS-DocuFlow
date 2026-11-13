@@ -1,6 +1,7 @@
 import {
   Bell,
   Building2,
+  CheckSquare,
   Clock,
   Edit3,
   FileText,
@@ -20,13 +21,13 @@ import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Badge, Button, Card, CardHeader, PageHeader } from '../../components/ui'
+import { Badge, Button, Card, CardHeader, PageHeader, cn } from '../../components/ui'
 import { OFFICE_LABEL } from '../../content/language'
 import { api, useDb } from '../../data/store'
 import type { DocumentType, ExternalOfficeItem, OfficeId, Requirement } from '../../data/types'
 
-const REVIEW_OFFICE_CHOICES: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
-const HIGHER_OFFICE_CHOICES: OfficeId[] = ['ovcaa', 'chancellor']
+const REVIEW_OFFICE_CHOICES: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
+const HIGHER_OFFICE_CHOICES: OfficeId[] = ['ovcaa', 'vcaf', 'chancellor']
 
 
 export function SettingsPage() {
@@ -203,12 +204,12 @@ export function SettingsPage() {
         description="Manage document types, required checklists, downloadable templates, CESS/IDS routes, turnaround times, external offices, reminder intervals, and user accounts without changing code."
       />
 
-      {/* 1. Document Types, Checklists, Templates, Routes & Turnaround Times (REQ-REQT-1, REQ-REQT-10, REQ-ROUTE-1, REQ-WFM-7) */}
+      {/* 1. Document Types, Checklists, Templates, Routes & Turnaround Times */}
       <Card>
         <CardHeader
           icon={Clock}
           title="Document Types, Checklists, Templates, Routes & Turnaround Times"
-          description="Configure required forms, upload official templates (REQ-REQT-10), edit CESS and IDS routes (REQ-ROUTE-1), and set standard processing times from the CESS Manual of Operations (REQ-WFM-7)."
+          description="Configure required forms, upload official templates, edit CESS and IDS routes, and set standard processing times from the CESS Manual of Operations."
           action={
             <Button size="sm" icon={Plus} onClick={openNewDocType}>
               Add Document Type
@@ -241,11 +242,23 @@ export function SettingsPage() {
                       </p>
                     </td>
                     <td className="px-5 py-4 capitalize text-ink-600 font-medium">{t.audience}</td>
-                    <td className="max-w-[320px] px-5 py-4 text-xs text-ink-600">
-                      <div className="font-semibold text-ink-800">
-                        {t.requirements.filter((r) => r.required).length} required · {t.requirements.filter((r) => !r.required).length} optional
+                    <td className="max-w-[340px] px-5 py-4 text-xs text-ink-600">
+                      <div className="flex items-center gap-1.5 font-bold text-ink-900">
+                        <CheckSquare className="size-3.5 text-brand-600 shrink-0" />
+                        <span>Checklist: {t.requirements.filter((r) => r.required).length} required, {t.requirements.filter((r) => !r.required).length} optional</span>
                       </div>
-                      <div className="mt-1 truncate" title={`CESS: ${cessSteps}`}>
+                      <ul className="mt-1 space-y-0.5 text-2xs text-ink-600">
+                        {t.requirements.map((r) => (
+                          <li key={r.id} className="flex items-center gap-1.5 truncate" title={`${r.label} (${r.required ? 'Required' : 'Optional'})`}>
+                            <span className={cn('size-1.5 rounded-full shrink-0', r.required ? 'bg-brand-600' : 'bg-ink-300')} />
+                            <span className="truncate font-medium">{r.label}</span>
+                            <span className={cn('text-[10px] font-semibold px-1 rounded', r.required ? 'bg-brand-50 text-brand-700' : 'bg-ink-100 text-ink-500')}>
+                              {r.required ? 'Required' : 'Optional'}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-2 pt-1.5 border-t border-ink-100 truncate" title={`CESS: ${cessSteps}`}>
                         <span className="font-semibold text-brand-700">CESS:</span> {cessSteps}
                       </div>
                       <div className="mt-0.5 truncate" title={`IDS: ${idsSteps}`}>
@@ -310,11 +323,11 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {/* 2. Automated Reminders Configuration (REQ-NOT-3) */}
+      {/* 2. Automated Reminders Configuration */}
       <Card>
         <CardHeader
           icon={Bell}
-          title="Automated Follow-up Reminders (REQ-NOT-3)"
+          title="Automated Follow-up Reminders"
           description="Interval for sending automated reminders to reviewing offices holding pending documents, and progress updates to requesters."
         />
         <div className="p-6">
@@ -343,11 +356,11 @@ export function SettingsPage() {
         </div>
       </Card>
 
-      {/* 3. External University Offices Management (REQ-EXT-1) */}
+      {/* 3. External University Offices Management */}
       <Card>
         <CardHeader
           icon={Building2}
-          title="External University Offices (REQ-EXT-1)"
+          title="External University Offices"
           description="Manage the list of external university offices (such as HRMO, Registrar, and Budget & Accounting) to which the College Secretary records transfers."
         />
         <div className="p-6">
@@ -476,9 +489,9 @@ export function SettingsPage() {
       <Dialog
         open={isDocTypeModalOpen}
         onClose={() => setIsDocTypeModalOpen(false)}
-        size="lg"
+        size="xl"
         title={dtDraft?.id ? `Configure ${dtDraft.name}` : 'Add New Document Type'}
-        description="Edit required forms and attachments (REQ-REQT-1), upload or replace the blank template (REQ-REQT-10), and configure the CESS and IDS approval routes (REQ-ROUTE-1)."
+        description="Edit required forms and attachments, upload or replace the blank template, and configure the CESS and IDS approval routes."
         busy={dtBusy}
         footer={
           <>
@@ -492,8 +505,8 @@ export function SettingsPage() {
         }
       >
         {dtDraft && (
-          <form className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
+          <form className="space-y-6">
+            <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Document Type Name" required>
                 <Input
                   type="text"
@@ -502,7 +515,7 @@ export function SettingsPage() {
                   placeholder="e.g. Travel Order"
                 />
               </Field>
-              <Field label="Requester Audience (REQ-SUB-1)" required>
+              <Field label="Requester Audience" hint="Specify whether this document is submitted by students or faculty." required>
                 <Select
                   value={dtDraft.audience}
                   onChange={(e) => setDtDraft({ ...dtDraft, audience: e.target.value as 'student' | 'faculty' })}
@@ -522,10 +535,10 @@ export function SettingsPage() {
               />
             </Field>
 
-            {/* Template Upload / Replacement (REQ-REQT-9, REQ-REQT-10) */}
+            {/* Template Upload / Replacement */}
             <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-brand-800">
-                Downloadable Form Template (REQ-REQT-9, REQ-REQT-10)
+                Downloadable Form Template
               </p>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-[200px] flex-1">
@@ -549,10 +562,10 @@ export function SettingsPage() {
               </div>
             </div>
 
-            {/* Origin-Based Routes Configuration (REQ-ROUTE-1, REQ-ROUTE-2, REQ-ROUTE-3, REQ-ROUTE-5) */}
+            {/* Origin-Based Routes Configuration */}
             <div className="space-y-4 rounded-xl border border-ink-200 bg-ink-50/40 p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-ink-700">
-                Origin-Based Approval Routes (REQ-ROUTE-1..5)
+                Origin-Based Approval Routes
               </p>
 
               {/* CESS Route */}
@@ -610,11 +623,11 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              {/* IDS Route (Supports IDS Principal 1st and 2nd review, REQ-ROUTE-3) */}
+              {/* IDS Route (Supports IDS Principal 1st and 2nd review) */}
               <div className="border-t border-ink-200/70 pt-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-ink-800">
-                    IDS Route (Supports IDS Principal 1st & 2nd Review, REQ-ROUTE-3):
+                    IDS Route (Supports IDS Principal 1st & 2nd Review):
                   </span>
                   <div className="flex gap-3">
                     <button
@@ -681,10 +694,10 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              {/* Higher Approval after Dean (REQ-ROUTE-5) */}
+              {/* Higher Approval after Dean */}
               <div className="border-t border-ink-200/70 pt-3">
                 <p className="text-xs font-semibold text-ink-800">
-                  Offices after College Dean when Higher Approval is marked (REQ-ROUTE-5):
+                  Offices after College Dean when Higher Approval is marked:
                 </p>
                 <div className="mt-2 flex flex-wrap gap-4">
                   {HIGHER_OFFICE_CHOICES.map((off) => {
@@ -707,11 +720,11 @@ export function SettingsPage() {
               </div>
             </div>
 
-            {/* Required Forms & Attachments Checklist (REQ-REQT-1, REQ-REQT-7) */}
+            {/* Required Forms & Attachments Checklist */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold uppercase tracking-wider text-ink-700">
-                  Required Forms & Attachments Checklist (REQ-REQT-1, REQ-REQT-7)
+                  Required Forms & Attachments Checklist
                 </p>
                 <Button
                   type="button"
@@ -784,8 +797,19 @@ export function SettingsPage() {
                       next[idx] = { ...req, source: e.target.value }
                       setDtDraft({ ...dtDraft, requirements: next })
                     }}
-                    placeholder="Where to get it (REQ-REQT-7), e.g., Registrar's Office, HRMO, or Download template above"
+                    placeholder="Where to get it, e.g., Registrar's Office, HRMO, or Download template above"
                     className="h-8 text-xs"
+                  />
+                  <Input
+                    type="text"
+                    value={req.why ?? ''}
+                    onChange={(e) => {
+                      const next = [...dtDraft.requirements]
+                      next[idx] = { ...req, why: e.target.value }
+                      setDtDraft({ ...dtDraft, requirements: next })
+                    }}
+                    placeholder="Purpose / Why it's needed (e.g. Official request approving offices sign)"
+                    className="h-8 text-xs text-ink-600"
                   />
                 </div>
               ))}
