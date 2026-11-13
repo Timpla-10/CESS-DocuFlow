@@ -1030,6 +1030,78 @@ Mindanao State University at Naawan
         },
       },
     },
+    '/api/auth/users/{id}': {
+      get: {
+        summary: 'Inspect single user account, role, and whitelist verification state (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'User account and role details' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'User not found' },
+        },
+      },
+      put: {
+        summary: 'Update user profile, role, unit, or status with audit trail (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'User updated' },
+          403: { description: 'Forbidden: Secretary only' },
+          409: { description: 'Duplicate email conflict prevented' },
+        },
+      },
+    },
+    '/api/auth/users/{id}/role': {
+      patch: {
+        summary: 'Update verified role assignment with session invalidation & audit log (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Role updated' },
+          400: { description: 'Invalid role or self-demotion denied' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/auth/users/{id}/status': {
+      patch: {
+        summary: 'Activate or deactivate user account with session/office revocation & audit log (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Status updated' },
+          400: { description: 'Invalid status or self-deactivation denied' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/auth/whitelist': {
+      get: {
+        summary: 'List approved institutional whitelist entries (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Approved whitelist list' }, 403: { description: 'Forbidden' } },
+      },
+      post: {
+        summary: 'Add single entry to approved whitelist with duplicate check (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        responses: { 201: { description: 'Whitelist entry created' }, 409: { description: 'Duplicate entry prevented' } },
+      },
+    },
+    '/api/auth/audit-logs': {
+      get: {
+        summary: 'Inspect traceable user, role, and whitelist audit logs (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Chronological user/role/whitelist audit log' }, 403: { description: 'Forbidden' } },
+      },
+    },
   },
 };
 
