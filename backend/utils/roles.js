@@ -131,10 +131,59 @@ function isInstitutionalEmail(email) {
 }
 
 /**
- * PB-02 Acceptance Criteria:
+ * Checks whether the user belongs to the office currently holding the document.
+ */
+function isCurrentHoldingOffice(user, doc) {
+  if (!user || !doc) return false;
+
+  if (user.officeIds && Array.isArray(user.officeIds) && doc.current_office_id) {
+    if (user.officeIds.includes(doc.current_office_id)) return true;
+  }
+
+  const expectedOfficeName = ROLE_TO_OFFICE_NAME[user.role];
+  if (expectedOfficeName && doc.office?.office_name === expectedOfficeName) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Checks whether a reviewing user or their office previously acted on the document in its history.
+ */
+function hasParticipatedInDocument(user, doc) {
+  if (!user || !doc || !REVIEWER_ROLES.includes(user.role)) return false;
+
+  const historyList = Array.isArray(doc.document_history)
+    ? doc.document_history
+    : Array.isArray(doc.history)
+    ? doc.history
+    : [];
+
+  if (historyList.length === 0) return false;
+
+  const expectedOfficeName = ROLE_TO_OFFICE_NAME[user.role];
+  const userOfficeIds = Array.isArray(user.officeIds) ? user.officeIds : [];
+
+  return historyList.some((h) => {
+    const actorId = h.action_by_user_id || h.actor_id;
+    if (actorId && actorId === user.id) return true;
+
+    const actionOfficeId = h.action_office_id || h.office_id;
+    if (actionOfficeId && userOfficeIds.includes(actionOfficeId)) return true;
+
+    const histOfficeName = h.office_name || h.office?.office_name || (typeof h.office === 'string' ? h.office : null);
+    if (expectedOfficeName && histOfficeName === expectedOfficeName) return true;
+
+    return false;
+  });
+}
+
+/**
+ * PB-02 & PB-35 Acceptance Criteria:
  * - Secretary sees all records
- * - Requester sees own requests
- * - Reviewers see routed records
+ * - Requester sees own requests (active and archived)
+ * - Reviewers see records currently routed to their office or previously reviewed/handled by them
  */
 function canViewDocument(user, doc) {
   if (!user || !doc) return false;
@@ -148,13 +197,11 @@ function canViewDocument(user, doc) {
     return true;
   }
 
-  // Reviewer check by office_id or office_name
-  if (user.officeIds && Array.isArray(user.officeIds) && doc.current_office_id) {
-    if (user.officeIds.includes(doc.current_office_id)) return true;
+  if (isCurrentHoldingOffice(user, doc)) {
+    return true;
   }
 
-  const expectedOfficeName = ROLE_TO_OFFICE_NAME[user.role];
-  if (expectedOfficeName && doc.office?.office_name === expectedOfficeName) {
+  if (hasParticipatedInDocument(user, doc)) {
     return true;
   }
 
@@ -177,6 +224,7 @@ function canPerformAction(user, action, doc = null) {
     case 'send_external':
     case 'mark_ready':
     case 'release_document':
+    case 'archive_document':
     case 'encode_walk_in':
       return user.role === ROLES.SECRETARY;
 
@@ -195,7 +243,7 @@ function canPerformAction(user, action, doc = null) {
       if (!doc) return true;
       const requesterId = doc.requester_id || doc.requesterId;
       if (requesterId === user.id) return false;
-      return canViewDocument(user, doc);
+      return isCurrentHoldingOffice(user, doc);
     }
 
     default:
@@ -582,7 +630,7 @@ function getPermittedActions(user, doc) {
     REVIEWER_ROLES.includes(user.role) &&
     status === 'Under_Review' &&
     requesterId !== user.id &&
-    canViewDocument(user, doc)
+    isCurrentHoldingOffice(user, doc)
   ) {
     const nextOffice = getDefaultNextOfficeForEndorsement(user.role, doc.origin);
 
@@ -643,6 +691,8 @@ module.exports = {
   fromDbRoleName,
   getRoleLabel,
   isInstitutionalEmail,
+  isCurrentHoldingOffice,
+  hasParticipatedInDocument,
   canViewDocument,
   canPerformAction,
   getApprovedRoute,

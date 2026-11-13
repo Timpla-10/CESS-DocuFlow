@@ -3,6 +3,13 @@ const NotificationModel = require('./notificationModel');
 
 const DOC_SELECT = `
   *,
+  requester:requester_id (
+    user_id,
+    first_name,
+    last_name,
+    university_email,
+    department_or_office
+  ),
   office:current_office_id (
     office_id,
     office_name,
@@ -36,6 +43,26 @@ const DOC_SELECT = `
     )
   )
 `;
+
+const ACTIVE_STATUSES = [
+  'Submitted',
+  'Under_Review',
+  'Returned',
+  'With_External_Office',
+  'Ready_for_Release',
+];
+
+const ARCHIVED_STATUSES = ['Released', 'Archived', 'Rejected'];
+
+function isArchivedDocument(doc) {
+  if (!doc) return false;
+  return Boolean(
+    doc.is_archived ||
+    doc.archived ||
+    doc.is_deleted ||
+    ARCHIVED_STATUSES.includes(doc.current_status)
+  );
+}
 
 const ACTION_TO_STATUS = {
   Submitted: 'Submitted',
@@ -145,13 +172,13 @@ function normalizeDoc(raw) {
 
   if (history.length > 0) {
     const latest = history[history.length - 1];
-    if (latest.action_type === 'Archived') {
+    if (latest.action_type === 'Archived' && latest.action_remarks === 'Archived test record.') {
       is_deleted = true;
     }
     if (ACTION_TO_STATUS[latest.action_type]) {
       current_status = ACTION_TO_STATUS[latest.action_type];
     }
-    if (latest.action_type === 'Returned' || latest.action_type === 'Rejected') {
+    if (latest.action_type === 'Returned' || latest.action_type === 'Rejected' || latest.action_type === 'Archived' || latest.action_type === 'Released') {
       current_office_id = null;
       office = null;
     } else if (latest.action_type === 'Endorsed' || latest.action_type === 'Approved') {
@@ -228,8 +255,9 @@ function normalizeDoc(raw) {
 
   // PB-26 / REQ-REC-4: Normalize each history milestone with actor, office, action, remarks, timestamp
   const normalizedHistory = history.map((h) => {
-    const actorName = h.user
-      ? `${h.user.first_name || ''} ${h.user.last_name || ''}`.trim() || h.user.university_email
+    const actorObj = h.actor || h.user;
+    const actorName = actorObj
+      ? `${actorObj.first_name || ''} ${actorObj.last_name || ''}`.trim() || actorObj.university_email
       : null;
     const officeName = h.office?.office_name || officeLookupById[h.action_office_id]?.office_name || null;
     return {
@@ -247,13 +275,68 @@ function normalizeDoc(raw) {
       actor_id: h.action_by_user_id,
       actor_name: actorName,
       actor: actorName,
-      actor_email: h.user?.university_email || null,
+      actor_email: actorObj?.university_email || null,
       action_office_id: h.action_office_id,
       office_id: h.action_office_id,
       office_name: officeName,
       office: officeName,
     };
   });
+
+  // Extract release and archive metadata from immutable audit trail (PB-33 / PB-35)
+  let releaseInfo = null;
+  const latestReleaseEntry = [...normalizedHistory].reverse().find((h) => h.action_type === 'Released');
+  if (latestReleaseEntry) {
+    const remarksStr = latestReleaseEntry.action_remarks || '';
+    const recipientMatch = remarksStr.match(/^Released to ([^.]+)\.?/i);
+    releaseInfo = {
+      receivedBy: recipientMatch ? recipientMatch[1].trim() : null,
+      releasedAt: latestReleaseEntry.action_timestamp,
+      recordedBy: latestReleaseEntry.actor_name || 'College Secretary',
+      remarks: remarksStr,
+    };
+  }
+
+  let archiveInfo = null;
+  const latestArchiveEntry = [...normalizedHistory].reverse().find((h) => h.action_type === 'Archived');
+  if (latestArchiveEntry) {
+    archiveInfo = {
+      archivedAt: latestArchiveEntry.action_timestamp,
+      archivedBy: latestArchiveEntry.actor_name || 'College Secretary',
+      remarks: latestArchiveEntry.action_remarks || '',
+    };
+  }
+
+  const requester = raw.requester
+    ? {
+        user_id: raw.requester.user_id,
+        id: raw.requester.user_id,
+        name: `${raw.requester.first_name || ''} ${raw.requester.last_name || ''}`.trim() || raw.requester.university_email,
+        email: raw.requester.university_email || null,
+        department: raw.requester.department_or_office || null,
+      }
+    : null;
+
+  // Normalize attachments chronologically with convenient field aliases (PB-35 / PB-19)
+  const rawAttachments = Array.isArray(raw.document_attachment) ? [...raw.document_attachment] : [];
+  rawAttachments.sort((a, b) => {
+    const revDiff = (Number(a.revision_no) || 1) - (Number(b.revision_no) || 1);
+    if (revDiff !== 0) return revDiff;
+    return new Date(a.uploaded_at || 0).getTime() - new Date(b.uploaded_at || 0).getTime();
+  });
+  const normalizedAttachments = rawAttachments.map((a) => ({
+    ...a,
+    id: a.attachment_id,
+    name: a.file_name,
+    url: a.file_url,
+    type: a.file_type,
+    sizeKb: a.file_size_kb,
+    revision: Number(a.revision_no) || 1,
+    is_signed_copy:
+      Boolean(a.is_signed_copy) ||
+      /signed/i.test(a.file_name || '') ||
+      (releaseInfo?.remarks && releaseInfo.remarks.includes(a.file_name || '')),
+  }));
 
   // PB-26 / REQ-TRK-2: Calculate office arrival timestamp (officeSince) & waiting duration (timeWaitingMs)
   let officeSince = raw.submitted_at || null;
@@ -304,9 +387,50 @@ function normalizeDoc(raw) {
     };
   }
 
+  const archived = Boolean(is_deleted || ARCHIVED_STATUSES.includes(current_status));
+  const lifecycleView = archived ? 'archived' : 'active';
+  const typeName = raw.document_type?.type_name || null;
+
+  const metadata = {
+    documentId: raw.document_id,
+    controlNumber: raw.control_number,
+    title: raw.title,
+    description: raw.description || '',
+    docTypeId: raw.doc_type_id,
+    typeName,
+    category: typeName,
+    documentType: raw.document_type || null,
+    origin: raw.origin,
+    status: current_status,
+    statusLabel,
+    currentRevision: current_revision_no,
+    currentOffice: office?.office_name || null,
+    currentOfficeId: current_office_id || null,
+    submittedAt: raw.submitted_at,
+    lastUpdatedAt: raw.last_updated_at || raw.submitted_at,
+    officeSince,
+    timeWaitingMs,
+    daysWaiting,
+    standardProcessingDays: raw.document_type?.standard_processing_days || null,
+    priority,
+    isExpedited: is_expedited,
+    isArchived: archived,
+    lifecycleView,
+    requester,
+    releaseInfo,
+    archiveInfo,
+    returnInfo,
+    rejectionInfo,
+    lastDecision,
+  };
+
   return {
     ...raw,
     id: raw.document_id,
+    requester,
+    requesterName: requester?.name || null,
+    typeName,
+    category: typeName,
     current_status,
     statusLabel,
     current_office_id,
@@ -319,6 +443,13 @@ function normalizeDoc(raw) {
     priority,
     exception_info,
     is_deleted,
+    archived,
+    isArchived: archived,
+    is_archived: archived,
+    lifecycleView,
+    releaseInfo,
+    archiveInfo,
+    metadata,
     returnReason,
     returnInfo,
     rejectionReason,
@@ -327,8 +458,8 @@ function normalizeDoc(raw) {
     document_history: normalizedHistory,
     history: normalizedHistory,
     timeline: normalizedHistory,
-    document_attachment: raw.document_attachment || [],
-    attachments: raw.document_attachment || [],
+    document_attachment: normalizedAttachments,
+    attachments: normalizedAttachments,
   };
 }
 
@@ -359,6 +490,51 @@ function mapPreferenceRow(row) {
   };
 }
 
+function applyCacheOverride(doc, cached) {
+  if (!doc || !cached) return doc;
+  const officeId = cached.current_office_id !== undefined ? cached.current_office_id : doc.current_office_id;
+  const officeObj = officeId === null ? null : (officeId && officeLookupById[officeId]) || cached.office || doc.office;
+  const status = cached.current_status || doc.current_status;
+  const statusLabel = STATUS_LABELS[status] || doc.statusLabel;
+  const title = cached.title !== undefined ? cached.title : doc.title;
+  const description = cached.description !== undefined ? cached.description : doc.description;
+  const lastUpdatedAt = cached.last_updated_at || doc.last_updated_at;
+  const archived = isArchivedDocument({ ...doc, current_status: status });
+  const lifecycleView = archived ? 'archived' : 'active';
+
+  return {
+    ...doc,
+    title,
+    description,
+    last_updated_at: lastUpdatedAt,
+    current_status: status,
+    statusLabel,
+    current_office_id: officeId,
+    office: officeObj,
+    archived,
+    isArchived: archived,
+    is_archived: archived,
+    lifecycleView,
+    metadata: doc.metadata
+      ? {
+          ...doc.metadata,
+          title,
+          description,
+          status,
+          statusLabel,
+          currentOffice: officeObj?.office_name || null,
+          currentOfficeId: officeId || null,
+          lastUpdatedAt,
+          isArchived: archived,
+          lifecycleView,
+        }
+      : doc.metadata,
+    is_expedited: cached.is_expedited !== undefined ? cached.is_expedited : doc.is_expedited,
+    priority: cached.priority || doc.priority,
+    exception_info: cached.exception_info || doc.exception_info,
+  };
+}
+
 const DocumentModel = {
   async findAll(options = {}) {
     await ensureOfficesLoaded();
@@ -372,30 +548,8 @@ const DocumentModel = {
       .order('submitted_at', { ascending });
     if (error) throw error;
 
-    let docs = (data || []).map(normalizeDoc).filter((d) => !d.is_deleted);
-
-    // Apply in-memory cached properties (e.g. exception flags, decisions, fallback updates)
-    docs = docs.map((d) => {
-      const cached = docCache.get(d.document_id);
-      if (cached) {
-        const officeId = cached.current_office_id !== undefined ? cached.current_office_id : d.current_office_id;
-        const officeObj = (officeId && officeLookupById[officeId]) || (officeId ? cached.office : null) || d.office;
-        const status = cached.current_status || d.current_status;
-        return {
-          ...d,
-          current_status: status,
-          statusLabel: STATUS_LABELS[status] || d.statusLabel,
-          current_office_id: officeId,
-          office: officeObj,
-          is_expedited: cached.is_expedited !== undefined ? cached.is_expedited : d.is_expedited,
-          priority: cached.priority || d.priority,
-          exception_info: cached.exception_info || d.exception_info,
-        };
-      }
-      return d;
-    });
-
-    return docs;
+    const docs = (data || []).map(normalizeDoc).filter((d) => !d.is_deleted);
+    return docs.map((d) => applyCacheOverride(d, docCache.get(d.document_id)));
   },
 
   async findById(id, { includeDeleted = false } = {}) {
@@ -407,48 +561,26 @@ const DocumentModel = {
       .maybeSingle();
     if (error) throw error;
     const doc = normalizeDoc(data);
-    const cached = docCache.get(id);
     if (!doc || (!includeDeleted && doc.is_deleted)) return null;
-    if (cached) {
-      const officeId = cached.current_office_id !== undefined ? cached.current_office_id : doc.current_office_id;
-      const officeObj = (officeId && officeLookupById[officeId]) || cached.office || doc.office;
-      return {
-        ...doc,
-        ...cached,
-        current_status: cached.current_status || doc.current_status,
-        statusLabel: STATUS_LABELS[cached.current_status || doc.current_status] || doc.statusLabel,
-        current_office_id: officeId,
-        office: officeObj,
-        officeSince: doc.officeSince,
-        timeWaitingMs: doc.timeWaitingMs,
-        returnReason: doc.returnReason,
-        returnInfo: doc.returnInfo,
-        rejectionReason: doc.rejectionReason,
-        rejectionInfo: doc.rejectionInfo,
-        lastDecision: doc.lastDecision,
-        document_attachment: doc.document_attachment,
-        document_history: doc.document_history,
-        history: doc.history,
-        timeline: doc.timeline,
-        attachments: doc.attachments,
-        is_expedited: cached.is_expedited !== undefined ? cached.is_expedited : doc.is_expedited,
-        priority: cached.priority || doc.priority,
-        exception_info: cached.exception_info || doc.exception_info,
-      };
-    }
-    return doc;
+    return applyCacheOverride(doc, docCache.get(id));
   },
 
-  async findByRequester(requesterId) {
+  async findByRequester(requesterId, { includeDeleted = false } = {}) {
     await ensureOfficesLoaded();
-    const { data, error } = await supabase
+    let query = supabase
       .from('document_request')
       .select(DOC_SELECT)
       .eq('requester_id', requesterId)
-      .eq('is_deleted', false)
       .order('submitted_at', { ascending: false });
+
+    if (!includeDeleted) {
+      query = query.eq('is_deleted', false);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
-    return (data || []).map(normalizeDoc).filter((d) => !d.is_deleted);
+    const docs = (data || []).map(normalizeDoc).filter((d) => includeDeleted || !d.is_deleted);
+    return docs.map((d) => applyCacheOverride(d, docCache.get(d.document_id)));
   },
 
   async getDefaultDocTypeId(origin = 'CESS') {
@@ -490,17 +622,18 @@ const DocumentModel = {
       // Fallback if DB trigger `trg_doc_request_updated_at` references `NEW.updated_at` instead of `NEW.last_updated_at`
       if (error.code === '42703') {
         const current = await this.findById(id);
-        const merged = { ...current, ...updates };
+        const nowIso = new Date().toISOString();
+        const nextCache = {
+          ...(docCache.get(id) || {}),
+          ...updates,
+          last_updated_at: updates.last_updated_at || nowIso,
+        };
         if (updates.current_office_id !== undefined) {
-          merged.current_office_id = updates.current_office_id;
-          merged.office = (updates.current_office_id && officeLookupById[updates.current_office_id]) || null;
+          nextCache.current_office_id = updates.current_office_id;
+          nextCache.office = (updates.current_office_id && officeLookupById[updates.current_office_id]) || null;
         }
-        if (updates.current_status !== undefined) {
-          merged.current_status = updates.current_status;
-          merged.statusLabel = STATUS_LABELS[updates.current_status] || updates.current_status;
-        }
-        docCache.set(id, merged);
-        return merged;
+        docCache.set(id, nextCache);
+        return applyCacheOverride(current, nextCache);
       }
       throw error;
     }
@@ -857,6 +990,9 @@ const DocumentModel = {
       routes,
     };
   },
+  isArchivedDocument,
+  ACTIVE_STATUSES,
+  ARCHIVED_STATUSES,
 };
 
 module.exports = DocumentModel;

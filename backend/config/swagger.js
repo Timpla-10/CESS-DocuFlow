@@ -358,6 +358,13 @@ Mindanao State University at Naawan
           { name: 'sort', in: 'query', schema: { type: 'string', enum: ['oldest', 'newest', 'waiting_longest'], default: 'oldest' }, description: 'PB-29: Queue ordering (default oldest eligible first / FIFO per SRS 3.9)' },
           { name: 'priority', in: 'query', schema: { type: 'string', enum: ['Urgent', 'Standard'] }, description: 'PB-29: Filter by priority' },
           { name: 'is_expedited', in: 'query', schema: { type: 'boolean' }, description: 'PB-29: Filter approved expedited exception requests only' },
+          { name: 'view', in: 'query', schema: { type: 'string', enum: ['active', 'archived', 'all'] }, description: 'PB-35: Filter by active vs archived lifecycle view' },
+          { name: 'archived', in: 'query', schema: { type: 'boolean' }, description: 'PB-35: Boolean shorthand for archived (true) vs active (false) records' },
+          { name: 'docTypeId', in: 'query', schema: { type: 'integer' }, description: 'PB-35: Filter by document type ID' },
+          { name: 'category', in: 'query', schema: { type: 'string' }, description: 'PB-35: Filter by document type / category name' },
+          { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['type', 'category', 'origin', 'audience', 'status'] }, description: 'PB-35: Group records into repository groups' },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date' }, description: 'PB-35: Filter records submitted on or after this date' },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date' }, description: 'PB-35: Filter records submitted on or before this date' },
         ],
         responses: {
           200: { description: 'List of accessible document requests' },
@@ -528,6 +535,77 @@ Mindanao State University at Naawan
         responses: {
           200: { description: 'Queues: intake, routed, returned, external, release, archived with counts' },
           403: { description: 'Forbidden: Secretary access only' },
+        },
+      },
+    },
+    '/api/documents/repository': {
+      get: {
+        summary: 'Browse Central Repository grouped by type/category with distinct Active and Archived views (PB-35)',
+        tags: ['Documents'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'view', in: 'query', schema: { type: 'string', enum: ['active', 'archived', 'all'], default: 'active' }, description: 'PB-35: Distinct active vs archived lifecycle view' },
+          { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['type', 'category', 'origin', 'audience', 'status'], default: 'type' }, description: 'PB-35: Repository grouping dimension' },
+          { name: 'docTypeId', in: 'query', schema: { type: 'integer' }, description: 'Filter by document type ID' },
+          { name: 'category', in: 'query', schema: { type: 'string' }, description: 'Filter by document type/category name' },
+          { name: 'origin', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS'] } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'includeEmpty', in: 'query', schema: { type: 'boolean', default: false }, description: 'Include empty eligible document type folders' },
+        ],
+        responses: {
+          200: { description: 'Grouped central repository records, category counts, and summary' },
+          400: { description: 'Invalid view or groupBy parameter' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/documents/archive': {
+      get: {
+        summary: 'Browse distinct Archived Records vault (Released, Rejected, Archived) grouped by type/category (PB-35)',
+        tags: ['Documents'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['type', 'category', 'origin', 'audience', 'status'], default: 'type' } },
+          { name: 'docTypeId', in: 'query', schema: { type: 'integer' } },
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+          { name: 'origin', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS'] } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'includeEmpty', in: 'query', schema: { type: 'boolean', default: false } },
+        ],
+        responses: {
+          200: { description: 'Grouped archived records vault strictly separated from active records' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/documents/{id}/archive': {
+      post: {
+        summary: 'Archive a document record into the central archive vault (PB-35 - CESS Secretary only)',
+        tags: ['Secretary Workstation'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  remarks: { type: 'string', example: 'Archived after completion.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Document archived and moved strictly to Archived view' },
+          400: { description: 'Document is already archived' },
+          403: { description: 'Forbidden: Only CESS Secretary may archive documents' },
+          404: { description: 'Document not found' },
         },
       },
     },

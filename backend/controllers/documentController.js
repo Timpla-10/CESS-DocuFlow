@@ -213,7 +213,7 @@ const DocumentController = {
    */
   async listDocuments(req, res, next) {
     try {
-      const docs = await AccessControlService.getVisibleDocumentsForUser(req.user, {
+      const filters = {
         queue: req.query.queue,
         stage: req.query.stage,
         office: req.query.office,
@@ -223,7 +223,36 @@ const DocumentController = {
         sort: req.query.sort,
         priority: req.query.priority,
         is_expedited: req.query.is_expedited || req.query.expedited,
-      });
+        view: req.query.view,
+        archived: req.query.archived,
+        docTypeId: req.query.docTypeId || req.query.typeId || req.query.doc_type_id,
+        category: req.query.category || req.query.type || req.query.typeName,
+        status: req.query.status,
+        search: req.query.search || req.query.q,
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo,
+        includeEmpty: req.query.includeEmpty,
+      };
+
+      if (req.query.groupBy || req.query.group_by) {
+        const repo = await AccessControlService.getRepository(req.user, {
+          ...filters,
+          groupBy: req.query.groupBy || req.query.group_by,
+          view: filters.view || 'all',
+        });
+        return res.json({
+          viewer: repo.viewer,
+          count: repo.documents.length,
+          view: repo.view,
+          groupBy: repo.groupBy,
+          summary: repo.summary,
+          categories: repo.categories,
+          groups: repo.groups,
+          documents: repo.documents,
+        });
+      }
+
+      const docs = await AccessControlService.getVisibleDocumentsForUser(req.user, filters);
       res.json({
         viewer: {
           id: req.user.id,
@@ -235,6 +264,61 @@ const DocumentController = {
         count: docs.length,
         documents: docs,
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/repository
+   * PB-35: Central repository grouped by type/category with distinct active & archived views
+   */
+  async getRepository(req, res, next) {
+    try {
+      const repo = await AccessControlService.getRepository(req.user, {
+        view: req.query.view || 'active',
+        groupBy: req.query.groupBy || req.query.group_by || 'type',
+        origin: req.query.origin,
+        status: req.query.status,
+        stage: req.query.stage,
+        office: req.query.office,
+        officeId: req.query.officeId,
+        priority: req.query.priority,
+        is_expedited: req.query.is_expedited || req.query.expedited,
+        docTypeId: req.query.docTypeId || req.query.typeId || req.query.doc_type_id,
+        category: req.query.category || req.query.type || req.query.typeName,
+        search: req.query.search || req.query.q,
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo,
+        sort: req.query.sort,
+        includeEmpty: req.query.includeEmpty,
+      });
+      res.json(repo);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * GET /api/documents/archive
+   * PB-35: Distinct archived repository view (Released, Rejected, Archived)
+   */
+  async getArchive(req, res, next) {
+    try {
+      const repo = await AccessControlService.getRepository(req.user, {
+        view: 'archived',
+        groupBy: req.query.groupBy || req.query.group_by || 'type',
+        origin: req.query.origin,
+        status: req.query.status,
+        docTypeId: req.query.docTypeId || req.query.typeId || req.query.doc_type_id,
+        category: req.query.category || req.query.type || req.query.typeName,
+        search: req.query.search || req.query.q,
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo,
+        sort: req.query.sort || 'newest',
+        includeEmpty: req.query.includeEmpty,
+      });
+      res.json(repo);
     } catch (err) {
       next(err);
     }
@@ -338,6 +422,9 @@ const DocumentController = {
       const doc = await AccessControlService.getDocumentByIdForUser(req.user, req.params.id);
       res.json({
         document: doc,
+        metadata: doc.metadata || null,
+        attachments: doc.attachments || [],
+        history: doc.history || [],
         permittedActions: doc.permittedActions || [],
         permittedOptions: doc.permittedOptions || [],
       });
@@ -530,6 +617,27 @@ const DocumentController = {
         document: updated,
         releaseInfo: updated?.releaseInfo || null,
         notification: updated?.notification || null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * POST /api/documents/:id/archive
+   * PB-35: Archive a document record into the central archive vault (Secretary only)
+   */
+  async archiveDocument(req, res, next) {
+    try {
+      const archived = await AccessControlService.archiveDocument(
+        req.user,
+        req.params.id,
+        req.body
+      );
+      res.json({
+        message: 'Document archived in central repository.',
+        document: archived,
+        archiveInfo: archived?.archiveInfo || null,
       });
     } catch (err) {
       next(err);

@@ -187,6 +187,111 @@ const AccessControlService = {
       docs = docs.filter((d) => d.origin === orig);
     }
 
+    // PB-35: Filter by lifecycle view (?view=active | archived | all, or ?archived=true|false)
+    if (options.view !== undefined && options.view !== null && options.view !== '') {
+      const v = String(options.view).toLowerCase().trim();
+      if (!['active', 'archived', 'all'].includes(v)) {
+        const err = new Error(`Invalid repository view '${options.view}'. Expected 'active', 'archived', or 'all'.`);
+        err.status = 400;
+        throw err;
+      }
+      if (v === 'active') {
+        docs = docs.filter((d) => !DocumentModel.isArchivedDocument(d));
+      } else if (v === 'archived') {
+        docs = docs.filter((d) => DocumentModel.isArchivedDocument(d));
+      }
+    } else if (options.archived !== undefined && options.archived !== null && options.archived !== '') {
+      const wantArchived = options.archived === true || String(options.archived).toLowerCase() === 'true';
+      const wantActive = options.archived === false || String(options.archived).toLowerCase() === 'false';
+      if (wantArchived) {
+        docs = docs.filter((d) => DocumentModel.isArchivedDocument(d));
+      } else if (wantActive) {
+        docs = docs.filter((d) => !DocumentModel.isArchivedDocument(d));
+      }
+    }
+
+    // PB-35: Filter by status (?status=Under_Review or ?status=Released,Archived)
+    if (options.status) {
+      const statuses = String(options.status)
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      if (statuses.length > 0) {
+        docs = docs.filter((d) => statuses.includes((d.current_status || '').toLowerCase()));
+      }
+    }
+
+    // PB-35: Filter by document type ID (?docTypeId=1 or ?typeId=1)
+    const rawTypeId = options.docTypeId ?? options.typeId ?? options.doc_type_id;
+    if (rawTypeId !== undefined && rawTypeId !== null && rawTypeId !== '') {
+      const targetTypeId = Number(rawTypeId);
+      if (!Number.isNaN(targetTypeId)) {
+        docs = docs.filter(
+          (d) => Number(d.doc_type_id || d.document_type?.doc_type_id) === targetTypeId
+        );
+      }
+    }
+
+    // PB-35: Filter by type/category name (?category=... or ?type=...)
+    const rawCategory = options.category ?? options.type ?? options.typeName;
+    if (rawCategory !== undefined && rawCategory !== null && String(rawCategory).trim() !== '') {
+      const targetCat = String(rawCategory).trim().toLowerCase();
+      if (/^\d+$/.test(targetCat)) {
+        const numericCatId = Number(targetCat);
+        docs = docs.filter(
+          (d) => Number(d.doc_type_id || d.document_type?.doc_type_id) === numericCatId
+        );
+      } else {
+        docs = docs.filter((d) => {
+          const typeName = (d.typeName || d.document_type?.type_name || d.category || '').toLowerCase();
+          return typeName === targetCat || typeName.includes(targetCat);
+        });
+      }
+    }
+
+    // PB-35: Search across control number, title, description, type, office, requester
+    const rawSearch = options.search ?? options.q;
+    if (rawSearch !== undefined && rawSearch !== null && String(rawSearch).trim() !== '') {
+      const q = String(rawSearch).trim().toLowerCase();
+      docs = docs.filter((d) => {
+        const haystack = [
+          d.control_number,
+          d.tracking_code,
+          d.title,
+          d.description,
+          d.typeName,
+          d.document_type?.type_name,
+          d.office?.office_name,
+          d.requester?.fullName,
+          d.requester?.email,
+          d.current_status,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    // PB-35: Date range filtering (?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD)
+    if (options.dateFrom) {
+      const fromMs = new Date(options.dateFrom).getTime();
+      if (!Number.isNaN(fromMs)) {
+        docs = docs.filter((d) => new Date(d.submitted_at || 0).getTime() >= fromMs);
+      }
+    }
+    if (options.dateTo) {
+      const toDate = new Date(options.dateTo);
+      if (!Number.isNaN(toDate.getTime())) {
+        // Include entire end day when date-only string is supplied
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(options.dateTo).trim())) {
+          toDate.setUTCHours(23, 59, 59, 999);
+        }
+        const toMs = toDate.getTime();
+        docs = docs.filter((d) => new Date(d.submitted_at || 0).getTime() <= toMs);
+      }
+    }
+
     // PB-29: Filter by priority (?priority=urgent or ?priority=standard)
     if (options.priority) {
       const p = String(options.priority).toLowerCase();
@@ -220,6 +325,215 @@ const AccessControlService = {
     }
 
     return docs;
+  },
+
+  /**
+   * PB-35: Central Repository grouped by type/category (or origin/audience/status),
+   * strictly separating Active and Archived lifecycle views while enforcing RBAC.
+   */
+  async getRepository(user, options = {}) {
+    const view = String(options.view || 'active').toLowerCase().trim();
+    if (!['active', 'archived', 'all'].includes(view)) {
+      const err = new Error(`Invalid repository view '${options.view}'. Expected 'active', 'archived', or 'all'.`);
+      err.status = 400;
+      throw err;
+    }
+
+    const rawGroupBy = String(options.groupBy || options.group_by || 'type').toLowerCase().trim();
+    const groupBy = rawGroupBy === 'category' ? 'type' : rawGroupBy;
+    if (!['type', 'origin', 'audience', 'status'].includes(groupBy)) {
+      const err = new Error(`Invalid groupBy '${options.groupBy}'. Expected 'type', 'category', 'origin', 'audience', or 'status'.`);
+      err.status = 400;
+      throw err;
+    }
+
+    const includeEmpty = options.includeEmpty === true || String(options.includeEmpty).toLowerCase() === 'true';
+
+    // Query user-visible docs across both views first so activeCount & archivedCount reflect current filters
+    const scopedDocs = await this.getVisibleDocumentsForUser(user, {
+      ...options,
+      view: undefined,
+      archived: undefined,
+    });
+
+    const activeDocs = scopedDocs.filter((d) => !DocumentModel.isArchivedDocument(d));
+    const archivedDocs = scopedDocs.filter((d) => DocumentModel.isArchivedDocument(d));
+    const targetDocs = view === 'archived' ? archivedDocs : view === 'all' ? scopedDocs : activeDocs;
+
+    const eligibleTypes = await DocumentTypeModel.findEligibleForRole(user.role, user.origin, {
+      includeInactive: true,
+    });
+
+    const typeMetaById = new Map();
+    eligibleTypes.forEach((dt) => {
+      typeMetaById.set(Number(dt.doc_type_id), dt);
+    });
+
+    const categoryMap = new Map();
+    eligibleTypes.forEach((dt) => {
+      categoryMap.set(String(dt.doc_type_id), {
+        key: String(dt.doc_type_id),
+        doc_type_id: dt.doc_type_id,
+        type_name: dt.type_name,
+        category: dt.type_name,
+        origin: dt.origin,
+        target_audience: dt.target_audience,
+        standard_processing_days: dt.standard_processing_days,
+        is_active: dt.is_active !== false,
+        activeCount: 0,
+        archivedCount: 0,
+        totalCount: 0,
+        viewCount: 0,
+      });
+    });
+
+    for (const doc of scopedDocs) {
+      const dtId = doc.doc_type_id || doc.document_type?.doc_type_id || null;
+      const typeName = doc.typeName || doc.document_type?.type_name || 'Uncategorized';
+      const catKey = dtId ? String(dtId) : `name:${typeName.toLowerCase()}`;
+      if (!categoryMap.has(catKey)) {
+        const dtMeta = dtId ? typeMetaById.get(Number(dtId)) : null;
+        categoryMap.set(catKey, {
+          key: catKey,
+          doc_type_id: dtId,
+          type_name: typeName,
+          category: typeName,
+          origin: doc.origin || dtMeta?.origin || 'CESS',
+          target_audience: doc.document_type?.target_audience || dtMeta?.target_audience || null,
+          standard_processing_days: doc.document_type?.standard_processing_days || dtMeta?.standard_processing_days || 3,
+          is_active: dtMeta ? dtMeta.is_active !== false : true,
+          activeCount: 0,
+          archivedCount: 0,
+          totalCount: 0,
+          viewCount: 0,
+        });
+      }
+      const entry = categoryMap.get(catKey);
+      entry.totalCount += 1;
+      if (DocumentModel.isArchivedDocument(doc)) {
+        entry.archivedCount += 1;
+      } else {
+        entry.activeCount += 1;
+      }
+    }
+
+    for (const doc of targetDocs) {
+      const dtId = doc.doc_type_id || doc.document_type?.doc_type_id || null;
+      const typeName = doc.typeName || doc.document_type?.type_name || 'Uncategorized';
+      const catKey = dtId ? String(dtId) : `name:${typeName.toLowerCase()}`;
+      if (categoryMap.has(catKey)) {
+        categoryMap.get(catKey).viewCount += 1;
+      }
+    }
+
+    const categories = Array.from(categoryMap.values()).sort((a, b) => {
+      if ((a.origin || '') !== (b.origin || '')) return (a.origin || '').localeCompare(b.origin || '');
+      return (a.type_name || '').localeCompare(b.type_name || '');
+    });
+
+    const groupMap = new Map();
+    if (groupBy === 'type' && includeEmpty) {
+      for (const cat of categories) {
+        groupMap.set(cat.key, {
+          key: cat.key,
+          groupBy: 'type',
+          doc_type_id: cat.doc_type_id,
+          label: cat.type_name,
+          typeName: cat.type_name,
+          category: cat.type_name,
+          origin: cat.origin,
+          targetAudience: cat.target_audience,
+          standardProcessingDays: cat.standard_processing_days,
+          count: 0,
+          latestActivityAt: null,
+          documents: [],
+        });
+      }
+    }
+
+    for (const doc of targetDocs) {
+      let gKey;
+      let label;
+      let extra = {};
+
+      if (groupBy === 'origin') {
+        gKey = doc.origin || 'Unknown';
+        label = doc.origin === 'IDS' ? 'IDS (Integrated Developmental School)' : doc.origin === 'CESS' ? 'CESS (College of Education)' : gKey;
+        extra = { origin: doc.origin || null };
+      } else if (groupBy === 'audience') {
+        const aud = doc.document_type?.target_audience || doc.origin || 'General';
+        gKey = aud;
+        label = aud;
+        extra = { targetAudience: aud };
+      } else if (groupBy === 'status') {
+        gKey = doc.current_status || 'Unknown';
+        label = gKey.replace(/_/g, ' ');
+        extra = { status: doc.current_status, isArchived: DocumentModel.isArchivedDocument(doc) };
+      } else {
+        const dtId = doc.doc_type_id || doc.document_type?.doc_type_id || null;
+        const typeName = doc.typeName || doc.document_type?.type_name || 'Uncategorized';
+        gKey = dtId ? String(dtId) : `name:${typeName.toLowerCase()}`;
+        label = typeName;
+        extra = {
+          doc_type_id: dtId,
+          typeName,
+          category: typeName,
+          origin: doc.origin || doc.document_type?.origin || null,
+          targetAudience: doc.document_type?.target_audience || null,
+          standardProcessingDays: doc.document_type?.standard_processing_days || null,
+        };
+      }
+
+      if (!groupMap.has(gKey)) {
+        groupMap.set(gKey, {
+          key: gKey,
+          groupBy,
+          label,
+          ...extra,
+          count: 0,
+          latestActivityAt: null,
+          documents: [],
+        });
+      }
+
+      const group = groupMap.get(gKey);
+      group.documents.push(doc);
+      group.count = group.documents.length;
+      const activityTs = doc.last_updated_at || doc.submitted_at || null;
+      if (activityTs && (!group.latestActivityAt || new Date(activityTs).getTime() > new Date(group.latestActivityAt).getTime())) {
+        group.latestActivityAt = activityTs;
+      }
+    }
+
+    const groups = Array.from(groupMap.values()).sort((a, b) => (a.label || '').localeCompare(b.label || ''));
+
+    return {
+      viewer: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        roleLabel: getRoleLabel(user.role, user.origin),
+        origin: user.origin || null,
+      },
+      view,
+      groupBy,
+      summary: {
+        view,
+        groupBy,
+        totalRecords: targetDocs.length,
+        totalGroups: groups.length,
+        activeCount: activeDocs.length,
+        archivedCount: archivedDocs.length,
+        cessCount: targetDocs.filter((d) => d.origin === 'CESS').length,
+        idsCount: targetDocs.filter((d) => d.origin === 'IDS').length,
+        releasedCount: archivedDocs.filter((d) => d.current_status === 'Released').length,
+        rejectedCount: archivedDocs.filter((d) => d.current_status === 'Rejected').length,
+        manuallyArchivedCount: archivedDocs.filter((d) => d.current_status === 'Archived').length,
+      },
+      categories,
+      groups,
+      documents: targetDocs,
+    };
   },
 
   /**
@@ -366,9 +680,43 @@ const AccessControlService = {
       throw err;
     }
 
+    const attachments = [...(doc.document_attachments || doc.attachments || [])].sort(
+      (a, b) => new Date(a.uploaded_at || a.created_at || 0).getTime() - new Date(b.uploaded_at || b.created_at || 0).getTime()
+    );
+    const history = [...(doc.document_history || doc.history || [])].sort(
+      (a, b) => new Date(a.action_timestamp || 0).getTime() - new Date(b.action_timestamp || 0).getTime()
+    );
+
+    const metadata = doc.metadata || {
+      documentId: doc.document_id,
+      controlNumber: doc.control_number,
+      trackingCode: doc.tracking_code || doc.control_number,
+      title: doc.title,
+      description: doc.description || '',
+      origin: doc.origin || 'CESS',
+      priority: doc.priority || 'Standard',
+      isExpedited: Boolean(doc.is_expedited),
+      revisionNumber: doc.revision_number || 1,
+      currentStatus: doc.current_status,
+      isArchived: DocumentModel.isArchivedDocument(doc),
+      lifecycleView: DocumentModel.isArchivedDocument(doc) ? 'archived' : 'active',
+      submittedAt: doc.submitted_at,
+      lastUpdatedAt: doc.last_updated_at || doc.submitted_at,
+      documentType: doc.document_type || null,
+      requester: doc.requester || null,
+      currentOffice: doc.office || null,
+      releaseInfo: doc.releaseInfo || null,
+      archiveInfo: doc.archiveInfo || null,
+      returnInfo: doc.returnInfo || null,
+      rejectionInfo: doc.rejectionInfo || null,
+    };
+
     const permitted = getPermittedActions(user, doc);
     return {
       ...doc,
+      attachments,
+      history,
+      metadata,
       permittedActions: permitted.actions,
       permittedOptions: permitted.options,
     };
@@ -1194,6 +1542,52 @@ const AccessControlService = {
       },
       notification,
     };
+  },
+
+  /**
+   * PB-35: Archive a document record into the central archive vault.
+   * Only the CESS Secretary holds permission to archive documents.
+   */
+  async archiveDocument(user, docId, payload = {}) {
+    if (!canPerformAction(user, 'archive_document')) {
+      const err = new Error('Forbidden: Only the CESS Secretary is authorized to archive documents.');
+      err.status = 403;
+      throw err;
+    }
+
+    const doc = await DocumentModel.findById(docId);
+    if (!doc) {
+      const err = new Error('Document record not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    if (doc.current_status === 'Archived') {
+      const err = new Error(`Document ${doc.control_number} is already archived.`);
+      err.status = 400;
+      throw err;
+    }
+
+    const secOfficeId = await UserModel.getOfficeIdByName('College Secretary');
+    const note = (payload.remarks || payload.reason || payload.notes || '').trim();
+    const archiveRemarks = `Archived in central repository by ${user.name}${note ? `: ${note}` : '.'}`;
+
+    await DocumentModel.update(docId, {
+      current_status: 'Archived',
+      current_office_id: null,
+      last_updated_at: new Date().toISOString(),
+    });
+
+    await DocumentModel.addHistory({
+      document_id: docId,
+      revision_no: doc.current_revision_no || 1,
+      action_by_user_id: user.id,
+      action_office_id: secOfficeId,
+      action_type: 'Archived',
+      action_remarks: archiveRemarks,
+    });
+
+    return await this.getDocumentByIdForUser(user, docId);
   },
 
   /**

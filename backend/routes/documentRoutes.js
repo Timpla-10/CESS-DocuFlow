@@ -26,6 +26,10 @@ router.delete('/types/:id/requirements/:formId', requireAction('manage_requireme
 // PB-02: Role-filtered document listing (Requester -> own, Reviewer -> routed, Secretary -> all)
 router.get('/', DocumentController.listDocuments);
 
+// PB-35: Central repository (grouped by type/category, distinct active vs archived views)
+router.get('/repository', DocumentController.getRepository);
+router.get('/archive', DocumentController.getArchive);
+
 // PB-28 / SRS 3.11: Secretary Workflow Map & Live Office Counts (Mutually exclusive stages & offices)
 router.get('/workflow-map', DocumentController.getWorkflowMap);
 
@@ -93,6 +97,9 @@ router.post('/:id/ready', requireAction('mark_ready'), DocumentController.markRe
 
 // PB-33: Record document release to requester (College Secretary only)
 router.post('/:id/release', requireAction('release_document'), DocumentController.recordRelease);
+
+// PB-35: Archive document record into the central archive vault (College Secretary only)
+router.post('/:id/archive', requireAction('archive_document'), DocumentController.archiveDocument);
 
 // PB-18 / REQ-SUB-7: Prevent editing while in process; edit allowed only when Returned
 router.put('/:id', DocumentController.editDocument);
