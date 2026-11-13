@@ -925,6 +925,111 @@ Mindanao State University at Naawan
         },
       },
     },
+    '/api/directory': {
+      get: {
+        summary: 'Browse faculty, assigned subjects, and CESS/IDS directory (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'unit', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS', 'all'] } },
+          { name: 'department', in: 'query', schema: { type: 'string' } },
+          { name: 'subjectCode', in: 'query', schema: { type: 'string' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'Role-scoped directory distinguishing CESS and IDS units and permitted syllabi' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Unit filter outside role permissions' },
+        },
+      },
+    },
+    '/api/directory/faculty/{id}': {
+      get: {
+        summary: 'Get faculty member profile, assigned subjects, and permitted syllabi (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Faculty entry with role-verified syllabus visibility' },
+          403: { description: 'Forbidden: Faculty belongs to an unauthorized unit' },
+          404: { description: 'Faculty not found' },
+        },
+      },
+    },
+    '/api/directory/subjects': {
+      get: {
+        summary: 'Browse subjects with CESS/IDS distinction and assigned faculty (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'unit', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS', 'all'] } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'List of subjects with assigned faculty and role-scoped syllabus status' },
+          403: { description: 'Forbidden' },
+        },
+      },
+    },
+    '/api/directory/syllabi': {
+      get: {
+        summary: 'List permitted syllabi for authenticated user (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Filtered list of syllabi visible to the caller' },
+        },
+      },
+      post: {
+        summary: 'Upload or replace syllabus for own teaching load or as Secretary (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          201: { description: 'Syllabus saved' },
+          403: { description: 'Forbidden: Faculty may only manage own syllabi' },
+        },
+      },
+    },
+    '/api/directory/syllabi/{syllabusId}': {
+      get: {
+        summary: 'Open syllabus details with strict permission enforcement (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'syllabusId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Syllabus metadata and file URL' },
+          403: { description: 'Forbidden: Syllabus access denied for current role/unit/program' },
+          404: { description: 'Syllabus not found' },
+        },
+      },
+      delete: {
+        summary: 'Remove a syllabus (own faculty load or Secretary) (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'syllabusId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Syllabus removed' },
+          403: { description: 'Forbidden' },
+        },
+      },
+    },
+    '/api/directory/template': {
+      get: {
+        summary: 'Get official CESS course syllabus template (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Official syllabus template metadata' } },
+      },
+      put: {
+        summary: 'Replace official CESS course syllabus template (Secretary only) (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Template updated' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
   },
 };
 

@@ -42,6 +42,7 @@ app.get('/', (req, res) => {
       documents: 'GET /api/documents',
       documentTypes: 'GET /api/document-types',
       routes: 'GET /api/workflow/routes',
+      directory: 'GET /api/directory',
     },
   });
 });

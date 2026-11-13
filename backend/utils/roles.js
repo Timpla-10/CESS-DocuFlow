@@ -226,7 +226,14 @@ function canPerformAction(user, action, doc = null) {
     case 'release_document':
     case 'archive_document':
     case 'encode_walk_in':
+    case 'manage_syllabus_template':
       return user.role === ROLES.SECRETARY;
+
+    case 'view_directory':
+      return ALL_ROLES.includes(user.role);
+
+    case 'manage_own_syllabus':
+      return user.role === ROLES.FACULTY || user.role === ROLES.SECRETARY;
 
     case 'submit_document':
       return REQUESTER_ROLES.includes(user.role);
@@ -675,6 +682,200 @@ function getPermittedActions(user, doc) {
   return { actions: [], options: [] };
 }
 
+/**
+ * PB-38: Faculty, subjects, and syllabus directory helpers & permission rules.
+ */
+function normalizeUnit(value) {
+  if (!value) return null;
+  const str = String(value).trim().toLowerCase();
+  if (str === 'ids' || str.includes('integrated developmental school') || /\bids\b/.test(str)) {
+    return 'IDS';
+  }
+  if (str === 'cess' || str.includes('education and social sciences') || str.includes('dsee') || str.includes('dssh')) {
+    return 'CESS';
+  }
+  return null;
+}
+
+function getUserUnit(user) {
+  if (!user) return 'CESS';
+  if (user.role === ROLES.IDS_PRINCIPAL) return 'IDS';
+  if (normalizeUnit(user.origin) === 'IDS') return 'IDS';
+  if (normalizeUnit(user.department || user.department_or_office) === 'IDS') return 'IDS';
+  return 'CESS';
+}
+
+function getFacultyUnit(entry) {
+  if (!entry) return 'CESS';
+  if (normalizeUnit(entry.unit || entry.origin) === 'IDS') return 'IDS';
+  if (normalizeUnit(entry.department) === 'IDS') return 'IDS';
+  return 'CESS';
+}
+
+function getAllowedDirectoryUnits(user) {
+  if (!user || !user.active) return [];
+  if ([ROLES.SECRETARY, ROLES.OVCAA, ROLES.VCAF, ROLES.CHANCELLOR].includes(user.role)) {
+    return ['CESS', 'IDS'];
+  }
+  if ([ROLES.DEAN, ROLES.CHAIRPERSON].includes(user.role)) {
+    return ['CESS'];
+  }
+  if (user.role === ROLES.IDS_PRINCIPAL) {
+    return ['IDS'];
+  }
+  return [getUserUnit(user)];
+}
+
+function canViewDirectoryUnit(user, unit) {
+  const norm = normalizeUnit(unit);
+  if (!norm) return false;
+  return getAllowedDirectoryUnits(user).includes(norm);
+}
+
+function isStudentEligibleForSubject(user, subjectEntry, facultyEntry) {
+  const userUnit = getUserUnit(user);
+  const targetUnit = getFacultyUnit(facultyEntry || subjectEntry);
+  if (userUnit !== targetUnit) return false;
+
+  // Explicit override if user object carries enrolledSubjectCodes
+  const code = String(subjectEntry?.code || subjectEntry?.subject_code || '').toUpperCase().trim();
+  if (Array.isArray(user?.enrolledSubjectCodes) && user.enrolledSubjectCodes.length > 0) {
+    return user.enrolledSubjectCodes.map((c) => String(c).toUpperCase().trim()).includes(code);
+  }
+
+  if (userUnit === 'IDS') {
+    return true;
+  }
+
+  const dept = String(user?.department || user?.department_or_office || '').toLowerCase();
+  const subjDept = String(subjectEntry?.department || facultyEntry?.department || '').toLowerCase();
+
+  // DSSH / Social Sciences scope
+  if (dept.includes('social science') || dept.includes('social studies') || dept.includes('dssh') || /\bba\b/.test(dept)) {
+    return (
+      subjDept.includes('social sciences') ||
+      subjDept.includes('dssh') ||
+      code.startsWith('SOCSCI') ||
+      code.startsWith('HIST') ||
+      code.startsWith('POLSCI') ||
+      code.startsWith('ENG')
+    );
+  }
+
+  // DSEE / BSEd / BEEd scope
+  if (
+    dept.includes('bsed') ||
+    dept.includes('beed') ||
+    dept.includes('english') ||
+    dept.includes('filipino') ||
+    dept.includes('elementary') ||
+    dept.includes('secondary') ||
+    dept.includes('science') ||
+    dept.includes('math') ||
+    dept.includes('dsee')
+  ) {
+    return (
+      subjDept.includes('secondary and elementary education') ||
+      subjDept.includes('dsee') ||
+      code.startsWith('EDUC') ||
+      code.startsWith('ENG') ||
+      code.startsWith('FIL')
+    );
+  }
+
+  // Default for generic CESS student department ('CESS' or general): general education / introductory CESS scope
+  return true;
+}
+
+function canViewSyllabus(user, facultyEntry, subjectEntry = null) {
+  if (!user || !user.active) {
+    return { allowed: false, reason: 'Authentication required.' };
+  }
+
+  const targetUnit = getFacultyUnit(facultyEntry || subjectEntry);
+  const facultyUserId = facultyEntry?.userId || facultyEntry?.user_id || null;
+
+  // 1. Secretary & higher university academic executives see all syllabi across CESS and IDS
+  if ([ROLES.SECRETARY, ROLES.OVCAA, ROLES.VCAF, ROLES.CHANCELLOR].includes(user.role)) {
+    return { allowed: true, reason: null };
+  }
+
+  // 2. Dean & Chairperson: CESS collegiate syllabi only
+  if (user.role === ROLES.DEAN || user.role === ROLES.CHAIRPERSON) {
+    if (targetUnit !== 'CESS') {
+      return {
+        allowed: false,
+        reason: `Forbidden: ${getRoleLabel(user.role, user.origin)} access is scoped to CESS collegiate units only.`,
+      };
+    }
+    return { allowed: true, reason: null };
+  }
+
+  // 3. IDS Principal: IDS department syllabi only
+  if (user.role === ROLES.IDS_PRINCIPAL) {
+    if (targetUnit !== 'IDS') {
+      return {
+        allowed: false,
+        reason: 'Forbidden: IDS Principal access is scoped to Integrated Developmental School (IDS) units only.',
+      };
+    }
+    return { allowed: true, reason: null };
+  }
+
+  // 4. Faculty: Privacy-protected — can view/manage only their own syllabi
+  if (user.role === ROLES.FACULTY) {
+    if (facultyUserId && facultyUserId === user.id) {
+      return { allowed: true, reason: null };
+    }
+    return {
+      allowed: false,
+      reason: 'Privacy restriction: Faculty members can only view or manage their own syllabi.',
+    };
+  }
+
+  // 5. Student: Unit-scoped (CESS vs IDS) and enrolled/eligible subject scope
+  if (user.role === ROLES.STUDENT) {
+    if (targetUnit !== getUserUnit(user)) {
+      return {
+        allowed: false,
+        reason: `Forbidden: ${getUserUnit(user)} students cannot access ${targetUnit} syllabi.`,
+      };
+    }
+    if (subjectEntry && !isStudentEligibleForSubject(user, subjectEntry, facultyEntry)) {
+      return {
+        allowed: false,
+        reason: 'Forbidden: This syllabus is restricted to students enrolled in or eligible for that subject.',
+      };
+    }
+    return { allowed: true, reason: null };
+  }
+
+  return { allowed: false, reason: 'Forbidden: Insufficient permissions to view syllabus.' };
+}
+
+function canManageSyllabus(user, facultyEntry) {
+  if (!user || !user.active) {
+    return { allowed: false, reason: 'Authentication required.' };
+  }
+  if (user.role === ROLES.SECRETARY) {
+    return { allowed: true, reason: null };
+  }
+  if (user.role === ROLES.FACULTY) {
+    const facultyUserId = facultyEntry?.userId || facultyEntry?.user_id || null;
+    if (facultyUserId && facultyUserId === user.id) {
+      return { allowed: true, reason: null };
+    }
+    return {
+      allowed: false,
+      reason: 'Forbidden: Faculty members can only upload, replace, or remove their own syllabi.',
+    };
+  }
+  return {
+    allowed: false,
+    reason: 'Forbidden: Only the assigned faculty member or College Secretary may modify syllabi.',
+  };
+}
+
 module.exports = {
   ROLES,
   ALL_ROLES,
@@ -699,4 +900,12 @@ module.exports = {
   getDefaultNextOfficeForEndorsement,
   validateRouteTransition,
   getPermittedActions,
+  normalizeUnit,
+  getUserUnit,
+  getFacultyUnit,
+  getAllowedDirectoryUnits,
+  canViewDirectoryUnit,
+  isStudentEligibleForSubject,
+  canViewSyllabus,
+  canManageSyllabus,
 };
