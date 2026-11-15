@@ -24,7 +24,7 @@ import {
 } from './engine'
 import type { Database, DocumentType, ExternalOfficeItem, User } from './types'
 
-export const DB_VERSION = 14
+export const DB_VERSION = 15
 export const DEMO_PASSWORD = 'cess2026'
 
 
@@ -39,6 +39,7 @@ const users: User[] = [
   { id: 'u-ids', name: 'Dr. Teresa Gomez', email: 'ids.principal@msunaawan.edu.ph', role: 'ids_principal', origin: 'IDS', department: 'Integrated Developmental School', position: 'IDS Principal', active: true, notificationPreference: 'both' },
   { id: 'u-dean', name: 'Dr. Ramon Villanueva', email: 'cess.dean@msunaawan.edu.ph', role: 'dean', department: 'College of Education and Social Sciences', position: 'College Dean', active: true, notificationPreference: 'both' },
   { id: 'u-ovcaa', name: 'Dr. Victor Salazar', email: 'ovcaa@msunaawan.edu.ph', role: 'ovcaa', department: 'Office of the Vice Chancellor for Academic Affairs', position: 'Vice Chancellor for Academic Affairs', active: true, notificationPreference: 'both' },
+  { id: 'u-vcaf', name: 'Dr. Carmelo Prudente', email: 'vcaf@msunaawan.edu.ph', role: 'vcaf', department: 'Office of the Vice Chancellor for Administration and Finance', position: 'Vice Chancellor for Administration and Finance', active: true, notificationPreference: 'both' },
   { id: 'u-chancellor', name: 'Dr. Antonio Cabrera', email: 'chancellor@msunaawan.edu.ph', role: 'chancellor', department: 'Office of the Chancellor', position: 'Chancellor', active: true, notificationPreference: 'both' },
 ]
 
@@ -305,6 +306,7 @@ export function createSeed(): Database {
     ids_principal: U('u-ids'),
     dean: U('u-dean'),
     ovcaa: U('u-ovcaa'),
+    vcaf: U('u-vcaf'),
     chancellor: U('u-chancellor'),
   }
   const review = (docId: string, office: string, kind: ReviewKind, at: string, remarks = '') =>
@@ -376,7 +378,7 @@ export function createSeed(): Database {
     review(d.id, 'chairperson', 'endorse', ago(14, 3))
     review(d.id, 'ids_principal', 'endorse', ago(12, 6))
     review(d.id, 'dean', 'approve', ago(10, 2))
-    sendToExternal(db, sec, d.id, { office: 'hrmo', handedBy: 'Carmela Ortiz', remarks: 'For updating of service record.' }, ago(9, 6))
+    sendToExternal(db, sec, d.id, { office: 'hrmo', transferDate: ago(9, 6).slice(0, 10), handedBy: 'Carmela Ortiz', referenceNumber: 'HRMO-2026-0419', remarks: 'For updating of service record.' }, ago(9, 6))
   }
   // 12. Faculty CESS — FTL with the Office of the Chancellor.
   {
@@ -411,8 +413,8 @@ export function createSeed(): Database {
     checkRequirements(db, sec, d.id, { decision: 'complete', missing: [], reasons: '' }, ago(20, 20))
     review(d.id, 'chairperson', 'endorse', ago(19))
     review(d.id, 'dean', 'approve', ago(17, 4))
-    sendToExternal(db, sec, d.id, { office: 'registrar', handedBy: 'Carmela Ortiz', remarks: 'For grade encoding.' }, ago(17))
-    recordExternalReturn(db, sec, d.id, { remarks: 'Grade encoded by the Registrar.' }, ago(14, 3))
+    sendToExternal(db, sec, d.id, { office: 'registrar', transferDate: ago(17).slice(0, 10), handedBy: 'Carmela Ortiz', referenceNumber: 'REG-2026-0812', remarks: 'For grade encoding.' }, ago(17))
+    recordExternalReturn(db, sec, d.id, { returnDate: ago(14, 3).slice(0, 10), outcome: 'signed', remarks: 'Grade encoded by the Registrar.' }, ago(14, 3))
     markReady(db, sec, d.id, ago(14, 2))
     recordRelease(db, sec, d.id, { receivedBy: 'Paolo Reyes', signedFile: { name: 'INC_SOCSCI220_Signed_Release.pdf', sizeKb: 410 } }, ago(13))
   }

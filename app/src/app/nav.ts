@@ -51,8 +51,10 @@ export function navFor(role: Role): NavSection[] {
             },
             {
               to: '/app/my-documents',
-              label: 'Document Repository',
+              label: 'My Documents',
               icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
+              countTone: 'brand',
             },
           ],
         },
@@ -74,8 +76,10 @@ export function navFor(role: Role): NavSection[] {
             },
             {
               to: '/app/my-documents',
-              label: 'Document Repository',
+              label: 'My Documents',
               icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
+              countTone: 'brand',
             },
           ],
         },
@@ -91,7 +95,7 @@ export function navFor(role: Role): NavSection[] {
           heading: 'Your tasks',
           items: [
             { to: '/app/requirements-check', label: 'Check Requirements', icon: ClipboardCheck, count: (db) => secretaryQueues(db).toCheck.length, countTone: 'warning' },
-            { to: '/app/release', label: 'Approved and Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
+            { to: '/app/release', label: 'Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
           ],
         },
         {
@@ -99,7 +103,7 @@ export function navFor(role: Role): NavSection[] {
           items: [
             { to: '/app/documents', label: 'All Documents', icon: Files },
             { to: '/app/archive', label: 'Archive', icon: Archive },
-            { to: '/app/email-log', label: 'Email Log', icon: Mail, count: (db) => db.notifications.filter((n) => n.result === 'failed').length, countTone: 'danger' },
+            { to: '/app/email-log', label: 'Email Log', icon: Mail },
           ],
         },
         {
@@ -168,6 +172,7 @@ export function navFor(role: Role): NavSection[] {
       ]
     case 'chairperson':
     case 'ovcaa':
+    case 'vcaf':
     case 'chancellor':
       return [
         {
@@ -198,6 +203,7 @@ export function homeFor(role: Role): string {
     role === 'chairperson' ||
     role === 'ids_principal' ||
     role === 'ovcaa' ||
+    role === 'vcaf' ||
     role === 'chancellor' ||
     role === 'dean'
   )

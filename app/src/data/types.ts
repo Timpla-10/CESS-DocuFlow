@@ -11,10 +11,11 @@ export type Role =
   | 'ids_principal'
   | 'dean'
   | 'ovcaa'
+  | 'vcaf'
   | 'chancellor'
 
 /** Offices that have accounts and can hold a document (REQ-AUTH-2). */
-export type OfficeId = 'secretary' | 'chairperson' | 'ids_principal' | 'dean' | 'ovcaa' | 'chancellor'
+export type OfficeId = 'secretary' | 'chairperson' | 'ids_principal' | 'dean' | 'ovcaa' | 'vcaf' | 'chancellor'
 
 /** Offices without accounts; the College Secretary records hand-offs for them (REQ-EXT-1). */
 export type ExternalOfficeId = string
@@ -23,6 +24,37 @@ export interface ExternalOfficeItem {
   id: ExternalOfficeId
   label: string
   shortLabel: string
+}
+
+export type ExternalReturnOutcome =
+  | 'signed'
+  | 'endorsed'
+  | 'needs_clarification'
+  | 'returned_without_action'
+  | 'other'
+
+export const EXTERNAL_RETURN_OUTCOMES: { value: ExternalReturnOutcome; label: string }[] = [
+  { value: 'signed', label: 'Signed / Completed' },
+  { value: 'endorsed', label: 'Endorsed with Action / Comments' },
+  { value: 'needs_clarification', label: 'Needs Additional Requirements / Clarification' },
+  { value: 'returned_without_action', label: 'Returned Without Action' },
+  { value: 'other', label: 'Other (see notes)' },
+]
+
+export interface ExternalTransferInfo {
+  office: ExternalOfficeId
+  officeName: string
+  transferredAt: string
+  transferDate?: string
+  handedBy: string
+  referenceNumber?: string
+  notes?: string
+  returnedAt?: string
+  returnDate?: string
+  returnRecordedBy?: string
+  returnOutcome?: ExternalReturnOutcome
+  returnOutcomeLabel?: string
+  returnNotes?: string
 }
 
 export type Origin = 'CESS' | 'IDS'
@@ -161,6 +193,7 @@ export interface DocRecord {
   status: Status
   currentOffice: OfficeId | null
   externalOffice?: ExternalOfficeId
+  externalTransfer?: ExternalTransferInfo
   route: RouteStep[]
   routeIndex: number
   submittedAt: string

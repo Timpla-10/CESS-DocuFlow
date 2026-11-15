@@ -2,9 +2,11 @@
  * Form controls. Every field has a VISIBLE label (never placeholder-only),
  * optional helper text, and an error message shown right beside the field.
  */
-import { AlertCircle } from 'lucide-react'
-import { cloneElement, isValidElement, useId, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { cn } from './ui'
+import { AlertCircle, ChevronDown } from 'lucide-react'
+import { cloneElement, forwardRef, isValidElement, useId, useState, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+import { cn, InfoTooltip } from './ui'
+
+export { InfoTooltip }
 
 export function Field({
   label,
@@ -28,21 +30,20 @@ export function Field({
   const errId = `${id}-err`
   const describedBy = [hint ? hintId : null, error ? errId : null].filter(Boolean).join(' ') || undefined
   const control = isValidElement(children)
-    ? cloneElement(children, { id, 'aria-describedby': describedBy, 'aria-invalid': !!error })
+  ? cloneElement(children, { id, 'aria-describedby': describedBy, 'aria-invalid': !!error })
     : children
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1.5 flex items-center gap-2 text-sm font-semibold text-ink-800">
-        {label}
-        {required && <span className="text-xs font-semibold text-brand-700">Required</span>}
-        {optional && <span className="text-xs font-medium text-ink-500">Optional</span>}
+      <label htmlFor={id} className="mb-2 flex min-h-[22px] items-center justify-between gap-2 text-sm font-semibold text-ink-800">
+        <span className="inline-flex items-center gap-1.5 min-w-0">
+          <span>{label}</span>
+          {hint && <InfoTooltip content={hint} />}
+        </span>
+        {required && <span className="shrink-0 text-xs font-semibold text-brand-700">Required</span>}
+        {optional && <span className="shrink-0 text-xs font-medium text-ink-500">Optional</span>}
       </label>
       {control}
-      {hint && !error && (
-        <p id={hintId} className="mt-1.5 text-[13px] leading-snug text-ink-500">
-          {hint}
-        </p>
-      )}
+      {hint && <span id={hintId} className="sr-only">{hint}</span>}
       {error && (
         <p id={errId} className="mt-1.5 flex items-start gap-1.5 text-[13px] font-medium text-danger-700" role="alert">
           <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden />
@@ -66,21 +67,75 @@ export function Textarea({ className, rows = 4, ...rest }: TextareaHTMLAttribute
   return <textarea rows={rows} className={cn(controlBase, 'px-3.5 py-2.5 leading-relaxed', className)} {...rest} />
 }
 
-export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      className={cn(
-        controlBase,
-        'h-10 appearance-none bg-[length:16px] bg-[right_0.75rem_center] bg-no-repeat pl-3.5 pr-10 text-sm font-medium',
-        "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236f6979' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")]",
-        className,
-      )}
-      {...rest}
-    >
-      {children}
-    </select>
-  )
-}
+export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
+  function Select(
+    {
+      className,
+      children,
+      id,
+      disabled,
+      'aria-describedby': ariaDescribedBy,
+      'aria-invalid': ariaInvalid,
+      onFocus,
+      onBlur,
+      onChange,
+      ...rest
+    },
+    ref,
+  ) {
+    const [isFocused, setIsFocused] = useState(false)
+    const widthClass = className?.match(/\b(w-\S+|min-w-\S+|max-w-\S+)\b/g)?.join(' ')
+    return (
+      <div className={cn('group relative', widthClass || 'w-full')}>
+        <select
+          ref={ref}
+          id={id}
+          disabled={disabled}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
+          onFocus={(e) => {
+            setIsFocused(true)
+            onFocus?.(e)
+          }}
+          onBlur={(e) => {
+            setIsFocused(false)
+            onBlur?.(e)
+          }}
+          onChange={(e) => {
+            setIsFocused(false)
+            e.currentTarget.blur()
+            onChange?.(e)
+          }}
+          className={cn(
+            controlBase,
+            'h-10 appearance-none pl-3.5 pr-10 text-sm font-medium cursor-pointer',
+            className,
+          )}
+          {...rest}
+        >
+          {children}
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+          <ChevronDown
+            className={cn(
+              'size-4 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+              disabled
+                ? 'text-ink-300'
+                : isFocused
+                ? 'text-brand-600'
+                : 'text-ink-500 group-hover:translate-y-0.5 group-hover:text-brand-600',
+            )}
+            style={{
+              transform: isFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+              transformOrigin: 'center',
+            }}
+            aria-hidden="true"
+          />
+        </div>
+      </div>
+    )
+  },
+)
 
 export function Checkbox({ label, hint, className, ...rest }: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode; hint?: ReactNode }) {
   const id = useId()

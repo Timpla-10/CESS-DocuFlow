@@ -11,14 +11,16 @@
  * Every function mutates the given `db` draft and returns it. Callers are
  * responsible for cloning (the mock API does this before each action).
  */
-import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel } from '../content/language'
+import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel, isRequester } from '../content/language'
 import { daysSince, plural } from '../lib/time'
+import { EXTERNAL_RETURN_OUTCOMES } from './types'
 import type {
   Attachment,
   Database,
   DocRecord,
   DocumentType,
   ExternalOfficeId,
+  ExternalReturnOutcome,
   HistoryEntry,
   NotificationKind,
   NotificationLog,
@@ -28,7 +30,7 @@ import type {
   User,
 } from './types'
 
-export const MAX_FILE_MB = 10
+export const MAX_FILE_MB = 20
 export const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png']
 export const ACCEPTED_EXT = ['.pdf', '.jpg', '.jpeg', '.png']
 
@@ -132,8 +134,12 @@ function requesterLink(doc: DocRecord) {
   return `/app/documents/${doc.id}`
 }
 
+function officeAccount(db: Database, office: OfficeId): User | undefined {
+  return db.users.find((u) => ROLE_OFFICE[u.role] === office && u.active)
+}
+
 function resolveChannels(db: Database, recipientId: string): ('email' | 'in_system')[] {
-  const u = getUser(db, recipientId)
+  const u = getUser(db, recipientId) || officeAccount(db, recipientId as OfficeId)
   const pref = u?.notificationPreference ?? 'both'
   if (pref === 'email_only') return ['email']
   if (pref === 'in_system_only') return ['in_system']
@@ -179,13 +185,29 @@ function firstName(u: User) {
 
 const SIGNOFF = '\n\n— CESS DocuFlow\nCollege of Education and Social Sciences, MSU at Naawan'
 
-function officeAccount(db: Database, office: OfficeId): User | undefined {
-  return db.users.find((u) => ROLE_OFFICE[u.role] === office && u.active)
-}
-
 /* ------------------------------------------------------------------------ */
 /* Requester & Walk-in Submission actions                                    */
 /* ------------------------------------------------------------------------ */
+
+export function generateUniqueControlBase(db: Database, origin: 'CESS' | 'IDS', year: number): string {
+  let maxSeq = 0
+  for (const d of db.documents) {
+    const parts = d.controlBase.split('-')
+    if (parts.length >= 5) {
+      const num = parseInt(parts[3], 10)
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num
+      }
+    }
+  }
+  let nextSeq = Math.max(maxSeq + 1, db.documents.length + 1)
+  let candidate = `MSU-${origin}-COM-${String(nextSeq).padStart(4, '0')}-${year}`
+  while (db.documents.some((d) => d.controlBase === candidate)) {
+    nextSeq += 1
+    candidate = `MSU-${origin}-COM-${String(nextSeq).padStart(4, '0')}-${year}`
+  }
+  return candidate
+}
 
 export function submitRequest(
   db: Database,
@@ -201,16 +223,25 @@ export function submitRequest(
   at: string,
 ): DocRecord {
   const type = getType(db, input.typeId)
+  if (!isRequester(user.role)) {
+    throw new FriendlyError('Only students and faculty members can submit document requests.')
+  }
   const userAudience = user.role === 'student' ? 'student' : 'faculty'
   if (type.audience !== userAudience) throw new FriendlyError('This document type isn’t available for the selected requester role.')
+  if (!input.title || !input.title.trim()) {
+    throw new FriendlyError('Please enter a title or subject for your document request.')
+  }
+  if (!input.description || !input.description.trim()) {
+    throw new FriendlyError('Please enter a description or purpose for your document request.')
+  }
   validateFiles(type, input.files)
   const origin = user.origin ?? (user.role === 'ids_principal' || user.department.includes('Integrated Developmental School') ? 'IDS' : 'CESS')
   const id = nextId(db, 'd')
-  const seq = db.documents.length + 1
   const year = new Date(at).getFullYear()
+  const controlBase = generateUniqueControlBase(db, origin, year)
   const doc: DocRecord = {
     id,
-    controlBase: `MSU-${origin}-COM-${String(seq).padStart(4, '0')}-${year}`,
+    controlBase,
     revision: 0,
     typeId: type.id,
     title: input.title.trim(),
@@ -305,7 +336,7 @@ function toAttachment(db: Database, f: NewFile, revision: number, by: string, at
 
 export function validateFiles(type: DocumentType, files: NewFile[]) {
   for (const f of files) {
-    if (f.sizeKb > MAX_FILE_MB * 1024) throw new FriendlyError(MESSAGES.fileTooLarge(f.name))
+    if (f.sizeKb > MAX_FILE_MB * 1024) throw new FriendlyError(MESSAGES.fileTooLarge(f.name, MAX_FILE_MB))
     const lower = f.name.toLowerCase()
     if (!ACCEPTED_EXT.some((e) => lower.endsWith(e))) throw new FriendlyError(MESSAGES.fileWrongType(f.name))
   }
@@ -438,15 +469,32 @@ export function sendToExternal(
   db: Database,
   actor: User,
   docId: string,
-  input: { office: ExternalOfficeId; handedBy: string; remarks: string },
+  input: {
+    office: ExternalOfficeId
+    transferDate?: string
+    handedBy: string
+    referenceNumber?: string
+    remarks: string
+  },
   at: string,
 ): DocRecord {
   if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can record office transfers.')
   const doc = getDoc(db, docId)
   if (!(doc.status === 'with_office' && doc.route[doc.routeIndex]?.stage === 'final'))
     throw new FriendlyError(MESSAGES.notAllowedToAct)
+  const targetLabel = externalOfficeLabel(input.office, db)
+  const transferDate = input.transferDate?.trim() || at.slice(0, 10)
   doc.status = 'with_external'
   doc.externalOffice = input.office
+  doc.externalTransfer = {
+    office: input.office,
+    officeName: targetLabel,
+    transferredAt: at,
+    transferDate,
+    handedBy: input.handedBy.trim(),
+    referenceNumber: input.referenceNumber?.trim() || undefined,
+    notes: input.remarks.trim() || undefined,
+  }
   doc.currentOffice = null
   doc.officeSince = at
   addHistory(
@@ -456,26 +504,66 @@ export function sendToExternal(
       office: OFFICE_LABEL.secretary,
       actorName: actor.name,
       action: 'sent_external',
-      target: externalOfficeLabel(input.office, db),
-      remarks: [input.handedBy.trim() && `Handed over by ${input.handedBy.trim()}.`, input.remarks.trim()].filter(Boolean).join(' ') || undefined,
+      target: targetLabel,
+      remarks: [
+        `Transfer Date: ${transferDate}.`,
+        input.handedBy.trim() && `Handed over by ${input.handedBy.trim()}.`,
+        input.referenceNumber?.trim() && `Ref: ${input.referenceNumber.trim()}.`,
+        input.remarks.trim() && `Notes: ${input.remarks.trim()}`,
+      ].filter(Boolean).join(' ') || undefined,
     },
     db,
   )
   return doc
 }
 
-export function recordExternalReturn(db: Database, actor: User, docId: string, input: { remarks: string }, at: string) {
+export function recordExternalReturn(
+  db: Database,
+  actor: User,
+  docId: string,
+  input: {
+    returnDate?: string
+    outcome?: ExternalReturnOutcome
+    remarks: string
+  },
+  at: string,
+) {
   if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can record office transfers.')
   const doc = getDoc(db, docId)
   if (doc.status !== 'with_external' || !doc.externalOffice) throw new FriendlyError(MESSAGES.notAllowedToAct)
   const ext = externalOfficeLabel(doc.externalOffice, db)
+  const returnDate = input.returnDate?.trim() || at.slice(0, 10)
+  const outcomeItem = EXTERNAL_RETURN_OUTCOMES.find((o) => o.value === input.outcome)
+  const outcomeLabel = outcomeItem?.label ?? 'Completed'
+
+  if (doc.externalTransfer) {
+    doc.externalTransfer.returnedAt = at
+    doc.externalTransfer.returnDate = returnDate
+    doc.externalTransfer.returnRecordedBy = actor.name
+    doc.externalTransfer.returnOutcome = input.outcome ?? 'signed'
+    doc.externalTransfer.returnOutcomeLabel = outcomeLabel
+    doc.externalTransfer.returnNotes = input.remarks.trim() || undefined
+  }
+
   doc.status = 'with_office'
   doc.externalOffice = undefined
   doc.currentOffice = 'secretary'
   doc.officeSince = at
   addHistory(
     doc,
-    { at, office: OFFICE_LABEL.secretary, actorName: actor.name, action: 'returned_external', target: ext, remarks: input.remarks.trim() || undefined },
+    {
+      at,
+      office: OFFICE_LABEL.secretary,
+      actorName: actor.name,
+      action: 'returned_external',
+      target: ext,
+      remarks: [
+        `Return Date: ${returnDate}.`,
+        `Outcome: ${outcomeLabel}.`,
+        doc.externalTransfer?.referenceNumber && `Ref: ${doc.externalTransfer.referenceNumber}.`,
+        input.remarks.trim() && `Notes: ${input.remarks.trim()}`,
+      ].filter(Boolean).join(' ') || undefined,
+    },
     db,
   )
   return doc
@@ -777,6 +865,34 @@ export function postNotice(
     })
   }
   return notice
+}
+
+export function updateNotice(
+  db: Database,
+  actor: User,
+  id: string,
+  input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string },
+) {
+  if (actor.role !== 'secretary' && actor.role !== 'dean')
+    throw new FriendlyError('Only the College Secretary and the College Dean can edit notices and minutes.')
+  if (!input.title.trim()) throw new FriendlyError('Please give the notice a title.')
+  const n = db.notices.find((x) => x.id === id)
+  if (!n) throw new FriendlyError('Notice not found.')
+  n.kind = input.kind
+  n.title = input.title.trim()
+  n.summary = input.summary.trim()
+  if (input.fileName.trim()) {
+    n.fileName = input.fileName.trim()
+  }
+  return n
+}
+
+export function deleteNotice(db: Database, actor: User, id: string) {
+  if (actor.role !== 'secretary' && actor.role !== 'dean')
+    throw new FriendlyError('Only the College Secretary and the College Dean can delete notices and minutes.')
+  const idx = db.notices.findIndex((x) => x.id === id)
+  if (idx === -1) throw new FriendlyError('Notice not found.')
+  db.notices.splice(idx, 1)
 }
 
 export function retryNotification(db: Database, actor: User, id: string) {

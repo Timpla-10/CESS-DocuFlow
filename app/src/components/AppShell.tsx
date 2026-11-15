@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { navFor } from '../app/nav'
 import { useSession, useUser } from '../app/session'
-import { ROLE_LABEL } from '../content/language'
+import { ROLE_LABEL, formatRoleTitle } from '../content/language'
 import { myNotifications, unreadCount } from '../data/selectors'
 import { api, useDb } from '../data/store'
 import { timeAgo } from '../lib/time'
 import { Logo, LogoMark } from './Logo'
+import { useToast } from './Toast'
 import { Avatar, cn } from './ui'
 
 export function AppShell() {
@@ -81,7 +82,7 @@ export function AppShell() {
 
       <div
         className={cn(
-          'transition-[padding] duration-300 ease-in-out',
+          'w-full min-w-0 max-w-full overflow-x-hidden transition-[padding] duration-300 ease-in-out',
           isLocked ? 'lg:pl-[264px]' : 'lg:pl-[72px]'
         )}
       >
@@ -90,7 +91,7 @@ export function AppShell() {
           isLocked={isLocked}
           onToggleLock={toggleLock}
         />
-        <main id="main" className="mx-auto w-full max-w-[1440px] 2xl:max-w-[1560px] px-4 pb-20 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+        <main id="main" className="mx-auto w-full min-w-0 max-w-[1440px] px-2.5 pb-20 pt-4 2xl:max-w-[1560px] sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
           <Outlet />
         </main>
       </div>
@@ -110,15 +111,14 @@ function Sidebar({
   onToggleLock?: () => void
 }) {
   const user = useUser()
-  const db = useDb()
   const sections = navFor(user.role)
 
   return (
     <nav aria-label="Main navigation" className="surface-brand-gradient relative flex h-full flex-col overflow-hidden text-white">
-      {/* Living Aurora ambient moving glow orbs in official CESS department colors (IDS Pink, DSEE Lavender, DSSH Purple) */}
-      <div className="pointer-events-none absolute -bottom-16 -right-16 size-80 rounded-full bg-ids-400/50 blur-2xl animate-aurora-pink" aria-hidden />
-      <div className="pointer-events-none absolute -top-16 -left-16 size-72 rounded-full bg-dsee-300/45 blur-2xl animate-aurora-lavender" aria-hidden />
-      <div className="pointer-events-none absolute top-1/2 -right-12 size-64 -translate-y-1/2 rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" aria-hidden />
+      {/* Subtle atmospheric ambient glow matching #191970 */}
+      <div className="pointer-events-none absolute -bottom-16 -right-16 size-80 rounded-full bg-[#191970]/50 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute -top-16 -left-16 size-72 rounded-full bg-[#191970]/40 blur-2xl" aria-hidden />
+      <div className="pointer-events-none absolute top-1/2 -right-12 size-64 -translate-y-1/2 rounded-full bg-[#191970]/30 blur-2xl" aria-hidden />
 
       <div className="relative z-10 flex h-full min-h-0 flex-col">
         {/* Header */}
@@ -165,8 +165,7 @@ function Sidebar({
         {isExpanded ? (
           <div className="mx-4 mb-2 mt-2 rounded-xl bg-white/[0.09] p-3 ring-1 ring-inset ring-white/15">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-200/90">Signed in as</p>
-            <p className="mt-0.5 truncate text-sm font-bold">{ROLE_LABEL[user.role]}</p>
-            <p className="truncate text-xs text-brand-200/80">{user.department}</p>
+            <p className="mt-0.5 truncate text-sm font-bold">{formatRoleTitle(user)}</p>
           </div>
         ) : (
           <div
@@ -187,73 +186,36 @@ function Sidebar({
                 </p>
               )}
               <ul className="space-y-1">
-                {s.items.map((it) => {
-                  const count = it.count?.(db, user) ?? 0
-                  return (
-                    <li key={it.to}>
-                      <NavLink
-                        to={it.to}
-                        end={it.to === '/app/documents'}
-                        title={it.label}
-                        className={({ isActive }) =>
-                          cn(
-                            'group relative flex items-center rounded-xl text-sm font-semibold transition-all',
-                            isExpanded ? 'gap-3 px-3 py-2' : 'justify-center p-2.5',
-                            isActive
-                              ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
-                              : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
-                          )
-                        }
-                      >
-                        {({ isActive }) => (
-                          <>
-                            <it.icon
-                              className={cn(
-                                'size-[18px] shrink-0',
-                                isActive ? 'text-brand-700' : 'text-brand-300 group-hover:text-white',
-                              )}
-                            />
-                            {isExpanded && <span className="flex-1 truncate">{it.label}</span>}
-                            {count > 0 &&
-                              (isExpanded ? (
-                                <span
-                                  className={cn(
-                                    'min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold tabular-nums leading-5',
-                                    it.countTone === 'danger'
-                                      ? 'bg-danger-500 text-white'
-                                      : it.countTone === 'warning'
-                                      ? 'bg-warning-500 text-brand-950'
-                                      : isActive
-                                      ? 'bg-brand-600 text-white'
-                                      : 'bg-white/15 text-white',
-                                  )}
-                                  aria-label={`${count} waiting`}
-                                >
-                                  {count}
-                                </span>
-                              ) : (
-                                <span
-                                  className={cn(
-                                    'absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full px-1 text-[9px] font-bold ring-2 ring-brand-900',
-                                    it.countTone === 'danger'
-                                      ? 'bg-danger-500 text-white'
-                                      : it.countTone === 'warning'
-                                      ? 'bg-warning-500 text-brand-950'
-                                      : isActive
-                                      ? 'bg-brand-600 text-white'
-                                      : 'bg-ids-400 text-brand-950',
-                                  )}
-                                  aria-label={`${count} waiting`}
-                                >
-                                  {count}
-                                </span>
-                              ))}
-                          </>
-                        )}
-                      </NavLink>
-                    </li>
-                  )
-                })}
+                {s.items.map((it) => (
+                  <li key={it.to}>
+                    <NavLink
+                      to={it.to}
+                      end={it.to === '/app/documents'}
+                      title={it.label}
+                      className={({ isActive }) =>
+                        cn(
+                          'group relative flex items-center rounded-xl text-sm font-semibold transition-all',
+                          isExpanded ? 'gap-3 px-3 py-2' : 'justify-center p-2.5',
+                          isActive
+                            ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
+                            : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
+                        )
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <it.icon
+                            className={cn(
+                              'size-[18px] shrink-0',
+                              isActive ? 'text-brand-700' : 'text-brand-300 group-hover:text-white',
+                            )}
+                          />
+                          {isExpanded && <span className="flex-1 truncate">{it.label}</span>}
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                ))}
               </ul>
             </div>
           ))}
@@ -286,15 +248,15 @@ function TopBar({
   onToggleLock: () => void
 }) {
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-ink-100 bg-white/80 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-20 flex h-14 sm:h-16 w-full min-w-0 max-w-full items-center gap-1.5 sm:gap-3 border-b border-ink-100 bg-white/80 px-2 sm:px-6 lg:px-8 backdrop-blur-xl">
       {/* Mobile hamburger */}
       <button
         type="button"
         onClick={onMenu}
-        className="grid size-10 place-items-center rounded-lg text-ink-700 hover:bg-brand-50 lg:hidden"
+        className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-700 hover:bg-brand-50 sm:size-10 lg:hidden"
         aria-label="Open menu"
       >
-        <Menu className="size-5" aria-hidden />
+        <Menu className="size-4.5 sm:size-5 shrink-0" aria-hidden />
       </button>
 
       {/* Desktop hamburger toggle: only rendered when sidebar is collapsed (rail mode) */}
@@ -310,10 +272,18 @@ function TopBar({
         </button>
       )}
 
-      <div className="lg:hidden">
-        <Logo subtitle={false} />
+      <div className="min-w-0 shrink lg:hidden">
+        <div className="hidden min-[440px]:block">
+          <Logo subtitle={false} />
+        </div>
+        <div className="hidden min-[260px]:block min-[440px]:hidden">
+          <LogoMark size="sm" />
+        </div>
+        <div className="block min-[260px]:hidden">
+          <LogoMark size="xs" />
+        </div>
       </div>
-      <div className="flex-1" />
+      <div className="min-w-0 flex-1" />
       <NotificationBell />
       <UserMenu />
     </header>
@@ -343,6 +313,7 @@ function NotificationBell() {
   const user = useUser()
   const db = useDb()
   const navigate = useNavigate()
+  const toast = useToast()
   const { open, setOpen, ref } = usePopover()
   const items = myNotifications(db, user).slice(0, 8)
   const unread = unreadCount(db, user)
@@ -356,47 +327,92 @@ function NotificationBell() {
     }
   }
 
+  const currentPref = user.notificationPreference ?? 'both'
+
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative shrink-0" ref={ref}>
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        aria-label={unread ? `Email updates — ${unread} new` : 'Email updates'}
-        className="relative grid size-10 place-items-center rounded-lg text-ink-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+        aria-label={unread ? `Notifications — ${unread} new` : 'Notifications'}
+        className="relative grid size-8 sm:size-10 place-items-center rounded-lg text-ink-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
       >
-        <Bell className="size-5" aria-hidden />
+        <Bell className="size-4.5 sm:size-5" aria-hidden />
         {unread > 0 && (
-          <span className="absolute right-1.5 top-1.5 grid min-w-[18px] place-items-center rounded-full bg-brand-600 px-1 text-[10px] font-bold leading-[18px] text-white ring-2 ring-white">
+          <span className="absolute right-0.5 top-0.5 sm:right-1.5 sm:top-1.5 grid min-w-4 sm:min-w-[18px] place-items-center rounded-full bg-brand-600 px-0.5 sm:px-1 text-[9px] sm:text-[10px] font-bold leading-none sm:leading-[18px] text-white ring-1.5 sm:ring-2 ring-white">
             {unread}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-12 z-30 w-[min(92vw,380px)] origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white shadow-raised ring-1 ring-ink-100">
-          <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-            <div>
-              <p className="text-sm font-bold text-ink-900">Notifications & Email Updates</p>
-              <p className="text-xs text-ink-500">
-                {user.notificationPreference === 'email_only'
-                  ? `External email only (${user.email})`
-                  : user.notificationPreference === 'in_system_only'
-                  ? 'In-system notifications only'
-                  : `In-system & sent to ${user.email}`}
-              </p>
+        <div className="absolute right-0 top-11 sm:top-12 z-30 w-[min(calc(100vw-16px),380px)] origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white shadow-raised ring-1 ring-ink-100">
+          <div className="border-b border-ink-100 bg-brand-50/50 p-3 sm:p-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-ink-900">Notifications &amp; Alerts</p>
+                <p className="text-xs text-ink-500">
+                  {currentPref === 'email_only'
+                    ? `External email only (${user.email})`
+                    : currentPref === 'in_system_only'
+                    ? 'In-system notifications only'
+                    : `In-system & sent to ${user.email}`}
+                </p>
+              </div>
+              <Link
+                to="/app/account"
+                onClick={() => setOpen(false)}
+                className="text-xs font-semibold text-brand-700 hover:underline"
+              >
+                Settings →
+              </Link>
             </div>
-            <Link
-              to="/app/account"
-              onClick={() => setOpen(false)}
-              className="text-xs font-semibold text-brand-700 hover:underline"
-            >
-              Preferences
-            </Link>
+            {/* Quick 3-mode preference switcher */}
+            <div className="mt-2.5 flex rounded-lg bg-white p-0.5 ring-1 ring-inset ring-ink-200">
+              {(
+                [
+                  { id: 'both', label: 'Both' },
+                  { id: 'in_system_only', label: 'In-System Only' },
+                  { id: 'email_only', label: 'Email Only' },
+                ] as const
+              ).map((opt) => {
+                const active = currentPref === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      if (active) return
+                      await api.updateNotificationPreference(user, opt.id)
+                      toast.success(
+                        'Delivery Preference Saved',
+                        `Notifications will now be delivered via: ${
+                          opt.id === 'both'
+                            ? 'Both In-System Bell & University Email'
+                            : opt.id === 'in_system_only'
+                            ? 'In-System Bell Only'
+                            : 'University Email Only'
+                        }.`,
+                      )
+                    }}
+                    className={cn(
+                      'flex-1 rounded-md py-1 text-[11px] font-semibold transition-all',
+                      active
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-ink-600 hover:text-ink-900 hover:bg-ink-50',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
           {items.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-ink-500">
               <Mail className="mx-auto mb-2 size-6 text-brand-300" aria-hidden />
-              {user.notificationPreference === 'email_only'
+              {currentPref === 'email_only'
                 ? 'In-system alerts are muted because your preference is set to External Email Only.'
                 : 'No notifications yet. We’ll let you know when something changes.'}
             </div>
@@ -443,22 +459,29 @@ function UserMenu() {
   const navigate = useNavigate()
   const { open, setOpen, ref } = usePopover()
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative shrink-0" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex items-center gap-2.5 rounded-xl py-1 pl-1 pr-2 transition-colors hover:bg-brand-50"
+        className="flex items-center gap-1.5 sm:gap-2.5 rounded-xl p-0.5 sm:py-1 sm:pl-1 sm:pr-2 transition-colors hover:bg-brand-50"
       >
-        <Avatar name={user.name} />
+        <Avatar name={user.name} className="size-7 sm:size-9 text-[11px] sm:text-xs" />
         <span className="hidden text-left leading-tight sm:block">
           <span className="block text-sm font-semibold text-ink-900">{user.name}</span>
           <span className="block text-xs text-ink-500">{user.position}</span>
         </span>
-        <ChevronDown className="size-4 text-ink-400" aria-hidden />
+        <ChevronDown
+          className={cn(
+            'hidden min-[280px]:block size-3.5 sm:size-4 text-ink-400 transform-gpu transition-transform duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+            open && 'rotate-180',
+          )}
+          style={{ transformOrigin: 'center' }}
+          aria-hidden
+        />
       </button>
       {open && (
-        <div className="absolute right-0 top-12 z-30 w-60 origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white p-1.5 shadow-raised ring-1 ring-ink-100">
+        <div className="absolute right-0 top-11 sm:top-12 z-30 w-[min(calc(100vw-16px),240px)] origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white p-1.5 shadow-raised ring-1 ring-ink-100">
           <div className="px-3 py-2">
             <p className="truncate text-sm font-semibold text-ink-900">{user.name}</p>
             <p className="truncate text-xs text-ink-500">{user.email}</p>

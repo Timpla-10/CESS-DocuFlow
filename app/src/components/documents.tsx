@@ -24,8 +24,10 @@ import {
   STATUS_FILTER_LABEL,
   controlNumber,
   downloadGeneratedPdf,
+  externalOfficeLabel,
   historyTitle,
   historyTone,
+  locationLabel,
   locationLabelForStaff,
   revisionLabel,
   statusView,
@@ -49,9 +51,11 @@ export function StatusBadge({ doc, audience, db }: { doc: DocRecord; audience: '
 
 export function DelayedBadge({ audience }: { audience: 'requester' | 'staff' }) {
   return (
-    <Badge tone="warning" dot={false} className="shrink-0 gap-1.5 whitespace-nowrap">
-      <Hourglass className="size-3 shrink-0" aria-hidden />
-      <span>{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
+    <Badge tone="warning" dot={false} className="whitespace-nowrap shrink-0">
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <Hourglass className="size-3 shrink-0" aria-hidden />
+        <span>{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
+      </span>
     </Badge>
   )
 }
@@ -126,7 +130,7 @@ export function useDocumentFilters(db: Database, docs: DocRecord[], initialSort:
   return { filters, setFilters, result, active, clear }
 }
 
-const ALL_INTERNAL_OFFICES: OfficeId[] = ['secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+const ALL_INTERNAL_OFFICES: OfficeId[] = ['secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
 
 export function FilterBar({
   db,
@@ -152,9 +156,9 @@ export function FilterBar({
   const types = db.documentTypes.filter((t) => audience === 'all' || t.audience === audience)
   const statusList = statuses ?? (Object.keys(STATUS_FILTER_LABEL) as Status[])
   return (
-    <div className="space-y-3.5 border-b border-ink-100 px-6 py-5">
-      <div className="flex flex-wrap items-end gap-3.5">
-        <div className="relative min-w-[220px] flex-1">
+    <div className="w-full min-w-0 space-y-3.5 border-b border-ink-100 p-3 sm:px-6 sm:py-5">
+      <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 sm:gap-3.5">
+        <div className="relative w-full min-w-0 flex-1 sm:w-auto sm:min-w-[220px]">
           <label htmlFor="doc-search" className="mb-1 block text-xs font-semibold text-ink-600">
             Search
           </label>
@@ -166,7 +170,7 @@ export function FilterBar({
               value={filters.q}
               onChange={(e) => setFilters({ ...filters, q: e.target.value })}
               placeholder={searchLabel}
-              className="pl-10 pr-4"
+              className="w-full pl-10 pr-4"
             />
           </div>
         </div>
@@ -223,23 +227,23 @@ export function FilterBar({
       </div>
 
       {showDateRange && (
-        <div className="flex flex-wrap items-end gap-3 pt-1">
-          <label className="block">
+        <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 pt-1 sm:gap-3.5">
+          <label className="block w-full min-w-0 sm:w-auto">
             <span className="mb-1 block text-xs font-semibold text-ink-600">Submitted from date</span>
             <Input
               type="date"
               value={filters.dateFrom}
               onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-              className="h-9 w-40 text-xs"
+              className="h-10 w-full min-w-0 text-sm sm:w-44"
             />
           </label>
-          <label className="block">
+          <label className="block w-full min-w-0 sm:w-auto">
             <span className="mb-1 block text-xs font-semibold text-ink-600">Submitted to date</span>
             <Input
               type="date"
               value={filters.dateTo}
               onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-              className="h-9 w-40 text-xs"
+              className="h-10 w-full min-w-0 text-sm sm:w-44"
             />
           </label>
           {(filters.dateFrom || filters.dateTo || filters.office || filters.status || filters.type || filters.origin || filters.q) && (
@@ -257,7 +261,7 @@ export function FilterBar({
                   dateTo: '',
                 })
               }
-              className="h-9 rounded-lg px-2.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-50/70 px-3.5 text-sm font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
             >
               Reset filters
             </button>
@@ -270,9 +274,9 @@ export function FilterBar({
 
 function FilterSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: ReactNode }) {
   return (
-    <label className="block">
+    <label className="block w-full min-w-0 sm:w-auto">
       <span className="mb-1 block text-xs font-semibold text-ink-600">{label}</span>
-      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 min-w-[150px]">
+      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-full min-w-0 sm:min-w-[150px]">
         {children}
       </Select>
     </label>
@@ -437,13 +441,15 @@ export function DocumentList({
                     <div className="mt-0.5 text-[11px] text-ink-400">Updated {timeAgo(d.updatedAt)}</div>
                   </td>
                   <td className="min-w-[190px] px-6 py-4.5">
-                    <div className="font-medium text-ink-800">{audience === 'requester' && d.status === 'returned' ? 'With you' : locationLabelForStaff(d, db)}</div>
+                    <div className="font-medium text-ink-800">
+                      {audience === 'requester' ? locationLabel(d, db) : locationLabelForStaff(d, db)}
+                    </div>
                     {showWaiting && (d.status === 'with_office' || d.status === 'with_external' || d.status === 'submitted') && (
                       <div className="mt-0.5 text-xs text-ink-500">Waiting {plural(daysWaiting(d), 'day')}</div>
                     )}
                   </td>
                   <td className="whitespace-nowrap min-w-[170px] px-6 py-4.5">
-                    <div className="flex flex-col items-start gap-1.5">
+                    <div className="inline-flex flex-wrap items-center gap-1.5">
                       <StatusBadge doc={d} audience={audience} db={db} />
                       {delayed && <DelayedBadge audience={audience} />}
                     </div>
@@ -456,28 +462,68 @@ export function DocumentList({
       </div>
 
       {/* Mobile cards */}
-      <ul className="divide-y divide-ink-100 md:hidden">
+      <ul className="w-full min-w-0 max-w-full divide-y divide-ink-100 overflow-hidden md:hidden">
         {docs.map((d) => {
           const type = typeOf(db, d)
           const req = userById(db, d.requesterId)
+          const highlight = audience === 'requester' && (d.status === 'returned' || d.status === 'ready')
           return (
-            <li key={d.id}>
-              <Link to={`/app/documents/${d.id}`} className="block px-4 py-4 hover:bg-brand-50/70">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-ink-900">{d.title}</p>
-                    <p className="mt-0.5 text-xs text-ink-500">
+            <li
+              key={d.id}
+              className={cn(
+                'w-full min-w-0 max-w-full overflow-hidden transition-colors',
+                highlight && d.status === 'returned' && 'bg-danger-50/30',
+                highlight && d.status === 'ready' && 'bg-success-50/40',
+              )}
+            >
+              <Link to={`/app/documents/${d.id}`} className="block w-full min-w-0 max-w-full px-3 py-3.5 hover:bg-brand-50/70 sm:px-4 sm:py-4">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="font-mono text-xs font-bold text-brand-900 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-200">
+                    {controlNumber(d)}
+                  </span>
+                  <Badge tone="neutral" dot={false}>
+                    {revisionLabel(d.revision)}
+                  </Badge>
+                  {d.encodedBySecretary && (
+                    <Badge tone="brand" dot={false}>
+                      Walk-in
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="mt-1.5 flex w-full min-w-0 items-start justify-between gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1 break-words">
+                    <p className="font-bold text-ink-950 break-words">{d.title}</p>
+                    <p className="mt-0.5 text-xs text-ink-500 break-words">
                       {type?.name}
                       {showRequester && req ? ` · ${req.name}` : ''}
                     </p>
                   </div>
                   <ArrowRight className="mt-1 size-4 shrink-0 text-ink-400" aria-hidden />
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+
+                <div className="mt-2.5 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
                   <StatusBadge doc={d} audience={audience} db={db} />
                   {isDelayed(db, d) && <DelayedBadge audience={audience} />}
-                  <span className="text-xs text-ink-500">Submitted {formatDate(lastSubmittedAt(d))}</span>
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100/70 pt-2 text-2xs text-ink-500">
+                  <div className="font-medium text-ink-700">
+                    <span className="text-ink-400">Location: </span>
+                    {audience === 'requester' ? locationLabel(d, db) : locationLabelForStaff(d, db)}
+                  </div>
+                  <div className="text-right">
+                    <span>Submitted {formatDate(lastSubmittedAt(d))}</span>
+                    <span className="ml-1.5 text-ink-400">· Updated {timeAgo(d.updatedAt)}</span>
+                  </div>
+                </div>
+
+                {audience === 'requester' && d.status === 'returned' && d.returnInfo && (
+                  <div className="mt-2.5 rounded-lg border border-danger-200 bg-danger-50/90 p-2.5 text-xs text-danger-900">
+                    <span className="font-bold">Return reason: </span>
+                    <span>{d.returnInfo.reasons}</span>
+                  </div>
+                )}
               </Link>
             </li>
           )
@@ -588,13 +634,17 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
       s.stage === 'check'
         ? 'Content & Completeness Check (College Secretary)'
         : s.stage === 'final'
-          ? 'Release & Archive (College Secretary)'
+          ? (doc.status === 'with_external' && doc.externalOffice
+              ? `External Office: ${externalOfficeLabel(doc.externalOffice, db)}`
+              : 'Release & Archive (College Secretary)')
           : s.label ?? OFFICE_LABEL[s.office]
     const help =
       s.stage === 'check'
         ? 'Automatic completeness check passed; the College Secretary verifies document content.'
         : s.stage === 'final'
-          ? 'The College Secretary prepares and releases the signed document.'
+          ? (doc.status === 'with_external' && doc.externalOffice
+              ? `Transferred to ${externalOfficeLabel(doc.externalOffice, db)} for university processing.`
+              : 'The College Secretary prepares and releases the signed document.')
           : OFFICE_HELP[s.office]
     let state: 'done' | 'current' | 'next' | 'returned' | 'rejected' = i < doc.routeIndex ? 'done' : i === doc.routeIndex ? 'current' : 'next'
     if (done) state = 'done'
@@ -748,10 +798,14 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                         </span>
                         <div className="min-w-0 flex-1 pt-0.5">
                           <p className="text-xs font-semibold text-brand-900">
-                            Currently under review at this office
+                            {doc.status === 'with_external'
+                              ? `Currently with ${doc.externalOffice ? externalOfficeLabel(doc.externalOffice, db) : 'External Office'}`
+                              : 'Currently under review at this office'}
                           </p>
                           <p className="text-[11px] text-ink-500">
-                            Awaiting recorded review decision or release action
+                            {doc.status === 'with_external'
+                              ? 'Awaiting recorded return from external university office'
+                              : 'Awaiting recorded review decision or release action'}
                           </p>
                         </div>
                       </div>
@@ -825,7 +879,7 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
       `Document Type: ${type?.name ?? doc.typeId}`,
       `Origin: ${doc.origin}`,
       `Requester: ${requester?.name ?? 'Unknown'} (${requester?.department ?? ''})`,
-      `Attachment Category: ${a.isSignedCopy ? 'Final Signed Release Copy (REQ-REL-4)' : (req?.label ?? 'Supporting Attachment')}`,
+      `Attachment Category: ${a.isSignedCopy ? 'Final Signed Release Copy' : (req?.label ?? 'Supporting Attachment')}`,
       `Uploaded By: ${a.uploadedBy}`,
       `Uploaded At: ${formatDateTime(a.uploadedAt)}`,
       `Revision: ${revisionLabel(a.revision)}`,

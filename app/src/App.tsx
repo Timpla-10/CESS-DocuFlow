@@ -27,7 +27,7 @@ import { RequirementsCheckPage } from './pages/secretary/RequirementsCheckPage'
 import { SettingsPage } from './pages/secretary/SettingsPage'
 import { UserManagementPage } from './pages/secretary/UserManagementPage'
 
-const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'chancellor']
+const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor']
 
 function Protected({ allowedRoles, children }: { allowedRoles?: Role[]; children: ReactNode }) {
   const { user } = useSession()
@@ -80,7 +80,7 @@ export default function App() {
               <Route
                 path="dashboard"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'chancellor', 'dean']}>
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor', 'dean']}>
                     <DashboardPage />
                   </Protected>
                 }
@@ -88,7 +88,7 @@ export default function App() {
               <Route
                 path="my-documents"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'chancellor', 'dean', 'secretary']}>
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor', 'dean', 'secretary']}>
                     <MyDocumentsPage />
                   </Protected>
                 }

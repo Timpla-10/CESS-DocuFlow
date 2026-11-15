@@ -48,6 +48,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     localStorage.removeItem(KEY)
+    try {
+      sessionStorage.clear()
+    } catch {
+      /* ignore */
+    }
     setUserId(null)
   }, [])
 

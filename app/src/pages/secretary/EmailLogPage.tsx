@@ -32,6 +32,7 @@ export function EmailLogPage() {
 
   const [search, setSearch] = useState('')
   const [filterResult, setFilterResult] = useState<'all' | 'sent' | 'failed'>('all')
+  const [filterChannel, setFilterChannel] = useState<'all' | 'email' | 'in_system_only'>('all')
   const [inspecting, setInspecting] = useState<NotificationLog | null>(null)
   const [retryingId, setRetryingId] = useState<string | null>(null)
   const [pageSize, setPageSize] = useState<number>(15)
@@ -39,6 +40,8 @@ export function EmailLogPage() {
 
   const notifications = db.notifications.filter((n) => {
     if (filterResult !== 'all' && n.result !== filterResult) return false
+    if (filterChannel === 'email' && n.channels && !n.channels.includes('email')) return false
+    if (filterChannel === 'in_system_only' && (!n.channels || n.channels.includes('email'))) return false
     if (!search.trim()) return true
     const q = search.toLowerCase()
     return (
@@ -65,6 +68,11 @@ export function EmailLogPage() {
     setCurrentPage(1)
   }
 
+  const handleChannelFilterChange = (channel: typeof filterChannel) => {
+    setFilterChannel(channel)
+    setCurrentPage(1)
+  }
+
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize)
     setCurrentPage(1)
@@ -88,7 +96,7 @@ export function EmailLogPage() {
       <PageHeader
         eyebrow="Communications Audit"
         title="Email Notifications Log"
-        description="A complete audit record of automated emails dispatched to requesters and reviewing offices, including status updates, return reasons, and reminders (REQ-NOT-4)."
+        description="A complete audit record of automated emails dispatched to requesters and reviewing offices, including status updates, return reasons, and reminders."
       />
 
       <Card>
@@ -104,6 +112,15 @@ export function EmailLogPage() {
               className="pl-10 pr-4"
             />
           </div>
+          <Select
+            value={filterChannel}
+            onChange={(e) => handleChannelFilterChange(e.target.value as typeof filterChannel)}
+            className="w-48"
+          >
+            <option value="all">All Delivery Modes</option>
+            <option value="email">Dispatched via Email</option>
+            <option value="in_system_only">In-System Only (Muted Email)</option>
+          </Select>
           <Select
             value={filterResult}
             onChange={(e) => handleFilterChange(e.target.value as typeof filterResult)}
@@ -163,9 +180,13 @@ export function EmailLogPage() {
                         {timeAgo(n.at)}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
-                        {n.result === 'sent' ? (
+                        {n.channels && !n.channels.includes('email') ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700">
+                            <span className="size-2 rounded-full bg-brand-400" /> In-System (Email Opted Out)
+                          </span>
+                        ) : n.result === 'sent' ? (
                           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-success-700">
-                            <CheckCircle2 className="size-3.5 shrink-0" /> Delivered
+                            <CheckCircle2 className="size-3.5 shrink-0" /> Delivered (Email)
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-danger-700">
@@ -180,9 +201,9 @@ export function EmailLogPage() {
                             size="sm"
                             onClick={() => setInspecting(n)}
                           >
-                            View Email
+                            {n.channels && !n.channels.includes('email') ? 'View Alert' : 'View Email'}
                           </Button>
-                          {n.result === 'failed' && (
+                          {n.result === 'failed' && (!n.channels || n.channels.includes('email')) && (
                             <Button
                               size="sm"
                               variant="danger-soft"
@@ -217,10 +238,17 @@ export function EmailLogPage() {
       <Dialog
         open={!!inspecting}
         onClose={() => setInspecting(null)}
-        title={inspecting?.subject || 'Email Preview'}
-        description={`Dispatched to ${inspecting?.recipientEmail} on ${
-          inspecting ? formatDateTime(inspecting.at) : ''
-        }`}
+        size="lg"
+        title={inspecting?.subject || 'Notification Preview'}
+        description={
+          inspecting?.channels && !inspecting.channels.includes('email')
+            ? `In-System Alert generated for ${inspecting.recipientLabel} on ${
+                inspecting ? formatDateTime(inspecting.at) : ''
+              } (External email delivery muted by recipient preference)`
+            : `Dispatched to ${inspecting?.recipientEmail} on ${
+                inspecting ? formatDateTime(inspecting.at) : ''
+              }`
+        }
         footer={
           <Button variant="secondary" onClick={() => setInspecting(null)}>
             Close Preview
@@ -228,13 +256,13 @@ export function EmailLogPage() {
         }
       >
         {inspecting && (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-ink-100 bg-ink-50/70 p-4">
-              <div className="flex justify-between text-xs text-ink-600 pb-2 border-b border-ink-200">
+          <div className="space-y-5">
+            <div className="rounded-xl border border-ink-100 bg-ink-50/70 p-5">
+              <div className="flex justify-between text-xs text-ink-600 pb-2.5 border-b border-ink-200">
                 <span><strong>To:</strong> {inspecting.recipientLabel} &lt;{inspecting.recipientEmail}&gt;</span>
                 <span><strong>Category:</strong> {KIND_LABEL[inspecting.kind]}</span>
               </div>
-              <p className="mt-3 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink-900">
+              <p className="mt-4 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink-900">
                 {inspecting.body}
               </p>
             </div>
