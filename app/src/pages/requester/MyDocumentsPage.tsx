@@ -2,6 +2,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   Building2,
   Calendar,
   CheckCircle2,
@@ -321,11 +322,18 @@ export function MyDocumentsPage() {
             title="My Documents"
             description="View all your requested documents, track current approval statuses, check which office currently holds each document, and manage revisions."
             actions={
-              canSubmit ? (
-                <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-                  Submit Document Request
-                </ButtonLink>
-              ) : undefined
+              <div className="flex flex-wrap items-center gap-2">
+                {user.role === 'faculty' && (
+                  <ButtonLink to="/app/syllabi" variant="secondary" icon={BookOpen}>
+                    Course Syllabi (PB-56)
+                  </ButtonLink>
+                )}
+                {canSubmit && (
+                  <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+                    Submit Document Request
+                  </ButtonLink>
+                )}
+              </div>
             }
           />
 

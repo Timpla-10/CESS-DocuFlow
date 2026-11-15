@@ -1,9 +1,11 @@
 import {
   Archive,
   BookOpen,
+  Building2,
   ClipboardCheck,
   Files,
   FolderOpen,
+  GraduationCap,
   LayoutDashboard,
   Mail,
   Megaphone,
@@ -29,7 +31,8 @@ export interface NavSection {
   items: NavItem[]
 }
 
-const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty and Subjects', icon: BookOpen }
+const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty Directory', icon: GraduationCap }
+const syllabiNav: NavItem = { to: '/app/syllabi', label: 'Course Syllabi', icon: BookOpen }
 const notices: NavItem = {
   to: '/app/notices',
   label: 'Notices and Minutes',
@@ -60,7 +63,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [directory],
+          items: [syllabiNav, directory],
         },
       ]
     case 'faculty':
@@ -81,6 +84,21 @@ export function navFor(role: Role): NavSection[] {
               count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
               countTone: 'brand',
             },
+            {
+              to: '/app/syllabi',
+              label: 'Course Syllabi',
+              icon: BookOpen,
+              count: (db, u) => {
+                const myFac = db.faculty.find(
+                  (f) =>
+                    f.userId === u.id ||
+                    f.name.toLowerCase() === u.name.toLowerCase(),
+                )
+                if (!myFac) return 0
+                return myFac.subjects.filter((s) => !s.syllabusFile).length
+              },
+              countTone: 'warning',
+            },
           ],
         },
         {
@@ -96,12 +114,14 @@ export function navFor(role: Role): NavSection[] {
           items: [
             { to: '/app/requirements-check', label: 'Check Requirements', icon: ClipboardCheck, count: (db) => secretaryQueues(db).toCheck.length, countTone: 'warning' },
             { to: '/app/release', label: 'Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
+            { to: '/app/external-offices', label: 'External Offices', icon: Building2, count: (db) => secretaryQueues(db).external.length, countTone: 'warning' },
           ],
         },
         {
           heading: 'Records',
           items: [
             { to: '/app/documents', label: 'All Documents', icon: Files },
+            syllabiNav,
             { to: '/app/archive', label: 'Archive', icon: Archive },
             { to: '/app/email-log', label: 'Email Log', icon: Mail },
           ],
@@ -144,7 +164,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [directory],
+          items: [syllabiNav, directory],
         },
       ]
     case 'dean':
@@ -167,7 +187,11 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }, directory],
+          items: [
+            { ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length },
+            syllabiNav,
+            directory,
+          ],
         },
       ]
     case 'chairperson':
@@ -189,6 +213,7 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
+            syllabiNav,
           ],
         },
       ]

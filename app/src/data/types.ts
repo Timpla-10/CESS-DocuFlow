@@ -264,6 +264,29 @@ export interface SyllabusTemplate {
   fileSize?: string
 }
 
+/**
+ * PB-56: Dedicated Course Syllabus Record.
+ * Stored separately from regular document requests to facilitate
+ * faculty course management, accreditation retrieval, and departmental organization.
+ */
+export interface SyllabusRecord {
+  id: string
+  subjectCode: string
+  subjectTitle: string
+  facultyId: string
+  facultyName: string
+  facultyUserId?: string
+  department: string
+  academicYear: string
+  semester: string
+  fileName: string
+  fileUrl?: string
+  fileSizeKb?: number
+  uploadedAt: string
+  description?: string
+  status: 'active' | 'archived'
+}
+
 export interface FacultyEntry {
   id: string
   userId?: string
@@ -313,6 +336,7 @@ export interface Database {
   notices: Notice[]
   faculty: FacultyEntry[]
   syllabusTemplate?: SyllabusTemplate
+  syllabi?: SyllabusRecord[]
   settings: Settings
   counter: number
   whitelist: WhitelistEntry[]

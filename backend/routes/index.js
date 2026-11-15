@@ -4,6 +4,7 @@ const authRoutes = require('./authRoutes');
 const documentRoutes = require('./documentRoutes');
 const workflowRouteRoutes = require('./workflowRouteRoutes');
 const notificationRoutes = require('./notificationRoutes');
+const syllabusRoutes = require('./syllabusRoutes');
 const DocumentController = require('../controllers/documentController');
 const { verifyUser, requireAction } = require('../middleware/authMiddleware');
 
@@ -33,5 +34,6 @@ router.use('/documents', documentRoutes);
 router.use('/workflow/routes', workflowRouteRoutes);
 router.use('/routes', workflowRouteRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/syllabi', syllabusRoutes);
 
 module.exports = router;

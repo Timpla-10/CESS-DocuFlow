@@ -22,6 +22,7 @@ import type {
   Origin,
   PendingRegistration,
   Role,
+  SyllabusRecord,
   SyllabusTemplate,
   User,
   WhitelistEntry,
@@ -891,6 +892,34 @@ export const api = {
       const subject = fac.subjects.find((s) => s.code.trim().toLowerCase() === subjectCode.trim().toLowerCase())
       if (!subject) throw new FriendlyError(`Subject ${subjectCode} not found for this instructor.`)
       subject.syllabusFile = fileName.trim()
+
+      if (!d.syllabi) d.syllabi = []
+      const existingSyl = d.syllabi.find(
+        (s) =>
+          s.facultyId === facultyId &&
+          s.subjectCode.trim().toLowerCase() === subjectCode.trim().toLowerCase(),
+      )
+      if (existingSyl) {
+        existingSyl.fileName = fileName.trim()
+        existingSyl.uploadedAt = new Date().toISOString()
+        existingSyl.status = 'active'
+      } else {
+        d.syllabi.push({
+          id: engine.nextId(d, 'syl-'),
+          subjectCode: subject.code,
+          subjectTitle: subject.title,
+          facultyId: fac.id,
+          facultyName: fac.name,
+          facultyUserId: fac.userId,
+          department: fac.department,
+          academicYear: '2026-2027',
+          semester: '1st Semester',
+          fileName: fileName.trim(),
+          fileSizeKb: 450,
+          uploadedAt: new Date().toISOString(),
+          status: 'active',
+        })
+      }
     }),
 
   /** Faculty self-service: Remove syllabus from own subject. */
@@ -907,6 +936,161 @@ export const api = {
       const subject = fac.subjects.find((s) => s.code.trim().toLowerCase() === subjectCode.trim().toLowerCase())
       if (!subject) throw new FriendlyError(`Subject ${subjectCode} not found for this instructor.`)
       delete subject.syllabusFile
+
+      if (d.syllabi) {
+        d.syllabi = d.syllabi.filter(
+          (s) =>
+            !(
+              s.facultyId === facultyId &&
+              s.subjectCode.trim().toLowerCase() === subjectCode.trim().toLowerCase()
+            ),
+        )
+      }
+    }),
+
+  /**
+   * PB-56: Separate Syllabus Management - Upload or update a syllabus record.
+   */
+  uploadSyllabusRecord: (
+    actor: User,
+    payload: {
+      subjectCode: string
+      subjectTitle: string
+      academicYear?: string
+      semester?: string
+      fileName: string
+      fileSizeKb?: number
+      description?: string
+      department?: string
+    },
+  ) =>
+    mutate((d) => {
+      if (actor.role === 'student') {
+        throw new FriendlyError('Students are not permitted to upload course syllabi.')
+      }
+
+      const code = payload.subjectCode.trim().toUpperCase()
+      const title = payload.subjectTitle.trim()
+      const fileName = payload.fileName.trim()
+      const ay = payload.academicYear || '2026-2027'
+      const sem = payload.semester || '1st Semester'
+
+      if (!code) throw new FriendlyError('Course code is required (e.g. EDUC 101).')
+      if (!title) throw new FriendlyError('Course title is required.')
+      if (!fileName) throw new FriendlyError('Syllabus file is required.')
+
+      if (!d.syllabi) d.syllabi = []
+
+      let fac = d.faculty.find(
+        (f) =>
+          (f.userId && f.userId === actor.id) ||
+          f.name.trim().toLowerCase() === actor.name.trim().toLowerCase(),
+      )
+
+      if (!fac && actor.role === 'faculty') {
+        fac = {
+          id: engine.nextId(d, 'fac-'),
+          userId: actor.id,
+          name: actor.name,
+          department: actor.department || payload.department || 'College of Education and Social Sciences',
+          subjects: [],
+        }
+        d.faculty.push(fac)
+      }
+
+      const facultyName = fac ? fac.name : actor.name
+      const facultyId = fac ? fac.id : `fac-${actor.id}`
+      const department =
+        fac?.department || actor.department || payload.department || 'College of Education and Social Sciences'
+
+      const existingIdx = d.syllabi.findIndex(
+        (s) =>
+          s.subjectCode.trim().toUpperCase() === code &&
+          s.academicYear === ay &&
+          s.semester === sem,
+      )
+
+      if (existingIdx >= 0) {
+        const existing = d.syllabi[existingIdx]
+        if (
+          actor.role === 'faculty' &&
+          existing.facultyUserId &&
+          existing.facultyUserId !== actor.id
+        ) {
+          throw new FriendlyError('Only the assigned instructor or College Secretary can update this course syllabus.')
+        }
+
+        d.syllabi[existingIdx] = {
+          ...existing,
+          subjectTitle: title,
+          fileName,
+          fileSizeKb: payload.fileSizeKb || existing.fileSizeKb || 450,
+          description: payload.description || existing.description,
+          uploadedAt: new Date().toISOString(),
+          status: 'active',
+        }
+      } else {
+        const newRecord: SyllabusRecord = {
+          id: engine.nextId(d, 'syl-'),
+          subjectCode: code,
+          subjectTitle: title,
+          facultyId,
+          facultyName,
+          facultyUserId: actor.id,
+          department,
+          academicYear: ay,
+          semester: sem,
+          fileName,
+          fileSizeKb: payload.fileSizeKb || 450,
+          description: payload.description || 'Outcome-Based Education (OBE) course syllabus.',
+          uploadedAt: new Date().toISOString(),
+          status: 'active',
+        }
+        d.syllabi.push(newRecord)
+      }
+
+      if (fac) {
+        let sub = fac.subjects.find((s) => s.code.trim().toUpperCase() === code)
+        if (sub) {
+          sub.title = title
+          sub.syllabusFile = fileName
+        } else {
+          fac.subjects.push({ code, title, syllabusFile: fileName })
+        }
+      }
+    }),
+
+  /**
+   * PB-56: Separate Syllabus Management - Delete a syllabus record.
+   */
+  deleteSyllabusRecord: (actor: User, syllabusId: string) =>
+    mutate((d) => {
+      if (!d.syllabi) return
+      const target = d.syllabi.find((s) => s.id === syllabusId)
+      if (!target) throw new FriendlyError('Syllabus record not found.')
+
+      const isOwner =
+        (target.facultyUserId && target.facultyUserId === actor.id) ||
+        target.facultyName.trim().toLowerCase() === actor.name.trim().toLowerCase()
+      const isSec = actor.role === 'secretary'
+
+      if (!isOwner && !isSec) {
+        throw new FriendlyError('Only the assigned instructor or College Secretary can remove this course syllabus.')
+      }
+
+      d.syllabi = d.syllabi.filter((s) => s.id !== syllabusId)
+
+      const fac = d.faculty.find(
+        (f) => f.id === target.facultyId || (f.userId && f.userId === target.facultyUserId),
+      )
+      if (fac) {
+        const sub = fac.subjects.find(
+          (s) => s.code.trim().toUpperCase() === target.subjectCode.trim().toUpperCase(),
+        )
+        if (sub) {
+          delete sub.syllabusFile
+        }
+      }
     }),
 
   updateReminderDays: (actor: User, days: number) =>

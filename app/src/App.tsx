@@ -26,6 +26,7 @@ import { ReleasePage } from './pages/secretary/ReleasePage'
 import { RequirementsCheckPage } from './pages/secretary/RequirementsCheckPage'
 import { SettingsPage } from './pages/secretary/SettingsPage'
 import { UserManagementPage } from './pages/secretary/UserManagementPage'
+import { SyllabusManagementPage } from './pages/syllabi/SyllabusManagementPage'
 
 const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor']
 
@@ -193,6 +194,16 @@ export default function App() {
                 element={
                   <Protected allowedRoles={REVIEWER_ROLES}>
                     <ReviewedPage />
+                  </Protected>
+                }
+              />
+
+              {/* PB-56: Dedicated Course Syllabus Management Section */}
+              <Route
+                path="syllabi"
+                element={
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
+                    <SyllabusManagementPage />
                   </Protected>
                 }
               />
