@@ -44,6 +44,7 @@ app.get('/', (req, res) => {
       routes: 'GET /api/workflow/routes',
       directory: 'GET /api/directory',
       notificationLogs: 'GET /api/notifications/logs',
+      homepage: 'GET /api/homepage',
     },
   });
 });

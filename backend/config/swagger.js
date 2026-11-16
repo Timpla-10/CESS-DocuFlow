@@ -290,6 +290,77 @@ Mindanao State University at Naawan
           changeNotes: { type: 'string', example: 'Aligned with updated syllabus template.' },
         },
       },
+      HomepageInfoUpdateRequest: {
+        type: 'object',
+        properties: {
+          collegeName: { type: 'string', example: 'College of Education and Social Sciences (CESS)' },
+          universityName: { type: 'string', example: 'Mindanao State University at Naawan' },
+          tagline: { type: 'string', example: 'Excellence in Education and Social Inquiry' },
+          heroTitle: { type: 'string', example: 'CESS DocuFlow — Institutional Document Portal' },
+          heroSubtitle: { type: 'string' },
+          heroBannerUrl: { type: 'string', example: '/assets/banners/cess-campus-hero.jpg' },
+          about: { type: 'string' },
+          mission: { type: 'string' },
+          vision: { type: 'string' },
+          coreValues: { type: 'array', items: { type: 'string' } },
+          programsOffered: { type: 'array', items: { type: 'string' } },
+          officeInfo: {
+            type: 'object',
+            properties: {
+              officeName: { type: 'string' },
+              location: { type: 'string' },
+              publicEmail: { type: 'string' },
+              contactNumber: { type: 'string' },
+              officeHours: { type: 'string' },
+            },
+          },
+          publish: { type: 'boolean', default: true, description: 'If false, stages changes as draft without altering live approved homepage.' },
+          reason: { type: 'string', example: 'Updated AY 2026-2027 office hours and mission copy.' },
+        },
+      },
+      HomepageLogosUpdateRequest: {
+        type: 'object',
+        properties: {
+          universityLogo: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string', example: 'MSU at Naawan Official Seal' },
+              url: { type: 'string', example: '/assets/logos/msu-naawan-seal-v2.png' },
+              altText: { type: 'string' },
+              isApproved: { type: 'boolean', default: true },
+              isActive: { type: 'boolean', default: true },
+            },
+          },
+          collegeLogo: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string', example: 'CESS Official College Emblem' },
+              url: { type: 'string', example: '/assets/logos/cess-emblem-v2.png' },
+              altText: { type: 'string' },
+              isApproved: { type: 'boolean', default: true },
+              isActive: { type: 'boolean', default: true },
+            },
+          },
+          additionalLogos: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                url: { type: 'string' },
+                altText: { type: 'string' },
+                isApproved: { type: 'boolean' },
+                isActive: { type: 'boolean' },
+              },
+            },
+          },
+          publish: { type: 'boolean', default: true },
+          reason: { type: 'string' },
+        },
+      },
     },
   },
   tags: [
@@ -301,6 +372,7 @@ Mindanao State University at Naawan
     { name: 'Workflow Routes', description: 'Office sequence configuration, CESS vs IDS routing & audit logs (PB-45)' },
     { name: 'Notifications', description: 'In-system alerts, user preferences & Secretary email audit log (PB-05, PB-06, PB-42)' },
     { name: 'Faculty & Syllabus Directory', description: 'Directory browsing, Secretary-managed templates, announcements & listings (PB-38, PB-40)' },
+    { name: 'Homepage & College Info', description: 'Public approved college homepage, logos & Secretary maintenance (PB-47)' },
   ],
   paths: {
     '/api/health': {
@@ -1487,6 +1559,113 @@ Mindanao State University at Naawan
         tags: ['User & Role Management'],
         security: [{ bearerAuth: [] }],
         responses: { 200: { description: 'Chronological user/role/whitelist audit log' }, 403: { description: 'Forbidden' } },
+      },
+    },
+
+    // --- HOMEPAGE & COLLEGE INFO (PB-47) ---
+    '/api/homepage': {
+      get: {
+        summary: 'Get approved public homepage and college information & logos (PB-47 - Public)',
+        description: 'Publicly accessible endpoint (SRS 3.13.2). Returns strictly approved college copy, active institutional logos, and public-audience announcements without exposing drafts or restricted data.',
+        tags: ['Homepage & College Info'],
+        responses: {
+          200: { description: 'Approved institutional homepage information and active official logos' },
+        },
+      },
+      put: {
+        summary: 'Update homepage and college information (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/HomepageInfoUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Homepage info updated (published or staged draft)' },
+          400: { description: 'Validation error or unsafe URL rejected' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Only College Secretary may update homepage info' },
+        },
+      },
+    },
+    '/api/homepage/public': {
+      get: {
+        summary: 'Public alias for approved homepage and college information (PB-47)',
+        tags: ['Homepage & College Info'],
+        responses: {
+          200: { description: 'Approved public homepage information' },
+        },
+      },
+    },
+    '/api/homepage/logos': {
+      get: {
+        summary: 'Get approved active institutional and college logos (PB-47 - Public)',
+        tags: ['Homepage & College Info'],
+        responses: {
+          200: { description: 'Approved active university, college, and additional logos' },
+        },
+      },
+      put: {
+        summary: 'Update approved university and college logos (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/HomepageLogosUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Institutional logos updated' },
+          400: { description: 'Invalid or unsafe logo URL' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/homepage/manage': {
+      get: {
+        summary: 'View both approved homepage state and pending draft edits (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Approved content, draft state, and change summary' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/homepage/publish': {
+      post: {
+        summary: 'Approve and publish staged homepage/logo draft to live public view (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  reason: { type: 'string', example: 'Approved by Dean and College Secretary.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Staged draft approved and published live' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/homepage/history': {
+      get: {
+        summary: 'Inspect traceable homepage and logo revision history (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } }],
+        responses: {
+          200: { description: 'Chronological list of homepage updates and publications' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
       },
     },
   },
