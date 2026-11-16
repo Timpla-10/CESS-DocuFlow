@@ -238,6 +238,58 @@ Mindanao State University at Naawan
           },
         },
       },
+      OfficialTemplateUpdateRequest: {
+        type: 'object',
+        required: ['fileName'],
+        properties: {
+          fileName: { type: 'string', example: 'CESS_Official_Course_Syllabus_Template_v2.docx' },
+          fileUrl: { type: 'string', example: '/templates/CESS_Official_Course_Syllabus_Template_v2.docx' },
+          fileSize: { type: 'string', example: '158 KB' },
+          description: { type: 'string', example: 'Updated OBE syllabus template with revised assessment rubrics.' },
+          academicTerm: { type: 'string', example: '2026-2027 (2nd Semester)' },
+          effectiveDate: { type: 'string', format: 'date', example: '2026-11-15' },
+          changeNotes: { type: 'string', example: 'Added CHED OBE alignment section.' },
+          announcementTitle: { type: 'string', example: 'Official Syllabus Template Updated to v2' },
+          announcementContent: { type: 'string', example: 'All faculty are advised to download the new OBE template.' },
+          targetAudience: { type: 'string', enum: ['Faculty', 'All', 'Student'], example: 'Faculty' },
+        },
+      },
+      FacultyListingUpsertRequest: {
+        type: 'object',
+        required: ['name'],
+        properties: {
+          userId: { type: 'string', format: 'uuid', nullable: true },
+          name: { type: 'string', example: 'Dr. Elena Magno' },
+          email: { type: 'string', example: 'elena.magno@msunaawan.edu.ph' },
+          department: { type: 'string', example: 'Department of Secondary and Elementary Education' },
+          unit: { type: 'string', enum: ['CESS', 'IDS'], example: 'CESS' },
+          position: { type: 'string', example: 'Associate Professor III' },
+          biography: { type: 'string', example: 'Specializes in Curriculum Development and Assessment.' },
+          consultationHours: { type: 'string', example: 'Tue/Thu 10:00 AM - 12:00 PM' },
+        },
+      },
+      SubjectListingCreateRequest: {
+        type: 'object',
+        required: ['subjectCode', 'subjectName'],
+        properties: {
+          subjectCode: { type: 'string', example: 'EDUC 115' },
+          subjectName: { type: 'string', example: 'Curriculum Innovation and Pedagogy' },
+          description: { type: 'string', example: 'Core teacher education course.' },
+          department: { type: 'string', example: 'Department of Secondary and Elementary Education' },
+          unit: { type: 'string', enum: ['CESS', 'IDS'], example: 'CESS' },
+          assignedFacultyId: { type: 'string', nullable: true },
+        },
+      },
+      SyllabusUpdateRequest: {
+        type: 'object',
+        properties: {
+          fileName: { type: 'string', example: 'EDUC101_Syllabus_Revised.pdf' },
+          fileUrl: { type: 'string', example: '/syllabi/EDUC101_Syllabus_Revised.pdf' },
+          academicYear: { type: 'string', example: '2026-2027' },
+          semester: { type: 'string', example: '2nd Semester' },
+          changeNotes: { type: 'string', example: 'Aligned with updated syllabus template.' },
+        },
+      },
     },
   },
   tags: [
@@ -248,6 +300,7 @@ Mindanao State University at Naawan
     { name: 'Document Types', description: 'Administrative document types, requirements checklist & templates (PB-44)' },
     { name: 'Workflow Routes', description: 'Office sequence configuration, CESS vs IDS routing & audit logs (PB-45)' },
     { name: 'Notifications', description: 'In-system alerts, user preferences & Secretary email audit log (PB-05, PB-06, PB-42)' },
+    { name: 'Faculty & Syllabus Directory', description: 'Directory browsing, Secretary-managed templates, announcements & listings (PB-38, PB-40)' },
   ],
   paths: {
     '/api/health': {
@@ -1026,6 +1079,22 @@ Mindanao State University at Naawan
         },
       },
     },
+    '/api/directory/faculty': {
+      post: {
+        summary: 'Create an approved faculty directory listing (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/FacultyListingUpsertRequest' } } },
+        },
+        responses: {
+          201: { description: 'Approved faculty directory listing created with audit record' },
+          400: { description: 'Validation error' },
+          403: { description: 'Forbidden: Only College Secretary may manage approved directory listings' },
+        },
+      },
+    },
     '/api/directory/faculty/{id}': {
       get: {
         summary: 'Get faculty member profile, assigned subjects, and permitted syllabi (PB-38)',
@@ -1036,6 +1105,32 @@ Mindanao State University at Naawan
           200: { description: 'Faculty entry with role-verified syllabus visibility' },
           403: { description: 'Forbidden: Faculty belongs to an unauthorized unit' },
           404: { description: 'Faculty not found' },
+        },
+      },
+      put: {
+        summary: 'Update an approved faculty directory listing (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/FacultyListingUpsertRequest' } } },
+        },
+        responses: {
+          200: { description: 'Approved faculty directory listing updated' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Faculty directory listing not found' },
+        },
+      },
+      delete: {
+        summary: 'Remove a faculty listing from the approved directory (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Faculty listing removed from approved directory' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Faculty directory listing not found' },
         },
       },
     },
@@ -1053,6 +1148,59 @@ Mindanao State University at Naawan
           403: { description: 'Forbidden' },
         },
       },
+      post: {
+        summary: 'Create an approved subject directory listing (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/SubjectListingCreateRequest' } } },
+        },
+        responses: {
+          201: { description: 'Approved subject listing created' },
+          403: { description: 'Forbidden: Secretary only' },
+          409: { description: 'Subject already exists' },
+        },
+      },
+    },
+    '/api/directory/subjects/{code}': {
+      get: {
+        summary: 'Get subject details and assigned faculty (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Subject details with assigned faculty' },
+          403: { description: 'Forbidden' },
+          404: { description: 'Subject not found' },
+        },
+      },
+      put: {
+        summary: 'Update an approved subject listing or faculty assignment (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/SubjectListingCreateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Approved subject listing updated' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Subject listing not found' },
+        },
+      },
+      delete: {
+        summary: 'Remove a subject listing from the approved directory (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Subject listing removed' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Subject listing not found' },
+        },
+      },
     },
     '/api/directory/syllabi': {
       get: {
@@ -1064,12 +1212,34 @@ Mindanao State University at Naawan
         },
       },
       post: {
-        summary: 'Upload or replace syllabus for own teaching load or as Secretary (PB-38)',
+        summary: 'Upload or replace syllabus with optional non-silent-overwrite guard and version archival (PB-38, PB-40)',
         tags: ['Faculty & Syllabus Directory'],
         security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['subjectCode'],
+                properties: {
+                  facultyId: { type: 'string' },
+                  subjectCode: { type: 'string', example: 'EDUC 101' },
+                  subjectName: { type: 'string' },
+                  academicYear: { type: 'string', default: '2026-2027' },
+                  semester: { type: 'string', default: '1st Semester' },
+                  fileName: { type: 'string' },
+                  fileUrl: { type: 'string' },
+                  overwrite: { type: 'boolean', default: true, description: 'Set false to prevent overwriting an existing term syllabus (returns 409 Conflict).' },
+                },
+              },
+            },
+          },
+        },
         responses: {
-          201: { description: 'Syllabus saved' },
+          201: { description: 'Syllabus saved (previous version archived when replaced)' },
           403: { description: 'Forbidden: Faculty may only manage own syllabi' },
+          409: { description: 'Conflict: Existing syllabus protected when overwrite=false' },
         },
       },
     },
@@ -1085,6 +1255,21 @@ Mindanao State University at Naawan
           404: { description: 'Syllabus not found' },
         },
       },
+      put: {
+        summary: 'Explicitly update an existing syllabus and archive previous version (PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'syllabusId', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/SyllabusUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Syllabus updated with version history preserved' },
+          403: { description: 'Forbidden' },
+          404: { description: 'Syllabus not found' },
+        },
+      },
       delete: {
         summary: 'Remove a syllabus (own faculty load or Secretary) (PB-38)',
         tags: ['Faculty & Syllabus Directory'],
@@ -1096,19 +1281,138 @@ Mindanao State University at Naawan
         },
       },
     },
-    '/api/directory/template': {
+    '/api/directory/syllabi/{syllabusId}/history': {
       get: {
-        summary: 'Get official CESS course syllabus template (PB-38)',
+        summary: 'Get traceable version history for a specific syllabus (PB-40)',
         tags: ['Faculty & Syllabus Directory'],
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Official syllabus template metadata' } },
+        parameters: [{ name: 'syllabusId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Previous archived versions of the syllabus' },
+          403: { description: 'Forbidden' },
+          404: { description: 'Syllabus not found' },
+        },
+      },
+    },
+    '/api/directory/template': {
+      get: {
+        summary: 'Get current official CESS course syllabus template (PB-38, PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Current official syllabus template metadata and downloadUrl' } },
       },
       put: {
-        summary: 'Replace official CESS course syllabus template (Secretary only) (PB-38)',
+        summary: 'Replace official CESS course syllabus template and auto-publish faculty announcement (PB-40 - Secretary only)',
+        description: 'Replaces the official syllabus template, increments template version history, leaves existing faculty syllabi untouched, and publishes an announcement.',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/OfficialTemplateUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Official template updated, traceable history recorded, and announcement published' },
+          400: { description: 'Validation error (fileName required)' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+      post: {
+        summary: 'Upload/replace official CESS course syllabus template (alias of PUT /api/directory/template, PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/OfficialTemplateUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Official template updated and announcement published' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/directory/template/download': {
+      get: {
+        summary: 'Download or resolve the current official syllabus template (PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'download', in: 'query', schema: { type: 'boolean', default: false }, description: 'Set true to stream file attachment response' },
+        ],
+        responses: {
+          200: { description: 'Always resolves to the latest active official syllabus template' },
+        },
+      },
+    },
+    '/api/directory/template/history': {
+      get: {
+        summary: 'Get traceable version history of official syllabus template changes (PB-40)',
         tags: ['Faculty & Syllabus Directory'],
         security: [{ bearerAuth: [] }],
         responses: {
-          200: { description: 'Template updated' },
+          200: { description: 'Versioned history of official syllabus template updates' },
+        },
+      },
+    },
+    '/api/directory/announcements': {
+      get: {
+        summary: 'List published college/template announcements for directory users (PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'audience', in: 'query', schema: { type: 'string', enum: ['All', 'Faculty', 'Student'] } },
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'List of published announcements (including automatic syllabus-template change notices)' },
+        },
+      },
+      post: {
+        summary: 'Publish a directory or syllabus announcement (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['title', 'content'],
+                properties: {
+                  title: { type: 'string' },
+                  content: { type: 'string' },
+                  targetAudience: { type: 'string', enum: ['All', 'Faculty', 'Student'], default: 'Faculty' },
+                  category: { type: 'string', default: 'directory' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Announcement published' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/directory/announcements/{id}': {
+      delete: {
+        summary: 'Delete an announcement (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Announcement removed' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/directory/audit-logs': {
+      get: {
+        summary: 'Inspect traceable audit logs for template & approved directory listing changes (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 100 } }],
+        responses: {
+          200: { description: 'Traceable directory and template change log' },
           403: { description: 'Forbidden: Secretary only' },
         },
       },

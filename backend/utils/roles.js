@@ -227,6 +227,7 @@ function canPerformAction(user, action, doc = null) {
     case 'archive_document':
     case 'encode_walk_in':
     case 'manage_syllabus_template':
+    case 'manage_directory_listings':
       return user.role === ROLES.SECRETARY;
 
     case 'view_directory':
