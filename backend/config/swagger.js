@@ -211,6 +211,33 @@ Mindanao State University at Naawan
           reason: { type: 'string', example: 'Institutional procedural update approved by College Council.' },
         },
       },
+      NotificationAuditLogEntry: {
+        type: 'object',
+        properties: {
+          notification_id: { type: 'string', format: 'uuid' },
+          event: { type: 'string', example: 'Document Returned Notice' },
+          category: { type: 'string', enum: ['workflow', 'system_email'] },
+          notification_type: {
+            type: 'string',
+            enum: ['Status_Update', 'Reminder_3_Days', 'Return_Alert', 'Reject_Alert', 'Release_Alert', 'Notice_Minutes_Alert'],
+          },
+          delivery_method: { type: 'string', enum: ['Email', 'In_System', 'Both'] },
+          result: { type: 'string', enum: ['Pending', 'Sent', 'Failed'] },
+          timestamp: { type: 'string', format: 'date-time' },
+          safeError: { type: 'string', nullable: true, example: 'SMTP server rejected recipient address.' },
+          retryable: { type: 'boolean' },
+          retryCount: { type: 'integer' },
+          recipientSummary: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string', format: 'uuid' },
+              name: { type: 'string' },
+              email: { type: 'string' },
+              department: { type: 'string' },
+            },
+          },
+        },
+      },
     },
   },
   tags: [
@@ -220,6 +247,7 @@ Mindanao State University at Naawan
     { name: 'Reviewer Decisions', description: 'Office endorsement, final approval, returning & rejection' },
     { name: 'Document Types', description: 'Administrative document types, requirements checklist & templates (PB-44)' },
     { name: 'Workflow Routes', description: 'Office sequence configuration, CESS vs IDS routing & audit logs (PB-45)' },
+    { name: 'Notifications', description: 'In-system alerts, user preferences & Secretary email audit log (PB-05, PB-06, PB-42)' },
   ],
   paths: {
     '/api/health': {
@@ -912,6 +940,61 @@ Mindanao State University at Naawan
         },
         responses: {
           200: { description: 'Preference updated successfully' },
+        },
+      },
+    },
+    '/api/notifications/logs': {
+      get: {
+        summary: 'List all system emails and workflow notification audit logs (PB-42, PB-49 - Secretary only)',
+        description: 'Secretary sees all system emails and only workflow notifications. Passwords, OTP codes, recovery tokens, and SMTP secrets are automatically redacted.',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['Sent', 'Failed', 'Pending'] } },
+          { name: 'deliveryMethod', in: 'query', schema: { type: 'string', enum: ['Email', 'In_System', 'Both'] } },
+          { name: 'notificationType', in: 'query', schema: { type: 'string', enum: ['Status_Update', 'Reminder_3_Days', 'Return_Alert', 'Reject_Alert', 'Release_Alert', 'Notice_Minutes_Alert'] } },
+          { name: 'category', in: 'query', schema: { type: 'string', enum: ['all', 'workflow', 'system_email'] }, description: 'Filter by workflow notifications or system emails' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Search sanitized title, event, recipient, control number, or safe error details' },
+          { name: 'documentId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'recipientId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } },
+          { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } },
+        ],
+        responses: {
+          200: { description: 'Sanitized system email and workflow notification logs with full totals (total, sent, failed, pending)' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Only College Secretary may access notification audit logs' },
+        },
+      },
+    },
+    '/api/notifications/logs/{id}': {
+      get: {
+        summary: 'Inspect a single notification audit log entry with sanitized error details (PB-42 - Secretary only)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Single sanitized notification audit log entry' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden' },
+          404: { description: 'Notification log entry not found' },
+        },
+      },
+    },
+    '/api/notifications/logs/{id}/retry': {
+      post: {
+        summary: 'Retry a failed email notification without corrupting request state (PB-42 / REQ-NOT-4 - Secretary only)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Retry executed; returns updated log state, retryAudit metadata, and safeError if delivery failed again' },
+          400: { description: 'Cannot retry (already sent, in-system-only, or sensitive OTP email)' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Notification log entry not found' },
         },
       },
     },

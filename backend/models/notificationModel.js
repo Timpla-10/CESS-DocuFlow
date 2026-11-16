@@ -1,8 +1,117 @@
 const supabase = require('../config/database');
+const { redactSensitiveText, sanitizeErrorForLog } = require('../utils/logSanitizer');
 
 const prefCache = new Map(); // userId -> { user_id, receive_email, receive_in_system }
 const userClearedMap = new Map(); // userId -> Set of cleared notification_ids
+const emailRetryContext = new Map(); // notificationId -> { to, subject, text, html, recipientId, documentId, notificationType, allowRetry }
+const retryAuditMap = new Map(); // notificationId -> { retryCount, lastRetriedAt, retriedBy, lastRetryResult }
 const RETENTION_DAYS = 90; // Default 90-day retention policy (SRS 3.10)
+
+const WORKFLOW_NOTIFICATION_TYPES = new Set([
+  'Reminder_3_Days',
+  'Return_Alert',
+  'Reject_Alert',
+  'Release_Alert',
+  'Notice_Minutes_Alert',
+]);
+
+const EVENT_LABELS = {
+  Reminder_3_Days: 'Automated Pending Reminder',
+  Return_Alert: 'Document Returned Notice',
+  Reject_Alert: 'Document Rejected Notice',
+  Release_Alert: 'Document Ready / Released Notice',
+  Notice_Minutes_Alert: 'Notice & Minutes Alert',
+};
+
+function normalizeAuditLog(row) {
+  if (!row) return null;
+
+  const isWorkflow =
+    Boolean(row.document_id) || WORKFLOW_NOTIFICATION_TYPES.has(row.notification_type);
+  const isSystemEmail =
+    row.delivery_method === 'Email' || row.delivery_method === 'Both';
+  const category = isWorkflow
+    ? 'workflow'
+    : isSystemEmail
+      ? 'system_email'
+      : 'personal_in_system';
+
+  const rawTitle = row.title || '';
+  const rawMessage = row.message || '';
+
+  const errMatch = rawMessage.match(/\[Delivery Error:\s*([^\]]+)\]/i);
+  const extractedError = errMatch ? sanitizeErrorForLog(errMatch[1]) : null;
+  const safeError =
+    extractedError || (row.status === 'Failed' ? 'Email delivery failed.' : null);
+
+  const cleanTitle = redactSensitiveText(rawTitle);
+  const cleanMessage = redactSensitiveText(rawMessage);
+
+  const isPasswordOrOtpEmail =
+    /password\s+reset|verification\s+code|recovery\s+link|temporary\s+password/i.test(
+      `${cleanTitle} ${cleanMessage}`
+    );
+
+  const retryCtx = emailRetryContext.get(row.notification_id);
+  const retryAudit = retryAuditMap.get(row.notification_id) || {
+    retryCount: 0,
+    lastRetriedAt: null,
+    retriedBy: null,
+    lastRetryResult: null,
+  };
+
+  const allowRetry =
+    retryCtx !== undefined
+      ? retryCtx.allowRetry !== false
+      : !isPasswordOrOtpEmail;
+
+  const recipientObj = row.recipient || null;
+  const recipientName = recipientObj
+    ? `${recipientObj.first_name || ''} ${recipientObj.last_name || ''}`.trim() ||
+      recipientObj.university_email
+    : null;
+
+  let eventLabel = EVENT_LABELS[row.notification_type];
+  if (!eventLabel) {
+    eventLabel = row.document_id
+      ? 'Document Workflow Update'
+      : 'System Account / Service Email';
+  }
+
+  return {
+    ...row,
+    title: cleanTitle,
+    message: cleanMessage,
+    event: eventLabel,
+    category,
+    isSystemEmail,
+    isWorkflow,
+    visibleToSecretary: isSystemEmail || isWorkflow,
+    timestamp: row.sent_at || row.created_at,
+    result: row.status,
+    safeError,
+    recipientSummary: {
+      userId: row.recipient_id,
+      name: recipientName || 'Unknown Recipient',
+      email: recipientObj?.university_email || null,
+      department: recipientObj?.department_or_office || null,
+    },
+    documentSummary: row.document_id
+      ? {
+          documentId: row.document_id,
+          controlNumber: row.document?.control_number || null,
+          title: row.document?.title || null,
+          currentStatus: row.document?.current_status || null,
+        }
+      : null,
+    retryCount: retryAudit.retryCount,
+    lastRetriedAt: retryAudit.lastRetriedAt,
+    retriedBy: retryAudit.retriedBy,
+    lastRetryResult: retryAudit.lastRetryResult,
+    retryable:
+      row.status !== 'Sent' && isSystemEmail && allowRetry,
+  };
+}
 
 function mapPreferenceRow(row = {}) {
   const receiveEmail = row.receive_email !== false;
@@ -152,13 +261,16 @@ const NotificationModel = {
     const validStatuses = ['Pending', 'Sent', 'Failed'];
     const safeStatus = validStatuses.includes(status) ? status : 'Sent';
 
+    const sanitizedTitle = redactSensitiveText(title || 'Notification').slice(0, 255);
+    const sanitizedMessage = redactSensitiveText(message || '');
+
     const logRow = {
       recipient_id: recipientId,
       document_id: documentId || null,
       notification_type: safeType,
       delivery_method: safeMethod,
-      title: (title || 'Notification').slice(0, 255),
-      message: message || '',
+      title: sanitizedTitle,
+      message: sanitizedMessage,
       is_read: false,
       status: safeStatus,
       sent_at: sentAt,
@@ -394,12 +506,38 @@ const NotificationModel = {
     prefCache.clear();
   },
 
-  /**
-   * PB-42 & PB-49: List all email/notification logs (Secretary / Admin only)
-   */
-  async getAllLogs(options = {}) {
-    let query = supabase
+  recordEmailRetryContext(notificationId, payload) {
+    if (!notificationId || !payload) return;
+    emailRetryContext.set(notificationId, { ...payload });
+  },
+
+  getEmailRetryContext(notificationId) {
+    return emailRetryContext.get(notificationId) || null;
+  },
+
+  recordRetryAttempt(notificationId, { success, retriedBy }) {
+    const prev = retryAuditMap.get(notificationId) || { retryCount: 0 };
+    const updated = {
+      retryCount: prev.retryCount + 1,
+      lastRetriedAt: new Date().toISOString(),
+      retriedBy: retriedBy || 'College Secretary',
+      lastRetryResult: success ? 'Sent' : 'Failed',
+    };
+    retryAuditMap.set(notificationId, updated);
+    return updated;
+  },
+
+  async updateLogStatus(notificationId, { status, message, sentAt, title }) {
+    const updates = {};
+    if (status) updates.status = status;
+    if (sentAt) updates.sent_at = sentAt;
+    if (title !== undefined) updates.title = redactSensitiveText(title).slice(0, 255);
+    if (message !== undefined) updates.message = redactSensitiveText(message);
+
+    const { data, error } = await supabase
       .from('notification_log')
+      .update(updates)
+      .eq('notification_id', notificationId)
       .select(`
         *,
         recipient:recipient_id (
@@ -409,41 +547,210 @@ const NotificationModel = {
           university_email,
           department_or_office
         )
-      `, { count: 'exact' })
-      .order('created_at', { ascending: false });
+      `)
+      .single();
 
-    if (options.status) {
-      query = query.eq('status', options.status);
-    }
+    if (error) return null;
+    return normalizeAuditLog(data);
+  },
 
-    if (options.deliveryMethod) {
-      query = query.eq('delivery_method', options.deliveryMethod);
-    }
+  /**
+   * PB-42: Inspect single notification audit log entry (Secretary only)
+   */
+  async getLogById(notificationId) {
+    let { data, error } = await supabase
+      .from('notification_log')
+      .select(`
+        *,
+        recipient:recipient_id (
+          user_id,
+          first_name,
+          last_name,
+          university_email,
+          department_or_office
+        ),
+        document:document_id (
+          document_id,
+          control_number,
+          title,
+          current_status
+        )
+      `)
+      .eq('notification_id', notificationId)
+      .maybeSingle();
 
-    if (options.notificationType) {
-      query = query.eq('notification_type', options.notificationType);
-    }
-
-    const limit = Number(options.limit) || 50;
-    const offset = Number(options.offset) || 0;
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, count, error } = await query;
     if (error) {
-      return { total: 0, sent: 0, failed: 0, logs: [] };
+      const fallback = await supabase
+        .from('notification_log')
+        .select(`
+          *,
+          recipient:recipient_id (
+            user_id,
+            first_name,
+            last_name,
+            university_email,
+            department_or_office
+          )
+        `)
+        .eq('notification_id', notificationId)
+        .maybeSingle();
+      if (fallback.error || !fallback.data) return null;
+      data = fallback.data;
     }
 
-    const logs = data || [];
-    const sentCount = logs.filter((l) => l.status === 'Sent').length;
-    const failedCount = logs.filter((l) => l.status === 'Failed').length;
+    return data ? normalizeAuditLog(data) : null;
+  },
+
+  /**
+   * PB-42 & PB-49: List system emails and workflow notification logs (Secretary only).
+   * PO Note: Secretary sees all system emails and only workflow notifications.
+   */
+  async getAllLogs(options = {}) {
+    const buildQuery = (withDocJoin) => {
+      const selectClause = withDocJoin
+        ? `
+          *,
+          recipient:recipient_id (
+            user_id,
+            first_name,
+            last_name,
+            university_email,
+            department_or_office
+          ),
+          document:document_id (
+            document_id,
+            control_number,
+            title,
+            current_status
+          )
+        `
+        : `
+          *,
+          recipient:recipient_id (
+            user_id,
+            first_name,
+            last_name,
+            university_email,
+            department_or_office
+          )
+        `;
+
+      let query = supabase
+        .from('notification_log')
+        .select(selectClause)
+        .order('created_at', { ascending: false });
+
+      if (options.status) {
+        query = query.eq('status', options.status);
+      }
+      if (options.deliveryMethod) {
+        query = query.eq('delivery_method', options.deliveryMethod);
+      }
+      if (options.notificationType) {
+        query = query.eq('notification_type', options.notificationType);
+      }
+      if (options.documentId) {
+        query = query.eq('document_id', options.documentId);
+      }
+      if (options.recipientId) {
+        query = query.eq('recipient_id', options.recipientId);
+      }
+      if (options.dateFrom) {
+        query = query.gte('created_at', new Date(options.dateFrom).toISOString());
+      }
+      if (options.dateTo) {
+        const end = new Date(options.dateTo);
+        if (!Number.isNaN(end.getTime())) {
+          // Include entire end date if YYYY-MM-DD was provided
+          if (String(options.dateTo).length <= 10) {
+            end.setUTCHours(23, 59, 59, 999);
+          }
+          query = query.lte('created_at', end.toISOString());
+        }
+      }
+      return query;
+    };
+
+    let { data, error } = await buildQuery(true);
+    if (error) {
+      const fallback = await buildQuery(false);
+      data = fallback.data;
+      error = fallback.error;
+    }
+
+    if (error) {
+      return {
+        total: 0,
+        sent: 0,
+        failed: 0,
+        pending: 0,
+        workflowCount: 0,
+        systemEmailCount: 0,
+        limit: Number(options.limit) || 50,
+        offset: Number(options.offset) || 0,
+        logs: [],
+      };
+    }
+
+    let normalized = (data || []).map(normalizeAuditLog);
+
+    // PO Note visibility enforcement: Secretary sees all system emails and only workflow notifications
+    if (options.includeAllRaw !== true) {
+      normalized = normalized.filter((item) => item.visibleToSecretary);
+    }
+
+    // Category / scope filter ('all' | 'workflow' | 'system_email' | 'email')
+    const catFilter = String(options.category || options.scope || '').trim().toLowerCase();
+    if (catFilter === 'workflow') {
+      normalized = normalized.filter((item) => item.isWorkflow);
+    } else if (catFilter === 'system_email' || catFilter === 'email') {
+      normalized = normalized.filter((item) => item.isSystemEmail);
+    }
+
+    // Full-text search across sanitized metadata
+    if (options.search && String(options.search).trim()) {
+      const q = String(options.search).trim().toLowerCase();
+      normalized = normalized.filter((item) => {
+        const haystack = [
+          item.event,
+          item.title,
+          item.message,
+          item.safeError,
+          item.notification_type,
+          item.recipientSummary?.name,
+          item.recipientSummary?.email,
+          item.documentSummary?.controlNumber,
+          item.documentSummary?.title,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    const total = normalized.length;
+    const sentCount = normalized.filter((l) => l.status === 'Sent').length;
+    const failedCount = normalized.filter((l) => l.status === 'Failed').length;
+    const pendingCount = normalized.filter((l) => l.status === 'Pending').length;
+    const workflowCount = normalized.filter((l) => l.isWorkflow).length;
+    const systemEmailCount = normalized.filter((l) => l.isSystemEmail).length;
+
+    const limit = Math.max(1, Number(options.limit) || 50);
+    const offset = Math.max(0, Number(options.offset) || 0);
+    const paginatedLogs = normalized.slice(offset, offset + limit);
 
     return {
-      total: count || logs.length,
+      total,
       sent: sentCount,
       failed: failedCount,
+      pending: pendingCount,
+      workflowCount,
+      systemEmailCount,
+      scope: catFilter || 'system_emails_and_workflow',
       limit,
       offset,
-      logs,
+      logs: paginatedLogs,
     };
   },
 };

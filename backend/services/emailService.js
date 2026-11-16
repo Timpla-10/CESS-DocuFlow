@@ -1,6 +1,8 @@
-const { transporter, defaultFrom, isConfigured, host, port, user: smtpUser } = require('../config/mailer');
+const mailer = require('../config/mailer');
+const { defaultFrom } = mailer;
 const NotificationModel = require('../models/notificationModel');
 const UserModel = require('../models/userModel');
+const { redactSensitiveText, sanitizeErrorForLog } = require('../utils/logSanitizer');
 
 /**
  * Base email layout wrapper with MSU at Naawan / CESS DocuFlow branding.
@@ -64,26 +66,42 @@ const EmailService = {
    * PB-52: Verify SMTP connectivity and readiness
    */
   async verifySmtp() {
-    if (!isConfigured) {
+    if (!mailer.isConfigured) {
       console.warn('⚠️ SMTP credentials not fully configured in backend/.env');
       return false;
     }
     try {
-      await transporter.verify();
+      await mailer.transporter.verify();
       console.log('✅ Nodemailer SMTP connection verified successfully.');
       return true;
     } catch (err) {
-      console.error('❌ Nodemailer SMTP verification failed:', err.message);
+      console.error('❌ Nodemailer SMTP verification failed:', sanitizeErrorForLog(err));
       return false;
     }
   },
 
   /**
-   * PB-42 & PB-49: Send a raw email and record delivery status in `notification_log`
+   * PB-42 & PB-49: Send a raw email and record delivery status in `notification_log`.
+   * Sensitive contents (passwords, OTPs, reset links, auth tokens) are automatically redacted from logs,
+   * and delivery failures are safely caught so request state is never corrupted.
    */
-  async sendMail({ to, subject, html, text, recipientId, documentId, notificationType = 'Status_Update' }) {
+  async sendMail({
+    to,
+    subject,
+    html,
+    text,
+    recipientId,
+    documentId,
+    notificationType = 'Status_Update',
+    secretsToRedact = [],
+    logTitle = null,
+    logMessage = null,
+    allowRetry = true,
+    eventCategory = null,
+    skipCreateLog = false,
+  }) {
     let resolvedRecipientId = recipientId;
-    if (!resolvedRecipientId) {
+    if (!resolvedRecipientId && to) {
       try {
         const u = await UserModel.findByEmail(to);
         if (u) resolvedRecipientId = u.id;
@@ -92,24 +110,47 @@ const EmailService = {
       }
     }
 
-    if (!isConfigured) {
-      console.warn(`⚠️ [Nodemailer skipped - no credentials] To: ${to} | Subject: ${subject}`);
-      if (resolvedRecipientId) {
-        await NotificationModel.createLog({
+    const safeLogTitle = redactSensitiveText(logTitle || subject || 'System Notification', secretsToRedact);
+    const safeLogMessage = redactSensitiveText(logMessage || text || '', secretsToRedact);
+
+    if (!mailer.isConfigured) {
+      const safeErr = 'SMTP credentials are not configured.';
+      console.warn(`⚠️ [Nodemailer skipped - no credentials] To: ${to} | Subject: ${safeLogTitle}`);
+      if (resolvedRecipientId && !skipCreateLog) {
+        const created = await NotificationModel.createLog({
           recipientId: resolvedRecipientId,
           documentId,
           notificationType,
           deliveryMethod: 'Email',
-          title: subject,
-          message: text,
+          title: safeLogTitle,
+          message: `${safeLogMessage}\n[Delivery Error: ${safeErr}]`.trim(),
           status: 'Failed',
+          sentAt: new Date().toISOString(),
         }).catch(() => null);
+        if (created?.notification_id && allowRetry) {
+          NotificationModel.recordEmailRetryContext(created.notification_id, {
+            to,
+            subject,
+            text,
+            html,
+            recipientId: resolvedRecipientId,
+            documentId,
+            notificationType,
+            eventCategory,
+            allowRetry,
+          });
+        }
+        return { success: false, reason: 'smtp_not_configured', error: safeErr, logId: created?.notification_id || null };
       }
-      return { success: false, reason: 'smtp_not_configured' };
+      return { success: false, reason: 'smtp_not_configured', error: safeErr };
     }
 
     try {
-      const info = await transporter.sendMail({
+      if (!to || typeof to !== 'string' || !to.includes('@')) {
+        throw new Error('Invalid recipient email address.');
+      }
+
+      const info = await mailer.transporter.sendMail({
         from: defaultFrom,
         to,
         subject,
@@ -117,41 +158,61 @@ const EmailService = {
         html,
       });
 
-      console.log(`📧 [Nodemailer sent] ID: ${info.messageId} | To: ${to} | Subject: ${subject}`);
+      console.log(`📧 [Nodemailer sent] ID: ${info.messageId} | To: ${to} | Subject: ${safeLogTitle}`);
 
-      // PB-42: Track successful delivery in notification log
-      if (resolvedRecipientId) {
-        await NotificationModel.createLog({
+      // PB-42: Track successful delivery in notification log (redacted)
+      let logged = null;
+      if (resolvedRecipientId && !skipCreateLog) {
+        logged = await NotificationModel.createLog({
           recipientId: resolvedRecipientId,
           documentId,
           notificationType,
           deliveryMethod: 'Email',
-          title: subject,
-          message: text,
+          title: safeLogTitle,
+          message: safeLogMessage,
           status: 'Sent',
           sentAt: new Date().toISOString(),
-        }).catch((e) => console.warn('Could not record sent notification log:', e.message));
+        }).catch((e) => {
+          console.warn('Could not record sent notification log:', sanitizeErrorForLog(e));
+          return null;
+        });
       }
 
-      return { success: true, messageId: info.messageId };
+      return { success: true, messageId: info.messageId, logId: logged?.notification_id || null };
     } catch (err) {
-      console.error(`❌ [Nodemailer error] Failed to send to ${to}:`, err.message);
+      const safeErrMsg = sanitizeErrorForLog(err, secretsToRedact) || 'Email delivery failed.';
+      console.error(`❌ [Nodemailer error] Failed to send to ${to}:`, safeErrMsg);
 
-      // PB-42: Track failure in notification log for Secretary auditing
-      if (resolvedRecipientId) {
-        await NotificationModel.createLog({
+      // PB-42: Track failure in notification log for Secretary auditing with safe error details
+      let logged = null;
+      if (resolvedRecipientId && !skipCreateLog) {
+        logged = await NotificationModel.createLog({
           recipientId: resolvedRecipientId,
           documentId,
           notificationType,
           deliveryMethod: 'Email',
-          title: subject,
-          message: `${text}\n[Delivery Error: ${err.message}]`,
+          title: safeLogTitle,
+          message: `${safeLogMessage}\n[Delivery Error: ${safeErrMsg}]`.trim(),
           status: 'Failed',
           sentAt: new Date().toISOString(),
         }).catch(() => null);
+
+        if (logged?.notification_id && allowRetry) {
+          NotificationModel.recordEmailRetryContext(logged.notification_id, {
+            to,
+            subject,
+            text,
+            html,
+            recipientId: resolvedRecipientId,
+            documentId,
+            notificationType,
+            eventCategory,
+            allowRetry,
+          });
+        }
       }
 
-      return { success: false, error: err.message };
+      return { success: false, error: safeErrMsg, logId: logged?.notification_id || null };
     }
   },
 
@@ -214,6 +275,11 @@ const EmailService = {
       html: wrapHtmlLayout('Password Reset Request', contentHtml),
       text,
       notificationType: 'Status_Update',
+      secretsToRedact: [code, resetUrl],
+      logTitle: '[CESS DocuFlow] Password Reset Verification Code ([REDACTED])',
+      logMessage: `Password reset verification email dispatched to ${to}. Sensitive code and recovery link redacted for security.`,
+      allowRetry: false,
+      eventCategory: 'system_email',
     });
   },
 
