@@ -229,6 +229,7 @@ function canPerformAction(user, action, doc = null) {
     case 'manage_syllabus_template':
     case 'manage_directory_listings':
     case 'manage_homepage_info':
+    case 'manage_follow_up_rules':
       return user.role === ROLES.SECRETARY;
 
     case 'view_directory':

@@ -585,6 +585,92 @@ const EmailService = {
       text: `Hello ${name},\n\nYour document request ${controlNumber} is approved and ready for release at ${releaseOffice}.\n\nStatus: Ready for Release`,
     });
   },
+
+  /**
+   * PB-46: Automated Pending-Review Follow-Up Reminder Email to Holding Office / Reviewer
+   */
+  async sendPendingReminderEmail({
+    to,
+    name = 'Reviewer',
+    controlNumber,
+    title,
+    currentOffice,
+    daysWaiting,
+    thresholdDays = 3,
+    isEscalated = false,
+    documentId,
+    recipientId,
+  }) {
+    const urgencyLabel = isEscalated ? 'Overdue Escalation Reminder' : 'Pending Review Follow-Up Reminder';
+    const badgeColor = isEscalated ? '#B91C1C' : '#D97706';
+    const bgTint = isEscalated ? '#FEF2F2' : '#FFFBEB';
+    const borderTint = isEscalated ? '#FECACA' : '#FDE68A';
+
+    const contentHtml = `
+      <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: ${badgeColor};">
+        ${urgencyLabel}
+      </h2>
+      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #4B5563;">
+        Hello <strong>${name}</strong>,<br>
+        Document request <strong>${controlNumber}</strong> (${title}) has remained pending at <strong>${currentOffice}</strong> for <strong>${daysWaiting} day(s)</strong> (threshold: ${thresholdDays} day(s)).
+      </p>
+      <div style="background-color: ${bgTint}; border: 1px solid ${borderTint}; border-radius: 12px; padding: 16px; margin: 20px 0;">
+        <div style="font-size: 13px; font-weight: 700; color: ${badgeColor};">Follow-Up Summary:</div>
+        <div style="font-size: 13px; color: #374151; margin-top: 6px; line-height: 1.5;">
+          • Control Number: <strong>${controlNumber}</strong><br>
+          • Document Title: <strong>${title}</strong><br>
+          • Current Office: <strong>${currentOffice}</strong><br>
+          • Days Waiting: <strong>${daysWaiting} day(s)</strong>
+        </div>
+      </div>
+    `;
+
+    return this.sendMail({
+      to,
+      recipientId,
+      documentId,
+      notificationType: 'Reminder_3_Days',
+      subject: `[CESS DocuFlow] ${urgencyLabel}: ${controlNumber} (${daysWaiting}d pending)`,
+      html: wrapHtmlLayout(urgencyLabel, contentHtml),
+      text: `Hello ${name},\n\nAutomated follow-up: Document ${controlNumber} (${title}) has been pending at ${currentOffice} for ${daysWaiting} day(s) (configured threshold: ${thresholdDays} day(s)). Please review when available.`,
+      eventCategory: 'workflow',
+    });
+  },
+
+  /**
+   * PB-46: Optional Requester Status Reminder Email when Follow-Up Rule Triggers
+   */
+  async sendRequesterFollowUpUpdateEmail({
+    to,
+    name = 'Requester',
+    controlNumber,
+    title,
+    currentOffice,
+    daysWaiting,
+    documentId,
+    recipientId,
+  }) {
+    const contentHtml = `
+      <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #4C2882;">
+        Automated Follow-Up Sent
+      </h2>
+      <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #4B5563;">
+        Hello <strong>${name}</strong>,<br>
+        An automated follow-up reminder has been triggered for your request <strong>${controlNumber}</strong> (${title}), currently with <strong>${currentOffice}</strong> (${daysWaiting} day(s) in stage).
+      </p>
+    `;
+
+    return this.sendMail({
+      to,
+      recipientId,
+      documentId,
+      notificationType: 'Reminder_3_Days',
+      subject: `[CESS DocuFlow] Follow-Up Triggered for Request ${controlNumber}`,
+      html: wrapHtmlLayout('Follow-Up Update', contentHtml),
+      text: `Hello ${name},\n\nAn automated follow-up reminder was issued for your request ${controlNumber} (${title}), currently at ${currentOffice} for ${daysWaiting} day(s).`,
+      eventCategory: 'workflow',
+    });
+  },
 };
 
 module.exports = EmailService;

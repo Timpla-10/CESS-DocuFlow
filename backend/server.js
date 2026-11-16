@@ -45,6 +45,7 @@ app.get('/', (req, res) => {
       directory: 'GET /api/directory',
       notificationLogs: 'GET /api/notifications/logs',
       homepage: 'GET /api/homepage',
+      followUpRules: 'GET /api/follow-up-rules',
     },
   });
 });

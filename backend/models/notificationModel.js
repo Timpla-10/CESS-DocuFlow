@@ -555,6 +555,27 @@ const NotificationModel = {
   },
 
   /**
+   * PB-46: Check whether a duplicate Reminder_3_Days notification already exists
+   * for the same (documentId, recipientId) within cooldownHours.
+   */
+  async hasRecentReminderLog({ documentId, recipientId, cooldownHours = 72 }) {
+    if (!documentId || !recipientId) return false;
+    const cutoffIso = new Date(Date.now() - cooldownHours * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('notification_log')
+      .select('notification_id, status, created_at')
+      .eq('document_id', documentId)
+      .eq('recipient_id', recipientId)
+      .eq('notification_type', 'Reminder_3_Days')
+      .neq('status', 'Failed')
+      .gte('created_at', cutoffIso)
+      .limit(1);
+
+    if (error) return false;
+    return Array.isArray(data) && data.length > 0;
+  },
+
+  /**
    * PB-42: Inspect single notification audit log entry (Secretary only)
    */
   async getLogById(notificationId) {

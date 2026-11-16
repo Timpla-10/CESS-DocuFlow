@@ -6,6 +6,7 @@ const workflowRouteRoutes = require('./workflowRouteRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const directoryRoutes = require('./directoryRoutes');
 const homepageRoutes = require('./homepageRoutes');
+const followUpRuleRoutes = require('./followUpRuleRoutes');
 const DocumentController = require('../controllers/documentController');
 const { verifyUser, requireAction } = require('../middleware/authMiddleware');
 
@@ -37,5 +38,6 @@ router.use('/routes', workflowRouteRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/directory', directoryRoutes);
 router.use('/homepage', homepageRoutes);
+router.use('/follow-up-rules', followUpRuleRoutes);
 
 module.exports = router;

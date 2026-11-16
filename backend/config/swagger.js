@@ -361,6 +361,40 @@ Mindanao State University at Naawan
           reason: { type: 'string' },
         },
       },
+      FollowUpRuleUpdateRequest: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', example: 'Standard 3-Day Pending Document Reminder' },
+          enabled: { type: 'boolean', example: true },
+          reminderIntervalDays: { type: 'number', minimum: 1, maximum: 30, example: 3 },
+          cooldownHours: { type: 'number', minimum: 1, maximum: 720, example: 72 },
+          maxRemindersPerStage: { type: 'integer', minimum: 1, maximum: 20, example: 3 },
+          eligibleStatuses: {
+            type: 'array',
+            items: { type: 'string', enum: ['Submitted', 'Under_Review', 'With_External_Office', 'Returned_for_Revision'] },
+            example: ['Submitted', 'Under_Review', 'With_External_Office'],
+          },
+          eligibleOrigins: {
+            type: 'array',
+            items: { type: 'string', enum: ['CESS', 'IDS'] },
+            example: ['CESS', 'IDS'],
+          },
+          includeExpeditedOnly: { type: 'boolean', example: false },
+          notifyHoldingOffice: { type: 'boolean', example: true },
+          notifyRequester: { type: 'boolean', example: false },
+          notifySecretaryOnOverdue: { type: 'boolean', example: true },
+          escalationDays: { type: 'number', minimum: 1, maximum: 60, example: 5 },
+          reason: { type: 'string', example: 'Adjusted reminder interval and cooldown policy per College Council.' },
+        },
+      },
+      FollowUpRunRequest: {
+        type: 'object',
+        properties: {
+          dryRun: { type: 'boolean', default: false },
+          documentIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+          asOf: { type: 'string', format: 'date-time' },
+        },
+      },
     },
   },
   tags: [
@@ -373,6 +407,8 @@ Mindanao State University at Naawan
     { name: 'Notifications', description: 'In-system alerts, user preferences & Secretary email audit log (PB-05, PB-06, PB-42)' },
     { name: 'Faculty & Syllabus Directory', description: 'Directory browsing, Secretary-managed templates, announcements & listings (PB-38, PB-40)' },
     { name: 'Homepage & College Info', description: 'Public approved college homepage, logos & Secretary maintenance (PB-47)' },
+    { name: 'Automated Follow-Up Rules', description: 'Configurable pending reminder rules, duplicate guard & dispatch engine (PB-46)' },
+    { name: 'User & Role Management', description: 'User account inspection, role assignment, whitelist & audit logs (PB-43)' },
   ],
   paths: {
     '/api/health': {
@@ -1664,6 +1700,78 @@ Mindanao State University at Naawan
         parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } }],
         responses: {
           200: { description: 'Chronological list of homepage updates and publications' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+
+    // --- AUTOMATED FOLLOW-UP RULES (PB-46) ---
+    '/api/follow-up-rules': {
+      get: {
+        summary: 'Get active automated follow-up and pending reminder rule configuration (PB-46 - Secretary only)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Active follow-up configuration rule with allowed statuses and origins' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Only College Secretary may configure automated follow-up rules' },
+        },
+      },
+      put: {
+        summary: 'Update reminder interval, cooldown, conditions, and notification targets (PB-46 - Secretary only)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/FollowUpRuleUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Follow-up rules updated and recorded in admin change history' },
+          400: { description: 'Validation error (invalid interval, cooldown, statuses, or target settings)' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/follow-up-rules/history': {
+      get: {
+        summary: 'View automated follow-up rule configuration change history and run executions (PB-46 - Secretary only)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } }],
+        responses: {
+          200: { description: 'Chronological rule configuration changes and recent evaluation runs' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/follow-up-rules/candidates': {
+      get: {
+        summary: 'Preview pending documents matching follow-up rule conditions (dry run) (PB-46 - Secretary only)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'documentId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'asOf', in: 'query', schema: { type: 'string', format: 'date-time' } },
+        ],
+        responses: {
+          200: { description: 'Dry-run evaluation showing eligible documents, targets, preferences, and duplicate blocks' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/follow-up-rules/run': {
+      post: {
+        summary: 'Evaluate overdue pending documents and dispatch reminders respecting preferences & duplicate cooldown (PB-46)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/FollowUpRunRequest' } } },
+        },
+        responses: {
+          200: { description: 'Evaluation summary with dispatched, duplicate-skipped, preference-routed, and failure counts' },
+          401: { description: 'Unauthorized' },
           403: { description: 'Forbidden: Secretary only' },
         },
       },
