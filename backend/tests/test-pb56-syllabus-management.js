@@ -147,8 +147,13 @@ async function runTests() {
     // Criterion 1: Dedicated Syllabus Category / Listing
     // ------------------------------------------------------------------------
     console.log('1️⃣  Testing Syllabus Catalog Retrieval (Separate Category)...');
-    const listRes = await request('GET', '/api/syllabi', { email: student.email });
-    assert(listRes.status === 200, 'GET /api/syllabi returns 200');
+    // Students are unauthorized to list syllabi (403 Forbidden)
+    const studentList = await request('GET', '/api/syllabi', { email: student.email });
+    assert(studentList.status === 403, 'Students blocked from listing syllabi -> 403 Forbidden');
+
+    // Faculty members and reviewers can browse the syllabus catalog
+    const listRes = await request('GET', '/api/syllabi', { email: facultyAna.email });
+    assert(listRes.status === 200, 'Faculty GET /api/syllabi returns 200');
     assert(Array.isArray(listRes.body.syllabi), 'Response contains syllabi array');
     assert(listRes.body.count >= 1, 'Pre-seeded syllabi are present in separate catalog');
 
@@ -235,14 +240,20 @@ async function runTests() {
     // ------------------------------------------------------------------------
     console.log('4️⃣  Testing Authorized Retrieval and Viewing...');
 
-    // Student views the uploaded syllabus
+    // Student attempts to view the uploaded syllabus -> 403 Forbidden
     const studentGet = await request('GET', `/api/syllabi/${createdSyllabusId}`, {
       email: student.email,
     });
-    assert(studentGet.status === 200, 'Student can view/retrieve course syllabus (200)');
+    assert(studentGet.status === 403, 'Students blocked from viewing course syllabus -> 403 Forbidden');
+
+    // Fellow faculty member views syllabus
+    const benGet = await request('GET', `/api/syllabi/${createdSyllabusId}`, {
+      email: facultyBen.email,
+    });
+    assert(benGet.status === 200, 'Faculty colleague can view/retrieve course syllabus (200)');
     assert(
-      studentGet.body.syllabus.subjectCode === 'EDUC 101',
-      'Student views accurate course details'
+      benGet.body.syllabus.subjectCode === 'EDUC 101',
+      'Faculty views accurate course details'
     );
 
     // Chairperson views syllabus
@@ -264,9 +275,13 @@ async function runTests() {
     // ------------------------------------------------------------------------
     console.log('5️⃣  Testing Institutional Syllabus & TOS Template Management...');
 
-    // Get current template
-    const templateRes = await request('GET', '/api/syllabi/template', { email: student.email });
-    assert(templateRes.status === 200, 'GET /api/syllabi/template returns 200');
+    // Student attempts to get template -> 403 Forbidden
+    const studentTemplate = await request('GET', '/api/syllabi/template', { email: student.email });
+    assert(studentTemplate.status === 403, 'Students blocked from accessing syllabus template -> 403 Forbidden');
+
+    // Faculty gets current template
+    const templateRes = await request('GET', '/api/syllabi/template', { email: facultyAna.email });
+    assert(templateRes.status === 200, 'GET /api/syllabi/template by Faculty returns 200');
     assert(templateRes.body.template.fileName !== undefined, 'Official template metadata returned');
 
     // Non-secretary (Faculty) attempts to replace official template -> 403 Forbidden
@@ -299,7 +314,7 @@ async function runTests() {
     assert(anaDelete.status === 200, 'Faculty successfully deletes own syllabus (200)');
 
     const verifyDeleted = await request('GET', `/api/syllabi/${createdSyllabusId}`, {
-      email: student.email,
+      email: facultyAna.email,
     });
     assert(verifyDeleted.status === 404, 'Deleted syllabus is no longer accessible (404)');
 

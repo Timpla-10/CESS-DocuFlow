@@ -63,7 +63,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [syllabiNav, directory],
+          items: [directory],
         },
       ]
     case 'faculty':

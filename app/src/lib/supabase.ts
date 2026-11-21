@@ -309,7 +309,8 @@ export interface SupabaseSyllabusRow {
  * PB-56: Fetch syllabi from Supabase PostgreSQL `Syllabus` table with local store fallback.
  * Strictly enforces role-based access:
  *  - Faculty can view all, but edit/upload only for their assigned courses.
- *  - Students, Chairperson, Dean, and Secretary have read access.
+ *  - Chairperson, Dean, and Secretary have read access.
+ *  - Students are NOT authorized to access or view course syllabi.
  */
 export async function fetchSupabaseSyllabi(
   user: User,
@@ -322,6 +323,10 @@ export async function fetchSupabaseSyllabi(
     q?: string
   },
 ): Promise<SyllabusRecord[]> {
+  // Students are not authorized to view or retrieve course syllabi (PB-56)
+  if (!user || user.role === 'student') {
+    return []
+  }
   // Attempt live API query to /api/syllabi
   try {
     const params = new URLSearchParams()

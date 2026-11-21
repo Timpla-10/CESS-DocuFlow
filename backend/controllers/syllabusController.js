@@ -20,6 +20,13 @@ const SyllabusController = {
    */
   async listSyllabi(req, res, next) {
     try {
+      const user = req.user;
+      if (user && user.role === ROLES.STUDENT) {
+        return res.status(403).json({
+          error: 'Forbidden: Students are not authorized to view or access course syllabi.',
+        });
+      }
+
       const filters = {
         academicYear: req.query.academicYear,
         semester: req.query.semester,
@@ -45,6 +52,13 @@ const SyllabusController = {
    */
   async getSyllabus(req, res, next) {
     try {
+      const user = req.user;
+      if (user && user.role === ROLES.STUDENT) {
+        return res.status(403).json({
+          error: 'Forbidden: Students are not authorized to view or access course syllabi.',
+        });
+      }
+
       const syllabus = await SyllabusModel.findById(req.params.id);
       if (!syllabus) {
         return res.status(404).json({ error: 'Course syllabus not found.' });
@@ -184,6 +198,13 @@ const SyllabusController = {
    */
   async getTemplate(req, res, next) {
     try {
+      const user = req.user;
+      if (user && user.role === ROLES.STUDENT) {
+        return res.status(403).json({
+          error: 'Forbidden: Students are not authorized to access official course syllabus templates.',
+        });
+      }
+
       const template = SyllabusModel.getTemplate();
       res.json({ template });
     } catch (err) {

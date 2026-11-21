@@ -198,11 +198,11 @@ export default function App() {
                 }
               />
 
-              {/* PB-56: Dedicated Course Syllabus Management Section */}
+              {/* PB-56: Dedicated Course Syllabus Management Section (Students are not authorized) */}
               <Route
                 path="syllabi"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
+                  <Protected allowedRoles={['faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
                     <SyllabusManagementPage />
                   </Protected>
                 }
