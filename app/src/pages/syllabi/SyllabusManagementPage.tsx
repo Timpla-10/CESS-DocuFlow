@@ -31,6 +31,7 @@ import {
   PageHeader,
   Segmented,
   StatCard,
+  TextTooltip,
   Tooltip,
   cn,
 } from '../../components/ui'
@@ -367,7 +368,15 @@ export function SyllabusManagementPage() {
       <PageHeader
         eyebrow="Outcome-Based Education (OBE) Curriculum Repository"
         title="Course Syllabus Management"
-        description="Manage, view, and retrieve official course syllabi and Tables of Specifications (TOS) separately from administrative document requests."
+        description={
+          <span>
+            Manage, view, and retrieve official course syllabi and Tables of Specifications (
+            <TextTooltip description="Table of Specifications: a test blueprint mapping examination items to course learning competencies and cognitive levels.">
+              TOS
+            </TextTooltip>
+            ) separately from administrative document requests.
+          </span>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Tooltip content="Download CESS Official Course Syllabus Template (.docx / .pdf)">
@@ -412,7 +421,14 @@ export function SyllabusManagementPage() {
         <StatCard
           label="Syllabi Uploaded"
           value={uploadedCount}
-          hint="Compliant with OBE standards"
+          hint={
+            <span>
+              Compliant with{' '}
+              <TextTooltip description="Outcome-Based Education: curriculum designed around measurable learning competencies required by CHED.">
+                OBE standards
+              </TextTooltip>
+            </span>
+          }
           icon={FileCheck2}
           tone="success"
         />
@@ -434,7 +450,11 @@ export function SyllabusManagementPage() {
 
       {/* Information Banner (PB-56 AC requirement) */}
       <Callout tone="brand" icon={Info} title="Dedicated Course Syllabus Repository">
-        Course syllabi are organized in this dedicated curriculum section separately from regular administrative document requests (such as leaves, thesis defenses, or travel orders). Faculty members can maintain their own course syllabi, while students, department chairs, and the college dean can view and retrieve official course outlines and Tables of Specifications (TOS).
+        Course syllabi are organized in this dedicated curriculum section separately from regular administrative document requests (such as leaves, thesis defenses, or travel orders). Faculty members can maintain their own course syllabi, while department chairs, the college dean, and administrators can view and retrieve official course outlines and Tables of Specifications (
+        <TextTooltip description="Table of Specifications: a test blueprint mapping examination items to cognitive domain levels.">
+          TOS
+        </TextTooltip>
+        ).
       </Callout>
 
       {/* Main Container */}
@@ -839,7 +859,14 @@ export function SyllabusManagementPage() {
               {/* OBE Guidelines Card */}
               <div className="space-y-3 rounded-xl border border-ink-200 bg-white p-5">
                 <h4 className="text-sm font-bold text-ink-950">
-                  OBE Syllabus & Table of Specifications (TOS) Format Guide
+                  <TextTooltip description="Outcome-Based Education: curriculum centered on measurable student learning outcomes.">
+                    OBE
+                  </TextTooltip>{' '}
+                  Syllabus & Table of Specifications (
+                  <TextTooltip description="Table of Specifications: exam blueprint aligning assessment items to cognitive domain levels.">
+                    TOS
+                  </TextTooltip>
+                  ) Format Guide
                 </h4>
                 <ul className="space-y-2 text-xs text-ink-700">
                   <li className="flex items-start gap-2">
@@ -851,7 +878,22 @@ export function SyllabusManagementPage() {
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
                     <span>
-                      <strong>Section II: Course Learning Outcomes (CLOs)</strong> — Mapped to Program Educational Objectives (PEOs) and CHED requirements.
+                      <strong>
+                        Section II: Course Learning Outcomes (
+                        <TextTooltip description="Course Learning Outcomes: statements defining the competencies, knowledge, and abilities students will achieve.">
+                          CLOs
+                        </TextTooltip>
+                        )
+                      </strong>{' '}
+                      — Mapped to Program Educational Objectives (
+                      <TextTooltip description="Program Educational Objectives: broad career accomplishments expected of graduates within 3 to 5 years.">
+                        PEOs
+                      </TextTooltip>
+                      ) and{' '}
+                      <TextTooltip description="Commission on Higher Education (Philippines).">
+                        CHED
+                      </TextTooltip>{' '}
+                      requirements.
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
@@ -863,7 +905,14 @@ export function SyllabusManagementPage() {
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />
                     <span>
-                      <strong>Section IV: Table of Specifications (TOS)</strong> — Item distribution mapped to cognitive domains (Knowledge, Comprehension, Application, Analysis).
+                      <strong>
+                        Section IV: Table of Specifications (
+                        <TextTooltip description="Table of Specifications: grid mapping test items to cognitive skill levels (e.g., Knowledge, Comprehension, Application, Analysis).">
+                          TOS
+                        </TextTooltip>
+                        )
+                      </strong>{' '}
+                      — Item distribution mapped to cognitive domains (Knowledge, Comprehension, Application, Analysis).
                     </span>
                   </li>
                 </ul>

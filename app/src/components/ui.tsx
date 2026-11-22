@@ -296,6 +296,7 @@ export interface TooltipProps {
   className?: string
   delayMs?: number
   disabled?: boolean
+  inline?: boolean
 }
 
 export function Tooltip({
@@ -305,6 +306,7 @@ export function Tooltip({
   className,
   delayMs = 150,
   disabled = false,
+  inline = false,
 }: TooltipProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLSpanElement>(null)
@@ -399,7 +401,7 @@ export function Tooltip({
       onMouseLeave={handleClose}
       onFocus={() => handleOpen(true)}
       onBlur={handleClose}
-      className={cn('inline-flex max-w-full items-center', className)}
+      className={cn(inline ? 'inline' : 'inline-flex max-w-full items-center', className)}
     >
       {children}
       {open &&
@@ -427,6 +429,40 @@ export function Tooltip({
           document.body,
         )}
     </span>
+  )
+}
+
+/**
+ * Inline Text Tooltip.
+ * Wraps specific text or keywords with a dotted underline and cursor cue.
+ * When the user points the cursor directly at that specific text, an explanatory description appears.
+ */
+export interface TextTooltipProps {
+  children: ReactNode // The specific text to point at
+  description: ReactNode // The description that appears on hover
+  placement?: 'top' | 'bottom' | 'left' | 'right'
+  className?: string
+}
+
+export function TextTooltip({
+  children,
+  description,
+  placement = 'top',
+  className,
+}: TextTooltipProps) {
+  return (
+    <Tooltip content={description} placement={placement} inline>
+      <span
+        tabIndex={0}
+        role="term"
+        className={cn(
+          'inline cursor-help border-b border-dotted border-current/70 underline-offset-2 transition-colors hover:text-brand-700 hover:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 rounded-xs font-inherit',
+          className,
+        )}
+      >
+        {children}
+      </span>
+    </Tooltip>
   )
 }
 
@@ -542,7 +578,7 @@ export function StatCard({
 }: {
   label: string
   value: number | string
-  hint?: string
+  hint?: ReactNode
   icon: IconType
   tone?: Tone
   to?: string

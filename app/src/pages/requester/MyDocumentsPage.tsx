@@ -40,6 +40,7 @@ import {
   Card,
   EmptyState,
   PageHeader,
+  TextTooltip,
   Tooltip,
   cn,
 } from '../../components/ui'
@@ -351,11 +352,13 @@ export function MyDocumentsPage() {
               </span>
             </div>
             <div className="flex items-center gap-2 text-2xs text-ink-600">
-              <Tooltip content="Row-Level Security (RLS) ensures only documents submitted by your university account are visible.">
-                <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium ring-1 ring-ink-200 cursor-help">
-                  🔒 Strict RLS Enforced: {user.name} ({user.email})
-                </span>
-              </Tooltip>
+              <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium ring-1 ring-ink-200">
+                🔒 Strict{' '}
+                <TextTooltip description="Row-Level Security: database policy in Supabase PostgreSQL ensuring you can strictly only view your own submitted requests.">
+                  RLS
+                </TextTooltip>{' '}
+                Enforced: {user.name} ({user.email})
+              </span>
             </div>
           </div>
 
