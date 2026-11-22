@@ -4,9 +4,9 @@
  */
 import { AlertCircle, ChevronDown } from 'lucide-react'
 import { cloneElement, forwardRef, isValidElement, useId, useState, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { cn, InfoTooltip } from './ui'
+import { cn, InfoTooltip, Tooltip, type TooltipProps } from './ui'
 
-export { InfoTooltip }
+export { InfoTooltip, Tooltip, type TooltipProps }
 
 export function Field({
   label,

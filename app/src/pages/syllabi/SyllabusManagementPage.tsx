@@ -31,6 +31,7 @@ import {
   PageHeader,
   Segmented,
   StatCard,
+  Tooltip,
   cn,
 } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
@@ -369,25 +370,31 @@ export function SyllabusManagementPage() {
         description="Manage, view, and retrieve official course syllabi and Tables of Specifications (TOS) separately from administrative document requests."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" icon={Download} onClick={handleDownloadTemplate}>
-              Download Official Template
-            </Button>
-            {isSecretary && (
-              <Button
-                variant="secondary"
-                icon={Upload}
-                onClick={() => {
-                  setNewTemplateFileName('')
-                  setIsTemplateUploadOpen(true)
-                }}
-              >
-                Update Template
+            <Tooltip content="Download CESS Official Course Syllabus Template (.docx / .pdf)">
+              <Button variant="secondary" icon={Download} onClick={handleDownloadTemplate}>
+                Download Official Template
               </Button>
+            </Tooltip>
+            {isSecretary && (
+              <Tooltip content="Upload and publish a revised standard institutional template">
+                <Button
+                  variant="secondary"
+                  icon={Upload}
+                  onClick={() => {
+                    setNewTemplateFileName('')
+                    setIsTemplateUploadOpen(true)
+                  }}
+                >
+                  Update Template
+                </Button>
+              </Tooltip>
             )}
             {isFacultyUser && (
-              <Button icon={FilePlus2} onClick={() => handleOpenUpload()}>
-                Upload Course Syllabus
-              </Button>
+              <Tooltip content="Upload and publish a syllabus for one of your assigned courses">
+                <Button icon={FilePlus2} onClick={() => handleOpenUpload()}>
+                  Upload Course Syllabus
+                </Button>
+              </Tooltip>
             )}
           </div>
         }
@@ -669,17 +676,21 @@ export function SyllabusManagementPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             {hasFile ? (
                               <div className="space-y-0.5">
-                                <Badge tone="success" dot={true}>
-                                  Available
-                                </Badge>
+                                <Tooltip content="Verified: Outcome-Based Education (OBE) course syllabus is on file">
+                                  <Badge tone="success" dot={true}>
+                                    Available
+                                  </Badge>
+                                </Tooltip>
                                 <div className="text-2xs text-ink-500">
                                   {item.syllabusFile}
                                 </div>
                               </div>
                             ) : (
-                              <Badge tone="warning" dot={true}>
-                                Missing / Pending
-                              </Badge>
+                              <Tooltip content="Action required: Course syllabus has not been uploaded yet">
+                                <Badge tone="warning" dot={true}>
+                                  Missing / Pending
+                                </Badge>
+                              </Tooltip>
                             )}
                           </td>
 
@@ -688,79 +699,87 @@ export function SyllabusManagementPage() {
                             <div className="inline-flex items-center gap-1.5">
                               {/* Preview */}
                               {hasFile && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setPreviewItem({
-                                      faculty: {
-                                        id: item.facultyId,
-                                        userId: item.facultyUserId,
-                                        name: item.facultyName,
-                                        department: item.department,
-                                        subjects: [
-                                          {
-                                            code: item.subjectCode,
-                                            title: item.subjectTitle,
-                                            syllabusFile: item.syllabusFile,
-                                          },
-                                        ],
-                                      },
-                                      subject: {
-                                        code: item.subjectCode,
-                                        title: item.subjectTitle,
-                                        syllabusFile: item.syllabusFile,
-                                      },
-                                    })
-                                  }
-                                  className="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition"
-                                  title="Preview Syllabus on Screen"
-                                >
-                                  <Eye className="size-3.5 text-brand-700" />
-                                  <span>Preview</span>
-                                </button>
+                                <Tooltip content="Preview Syllabus on Screen">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPreviewItem({
+                                        faculty: {
+                                          id: item.facultyId,
+                                          userId: item.facultyUserId,
+                                          name: item.facultyName,
+                                          department: item.department,
+                                          subjects: [
+                                            {
+                                              code: item.subjectCode,
+                                              title: item.subjectTitle,
+                                              syllabusFile: item.syllabusFile,
+                                            },
+                                          ],
+                                        },
+                                        subject: {
+                                          code: item.subjectCode,
+                                          title: item.subjectTitle,
+                                          syllabusFile: item.syllabusFile,
+                                        },
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition"
+                                    aria-label="Preview Syllabus on Screen"
+                                  >
+                                    <Eye className="size-3.5 text-brand-700" />
+                                    <span>Preview</span>
+                                  </button>
+                                </Tooltip>
                               )}
 
                               {/* Download */}
                               {hasFile && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownload(item)}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-xs ring-1 ring-ink-200 hover:bg-brand-50 transition"
-                                  title="Retrieve and download syllabus file"
-                                >
-                                  <Download className="size-3.5" />
-                                  <span>Download</span>
-                                </button>
+                                <Tooltip content="Retrieve and download syllabus file">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownload(item)}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-xs ring-1 ring-ink-200 hover:bg-brand-50 transition"
+                                    aria-label="Retrieve and download syllabus file"
+                                  >
+                                    <Download className="size-3.5" />
+                                    <span>Download</span>
+                                  </button>
+                                </Tooltip>
                               )}
 
                               {/* Faculty self-service: Upload/Replace/Delete (Strict RBAC) */}
                               {(item.isMyCourse || isSecretary) && (
                                 <>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleOpenUpload({
-                                        code: item.subjectCode,
-                                        title: item.subjectTitle,
-                                        dept: item.department,
-                                      })
-                                    }
-                                    className="inline-flex items-center gap-1 rounded-lg bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-800 hover:bg-ink-200 transition"
-                                    title={hasFile ? 'Replace Syllabus File' : 'Upload Syllabus File'}
-                                  >
-                                    <UploadCloud className="size-3.5" />
-                                    <span>{hasFile ? 'Replace' : 'Upload'}</span>
-                                  </button>
-
-                                  {hasFile && (
+                                  <Tooltip content={hasFile ? 'Replace Syllabus File' : 'Upload Syllabus File'}>
                                     <button
                                       type="button"
-                                      onClick={() => handleDeleteSyllabus(item)}
-                                      className="inline-flex items-center justify-center rounded-lg bg-danger-50 p-1.5 text-danger-700 ring-1 ring-danger-200 hover:bg-danger-100 transition"
-                                      title="Remove this syllabus file"
+                                      onClick={() =>
+                                        handleOpenUpload({
+                                          code: item.subjectCode,
+                                          title: item.subjectTitle,
+                                          dept: item.department,
+                                        })
+                                      }
+                                      className="inline-flex items-center gap-1 rounded-lg bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-800 hover:bg-ink-200 transition"
+                                      aria-label={hasFile ? 'Replace Syllabus File' : 'Upload Syllabus File'}
                                     >
-                                      <Trash2 className="size-3.5" />
+                                      <UploadCloud className="size-3.5" />
+                                      <span>{hasFile ? 'Replace' : 'Upload'}</span>
                                     </button>
+                                  </Tooltip>
+
+                                  {hasFile && (
+                                    <Tooltip content="Remove this syllabus file">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteSyllabus(item)}
+                                        className="inline-flex items-center justify-center rounded-lg bg-danger-50 p-1.5 text-danger-700 ring-1 ring-danger-200 hover:bg-danger-100 transition"
+                                        aria-label="Remove this syllabus file"
+                                      >
+                                        <Trash2 className="size-3.5" />
+                                      </button>
+                                    </Tooltip>
                                   )}
                                 </>
                               )}
@@ -800,16 +819,20 @@ export function SyllabusManagementPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    icon={Eye}
-                    onClick={() => setIsPreviewTemplateOpen(true)}
-                  >
-                    Preview Template
-                  </Button>
-                  <Button icon={Download} onClick={handleDownloadTemplate}>
-                    Download Template
-                  </Button>
+                  <Tooltip content="Preview official OBE Syllabus & TOS template in-app">
+                    <Button
+                      variant="secondary"
+                      icon={Eye}
+                      onClick={() => setIsPreviewTemplateOpen(true)}
+                    >
+                      Preview Template
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Download CESS Official Course Syllabus Template (.docx / .pdf)">
+                    <Button icon={Download} onClick={handleDownloadTemplate}>
+                      Download Template
+                    </Button>
+                  </Tooltip>
                 </div>
               </div>
 

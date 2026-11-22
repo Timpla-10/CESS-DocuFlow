@@ -38,7 +38,7 @@ import { byNewest, byOldest, daysWaiting, isDelayed, typeOf, userById } from '..
 import type { Attachment, Database, DocRecord, HistoryEntry, OfficeId, RouteStep, Status } from '../data/types'
 import { formatDate, formatDateTime, plural, timeAgo } from '../lib/time'
 import { Input, Select } from './form'
-import { Avatar, Badge, EmptyState, cn } from './ui'
+import { Avatar, Badge, EmptyState, Tooltip, cn } from './ui'
 
 /* ------------------------------------------------------------------------ */
 /* Status                                                                    */
@@ -924,26 +924,29 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedAttachId(a.id)
-                        setIsPreviewOpen(true)
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
-                      title="Preview this document on screen"
-                    >
-                      <Eye className="size-3.5 text-brand-600" aria-hidden /> Preview
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSampleDownload(a)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-ink-50 p-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-colors"
-                      title="Download PDF Copy"
-                      aria-label={`Download ${a.name}`}
-                    >
-                      <Download className="size-3.5" aria-hidden />
-                    </button>
+                    <Tooltip content="Preview this document on screen">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAttachId(a.id)
+                          setIsPreviewOpen(true)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
+                        aria-label="Preview this document on screen"
+                      >
+                        <Eye className="size-3.5 text-brand-600" aria-hidden /> Preview
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Download PDF copy">
+                      <button
+                        type="button"
+                        onClick={() => handleSampleDownload(a)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-ink-50 p-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-colors"
+                        aria-label={`Download ${a.name}`}
+                      >
+                        <Download className="size-3.5" aria-hidden />
+                      </button>
+                    </Tooltip>
                   </div>
                 </li>
               )

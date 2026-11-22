@@ -4,6 +4,7 @@
  */
 import { ChevronDown, ChevronLeft, ChevronRight, HelpCircle, Loader2 } from 'lucide-react'
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -274,6 +275,152 @@ export function InfoTooltip({ content }: { content: ReactNode }) {
               transform: coords.isAbove ? 'translateY(-100%)' : 'none',
             }}
             className="pointer-events-none z-[9999] max-w-[280px] rounded-lg bg-ink-950 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-2xl ring-1 ring-white/20 border border-white/10 animate-fade-in"
+          >
+            {content}
+          </div>,
+          document.body,
+        )}
+    </span>
+  )
+}
+
+/**
+ * Generic accessible Tooltip component.
+ * Wraps any trigger element and displays a styled floating tooltip on hover/focus.
+ * Rendered via Portal at document.body with fixed positioning to prevent clipping.
+ */
+export interface TooltipProps {
+  content: ReactNode
+  children: ReactNode
+  placement?: 'top' | 'bottom' | 'left' | 'right'
+  className?: string
+  delayMs?: number
+  disabled?: boolean
+}
+
+export function Tooltip({
+  content,
+  children,
+  placement = 'top',
+  className,
+  delayMs = 150,
+  disabled = false,
+}: TooltipProps) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLSpanElement>(null)
+  const timeoutRef = useRef<any>(null)
+  const [coords, setCoords] = useState<{
+    top: number
+    left: number
+    computedPlacement: 'top' | 'bottom' | 'left' | 'right'
+  } | null>(null)
+
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    let computed = placement
+
+    // Boundary checks & flip
+    if (placement === 'top' && rect.top < 45) {
+      computed = 'bottom'
+    } else if (placement === 'bottom' && rect.bottom > window.innerHeight - 45) {
+      computed = 'top'
+    }
+
+    let top = 0
+    let left = 0
+
+    if (computed === 'top') {
+      top = rect.top - 6
+      left = Math.max(16, Math.min(window.innerWidth - 16, rect.left + rect.width / 2))
+    } else if (computed === 'bottom') {
+      top = rect.bottom + 6
+      left = Math.max(16, Math.min(window.innerWidth - 16, rect.left + rect.width / 2))
+    } else if (computed === 'left') {
+      top = rect.top + rect.height / 2
+      left = rect.left - 6
+    } else if (computed === 'right') {
+      top = rect.top + rect.height / 2
+      left = rect.right + 6
+    }
+
+    setCoords({ top, left, computedPlacement: computed })
+  }, [placement])
+
+  const handleOpen = (immediate = false) => {
+    if (disabled || !content) return
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    if (immediate || delayMs === 0) {
+      updatePosition()
+      setOpen(true)
+    } else {
+      timeoutRef.current = setTimeout(() => {
+        updatePosition()
+        setOpen(true)
+      }, delayMs)
+    }
+  }
+
+  const handleClose = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    setOpen(false)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const onScrollOrResize = () => updatePosition()
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open, updatePosition])
+
+  if (!content || disabled) {
+    return <>{children}</>
+  }
+
+  return (
+    <span
+      ref={triggerRef}
+      onMouseEnter={() => handleOpen(false)}
+      onMouseLeave={handleClose}
+      onFocus={() => handleOpen(true)}
+      onBlur={handleClose}
+      className={cn('inline-flex max-w-full items-center', className)}
+    >
+      {children}
+      {open &&
+        coords &&
+        createPortal(
+          <div
+            role="tooltip"
+            style={{
+              position: 'fixed',
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              transform:
+                coords.computedPlacement === 'top'
+                  ? 'translate(-50%, -100%)'
+                  : coords.computedPlacement === 'bottom'
+                  ? 'translate(-50%, 0)'
+                  : coords.computedPlacement === 'left'
+                  ? 'translate(-100%, -50%)'
+                  : 'translate(0, -50%)',
+            }}
+            className="pointer-events-none z-[9999] max-w-xs whitespace-normal rounded-md bg-ink-950 px-2.5 py-1 text-center text-2xs font-medium leading-tight text-white shadow-xl ring-1 ring-white/15 border border-white/10 animate-fade-in"
           >
             {content}
           </div>,

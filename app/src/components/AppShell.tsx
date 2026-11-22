@@ -9,7 +9,7 @@ import { api, useDb } from '../data/store'
 import { timeAgo } from '../lib/time'
 import { Logo, LogoMark } from './Logo'
 import { useToast } from './Toast'
-import { Avatar, cn } from './ui'
+import { Avatar, Tooltip, cn } from './ui'
 
 export function AppShell() {
   const [drawer, setDrawer] = useState(false)
@@ -188,32 +188,33 @@ function Sidebar({
               <ul className="space-y-1">
                 {s.items.map((it) => (
                   <li key={it.to}>
-                    <NavLink
-                      to={it.to}
-                      end={it.to === '/app/documents'}
-                      title={it.label}
-                      className={({ isActive }) =>
-                        cn(
-                          'group relative flex items-center rounded-xl text-sm font-semibold transition-all',
-                          isExpanded ? 'gap-3 px-3 py-2' : 'justify-center p-2.5',
-                          isActive
-                            ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
-                            : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
-                        )
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <it.icon
-                            className={cn(
-                              'size-[18px] shrink-0',
-                              isActive ? 'text-brand-700' : 'text-brand-300 group-hover:text-white',
-                            )}
-                          />
-                          {isExpanded && <span className="flex-1 truncate">{it.label}</span>}
-                        </>
-                      )}
-                    </NavLink>
+                    <Tooltip content={it.label} placement="right" disabled={isExpanded}>
+                      <NavLink
+                        to={it.to}
+                        end={it.to === '/app/documents'}
+                        className={({ isActive }) =>
+                          cn(
+                            'group relative flex w-full items-center rounded-xl text-sm font-semibold transition-all',
+                            isExpanded ? 'gap-3 px-3 py-2' : 'justify-center p-2.5',
+                            isActive
+                              ? 'bg-white text-brand-900 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.25)] font-bold'
+                              : 'text-brand-100/90 hover:bg-white/10 hover:text-white',
+                          )
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <it.icon
+                              className={cn(
+                                'size-[18px] shrink-0',
+                                isActive ? 'text-brand-700' : 'text-brand-300 group-hover:text-white',
+                              )}
+                            />
+                            {isExpanded && <span className="flex-1 truncate">{it.label}</span>}
+                          </>
+                        )}
+                      </NavLink>
+                    </Tooltip>
                   </li>
                 ))}
               </ul>
@@ -261,15 +262,16 @@ function TopBar({
 
       {/* Desktop hamburger toggle: only rendered when sidebar is collapsed (rail mode) */}
       {!isLocked && (
-        <button
-          type="button"
-          onClick={onToggleLock}
-          className="hidden lg:grid size-10 place-items-center rounded-lg text-ink-600 hover:bg-brand-50 hover:text-brand-900 transition-colors"
-          title="Expand sidebar"
-          aria-label="Expand sidebar"
-        >
-          <Menu className="size-5" aria-hidden />
-        </button>
+        <Tooltip content="Expand sidebar">
+          <button
+            type="button"
+            onClick={onToggleLock}
+            className="hidden lg:grid size-10 place-items-center rounded-lg text-ink-600 hover:bg-brand-50 hover:text-brand-900 transition-colors"
+            aria-label="Expand sidebar"
+          >
+            <Menu className="size-5" aria-hidden />
+          </button>
+        </Tooltip>
       )}
 
       <div className="min-w-0 shrink lg:hidden">
@@ -331,20 +333,22 @@ function NotificationBell() {
 
   return (
     <div className="relative shrink-0" ref={ref}>
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={open}
-        aria-label={unread ? `Notifications — ${unread} new` : 'Notifications'}
-        className="relative grid size-8 sm:size-10 place-items-center rounded-lg text-ink-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
-      >
-        <Bell className="size-4.5 sm:size-5" aria-hidden />
-        {unread > 0 && (
-          <span className="absolute right-0.5 top-0.5 sm:right-1.5 sm:top-1.5 grid min-w-4 sm:min-w-[18px] place-items-center rounded-full bg-brand-600 px-0.5 sm:px-1 text-[9px] sm:text-[10px] font-bold leading-none sm:leading-[18px] text-white ring-1.5 sm:ring-2 ring-white">
-            {unread}
-          </span>
-        )}
-      </button>
+      <Tooltip content={unread > 0 ? `${unread} new notification(s)` : 'Notifications'}>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-label={unread ? `Notifications — ${unread} new` : 'Notifications'}
+          className="relative grid size-8 sm:size-10 place-items-center rounded-lg text-ink-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+        >
+          <Bell className="size-4.5 sm:size-5" aria-hidden />
+          {unread > 0 && (
+            <span className="absolute right-0.5 top-0.5 sm:right-1.5 sm:top-1.5 grid min-w-4 sm:min-w-[18px] place-items-center rounded-full bg-brand-600 px-0.5 sm:px-1 text-[9px] sm:text-[10px] font-bold leading-none sm:leading-[18px] text-white ring-1.5 sm:ring-2 ring-white">
+              {unread}
+            </span>
+          )}
+        </button>
+      </Tooltip>
       {open && (
         <div className="absolute right-0 top-11 sm:top-12 z-30 w-[min(calc(100vw-16px),380px)] origin-top-right animate-scale-in overflow-hidden rounded-xl bg-white shadow-raised ring-1 ring-ink-100">
           <div className="border-b border-ink-100 bg-brand-50/50 p-3 sm:p-3.5">

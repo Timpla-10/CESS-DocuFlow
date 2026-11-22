@@ -40,6 +40,7 @@ import {
   Card,
   EmptyState,
   PageHeader,
+  Tooltip,
   cn,
 } from '../../components/ui'
 import {
@@ -324,9 +325,11 @@ export function MyDocumentsPage() {
             actions={
               <div className="flex flex-wrap items-center gap-2">
                 {user.role === 'faculty' && (
-                  <ButtonLink to="/app/syllabi" variant="secondary" icon={BookOpen}>
-                    Course Syllabi (PB-56)
-                  </ButtonLink>
+                  <Tooltip content="Separate syllabus upload, viewing, and retrieval management (PB-56)">
+                    <ButtonLink to="/app/syllabi" variant="secondary" icon={BookOpen}>
+                      Course Syllabi (PB-56)
+                    </ButtonLink>
+                  </Tooltip>
                 )}
                 {canSubmit && (
                   <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
@@ -348,9 +351,11 @@ export function MyDocumentsPage() {
               </span>
             </div>
             <div className="flex items-center gap-2 text-2xs text-ink-600">
-              <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium ring-1 ring-ink-200">
-                🔒 Strict RLS Enforced: {user.name} ({user.email})
-              </span>
+              <Tooltip content="Row-Level Security (RLS) ensures only documents submitted by your university account are visible.">
+                <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium ring-1 ring-ink-200 cursor-help">
+                  🔒 Strict RLS Enforced: {user.name} ({user.email})
+                </span>
+              </Tooltip>
             </div>
           </div>
 
@@ -513,32 +518,36 @@ export function MyDocumentsPage() {
               <div className="flex items-center gap-2">
                 <span className="text-2xs font-semibold text-ink-500">View as:</span>
                 <div className="flex items-center rounded-lg bg-ink-100 p-0.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('cards')}
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium',
-                      viewMode === 'cards'
-                        ? 'bg-white text-brand-900 shadow-2xs'
-                        : 'text-ink-600 hover:text-ink-900',
-                    )}
-                    aria-label="Cards view"
-                  >
-                    <LayoutGrid className="size-3.5" /> Cards
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('table')}
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium',
-                      viewMode === 'table'
-                        ? 'bg-white text-brand-900 shadow-2xs'
-                        : 'text-ink-600 hover:text-ink-900',
-                    )}
-                    aria-label="Table view"
-                  >
-                    <List className="size-3.5" /> Table
-                  </button>
+                  <Tooltip content="Display requests in visual card layout">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('cards')}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium',
+                        viewMode === 'cards'
+                          ? 'bg-white text-brand-900 shadow-2xs'
+                          : 'text-ink-600 hover:text-ink-900',
+                      )}
+                      aria-label="Cards view"
+                    >
+                      <LayoutGrid className="size-3.5" /> Cards
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Display requests in structured data table">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('table')}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium',
+                        viewMode === 'table'
+                          ? 'bg-white text-brand-900 shadow-2xs'
+                          : 'text-ink-600 hover:text-ink-900',
+                      )}
+                      aria-label="Table view"
+                    >
+                      <List className="size-3.5" /> Table
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             )}
