@@ -5,8 +5,8 @@ import { cn } from './ui'
 /**
  * Dual institutional seal mark (MSUN official university seal & CESS college seal).
  */
-export function LogoMark({ className, size = 'md' }: { className?: string; size?: 'sm' | 'md' | 'lg' }) {
-  const imgSize = size === 'sm' ? 'size-6' : size === 'lg' ? 'size-9' : 'size-7'
+export function LogoMark({ className, size = 'md' }: { className?: string; size?: 'xs' | 'sm' | 'md' | 'lg' }) {
+  const imgSize = size === 'xs' ? 'size-5' : size === 'sm' ? 'size-6' : size === 'lg' ? 'size-9' : 'size-7'
   return (
     <span className={cn('inline-flex items-center justify-center gap-1 shrink-0', className)}>
       <img

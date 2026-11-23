@@ -1,19 +1,16 @@
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
   CheckSquare,
   Inbox,
   PackageCheck,
   RotateCcw,
-  Route,
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DocumentList } from '../../components/documents'
 import {
-  Badge,
   ButtonLink,
   Callout,
   Card,
@@ -22,33 +19,34 @@ import {
   PieChart,
   Segmented,
   StatCard,
+  Tooltip,
 } from '../../components/ui'
-import { OFFICE_LABEL, controlNumber, locationLabelForStaff } from '../../content/language'
-import { daysWaiting, isDelayed, secretaryQueues, typeOf, userById } from '../../data/selectors'
+import { OFFICE_LABEL, locationLabelForStaff } from '../../content/language'
+import { daysWaiting, isDelayed, secretaryQueues } from '../../data/selectors'
 import { useDb } from '../../data/store'
 import type { OfficeId } from '../../data/types'
-import { formatDateTime, plural } from '../../lib/time'
+import { plural } from '../../lib/time'
 
 export function OverviewPage() {
   const db = useDb()
   const queues = secretaryQueues(db)
   const allDocs = db.documents
   const delayedDocs = allDocs.filter((d) => isDelayed(db, d))
-  const idsDocs = allDocs.filter((d) => d.origin === 'IDS' && !d.archived)
   const returnedDocs = allDocs.filter((d) => d.status === 'returned')
   const rejectedDocs = allDocs.filter((d) => d.status === 'rejected')
 
   const [activeQueueTab, setActiveQueueTab] = useState<
-    'toCheck' | 'ready' | 'returned' | 'rejected' | 'ids'
+    'toCheck' | 'ready' | 'returned' | 'rejected'
   >('toCheck')
 
   // Distribution by holding office with official institutional gradients
-  const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+  const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
   const officeGradients: Record<OfficeId, [string, string]> = {
     chairperson: ['#8B5CF6', '#581C87'], // Royal Violet (DSSH): Violet-500 -> Violet-900
     ids_principal: ['#FB7185', '#BE185D'], // Official IDS Warm Rose Pink: Rose-400 -> Pink-700
     dean: ['#C084FC', '#6B21A8'], // Dean Amethyst Purple: Purple-400 -> Purple-800
     ovcaa: ['#60A5FA', '#1D4ED8'], // University Azure Blue: Blue-400 -> Blue-700
+    vcaf: ['#34D399', '#047857'], // University Emerald Green: Emerald-400 -> Emerald-700
     chancellor: ['#FBBF24', '#B45309'], // Chancellor Amber Gold: Amber-400 -> Amber-700
     secretary: ['#A78BFA', '#4C1D95'],
   }
@@ -151,7 +149,7 @@ export function OverviewPage() {
                 <span className="text-xs font-bold uppercase tracking-wider text-ink-500">
                   Secretary Workstation Queues
                 </span>
-                <Segmented<'toCheck' | 'ready' | 'returned' | 'rejected' | 'ids'>
+                <Segmented<'toCheck' | 'ready' | 'returned' | 'rejected'>
                   label="Workstation Queue Tabs"
                   value={activeQueueTab}
                   onChange={setActiveQueueTab}
@@ -176,11 +174,6 @@ export function OverviewPage() {
                       label: 'Rejected',
                       count: rejectedDocs.length,
                     },
-                    {
-                      value: 'ids',
-                      label: 'IDS Hand-Offs',
-                      count: idsDocs.length,
-                    },
                   ]}
                 />
               </div>
@@ -192,9 +185,11 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        Submissions Awaiting Content Verification
-                      </h3>
+                      <Tooltip content="Submissions awaiting initial review and manual document verification before routing" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Submissions Awaiting Content Verification
+                        </h3>
+                      </Tooltip>
                       <p className="text-xs text-ink-500">
                         Automatic completeness check passed. Inspect attached document contents before logging and routing (oldest first).
                       </p>
@@ -230,9 +225,11 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        Approved Documents Ready for Release
-                      </h3>
+                      <Tooltip content="Documents with final approval ready for physical requester release or counter pickup" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Approved Documents Ready for Release
+                        </h3>
+                      </Tooltip>
                       <p className="text-xs text-ink-500">
                         Documents with final Dean approval awaiting requester collection at the counter.
                       </p>
@@ -267,9 +264,11 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        Submissions Returned to Requesters for Correction
-                      </h3>
+                      <Tooltip content="Documents requiring requester corrections before resuming office routing" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Submissions Returned to Requesters for Correction
+                        </h3>
+                      </Tooltip>
                       <p className="text-xs text-ink-500">
                         Documents returned by the Secretary or Reviewing Offices for file or content revisions.
                       </p>
@@ -304,9 +303,11 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        Officially Disapproved & Rejected Records
-                      </h3>
+                      <Tooltip content="Submissions officially rejected by reviewing authorities and closed" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Officially Disapproved & Rejected Records
+                        </h3>
+                      </Tooltip>
                       <p className="text-xs text-ink-500">
                         Documents officially disapproved and closed by Reviewing Authorities.
                       </p>
@@ -331,82 +332,6 @@ export function OverviewPage() {
                     </div>
                   }
                 />
-              </div>
-            )}
-
-            {/* TAB 3: IDS Hand-offs Unified Trail */}
-            {activeQueueTab === 'ids' && (
-              <div>
-                <div className="border-b border-ink-100 p-4">
-                  <div className="flex items-center gap-2">
-                    <Route className="size-4 text-brand-700" />
-                    <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        IDS Document Hand-Offs (Secretary ↔ Chairperson ↔ IDS Principal)
-                      </h3>
-                      <p className="text-xs text-ink-500">
-                        Unified tracking of Integrated Developmental School documents and reviewer endorsements.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {idsDocs.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-ink-500">
-                    No active IDS documents in routing.
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-ink-100">
-                    {idsDocs.map((d) => {
-                      const type = typeOf(db, d)
-                      const req = userById(db, d.requesterId)
-                      const handoffs = d.history.filter((h) =>
-                        [
-                          'submitted',
-                          'checked_complete',
-                          'routed',
-                          'endorsed',
-                          'approved',
-                        ].includes(h.action),
-                      )
-                      return (
-                        <li key={d.id} className="p-4 hover:bg-brand-50/40">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <Link
-                                to={`/app/documents/${d.id}`}
-                                className="font-semibold text-ink-900 hover:text-brand-700 hover:underline"
-                              >
-                                {d.title}
-                              </Link>
-                              <p className="mt-0.5 text-xs text-ink-500">
-                                {type?.name} · <span className="font-mono">{controlNumber(d)}</span> · {req?.name}
-                              </p>
-                            </div>
-                            <Badge tone="ids">
-                              Now at: {locationLabelForStaff(d, db)} ({plural(daysWaiting(d), 'day')})
-                            </Badge>
-                          </div>
-
-                          {/* Hand-off chain pill trail */}
-                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
-                            {handoffs.map((h, idx) => (
-                              <span key={h.id} className="inline-flex items-center gap-1.5">
-                                {idx > 0 && <ArrowRight className="size-3 text-ink-400" aria-hidden />}
-                                <span
-                                  className="rounded-md bg-ink-50 px-2 py-0.5 text-2xs font-medium text-ink-700 ring-1 ring-inset ring-ink-200"
-                                  title={formatDateTime(h.at)}
-                                >
-                                  {h.office} ({h.action.replace('_', ' ')})
-                                </span>
-                              </span>
-                            ))}
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
               </div>
             )}
           </Card>

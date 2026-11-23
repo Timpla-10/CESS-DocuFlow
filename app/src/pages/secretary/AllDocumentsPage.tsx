@@ -31,7 +31,7 @@ import {
 } from '../../components/documents'
 import { Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Badge, Button, Card, EmptyState, PageHeader, Segmented, cn } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, PageHeader, Segmented, Tooltip, cn } from '../../components/ui'
 import {
   OFFICE_LABEL,
   controlNumber,
@@ -139,7 +139,7 @@ export function AllDocumentsPage() {
       return
     }
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a file smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a file smaller than ${MAX_FILE_MB} MB.`)
       e.target.value = ''
       return
     }
@@ -188,7 +188,7 @@ export function AllDocumentsPage() {
         requesterId: selectedRequester.id,
         typeId: selectedType.id,
         title: title.trim(),
-        description: description.trim(),
+        description: description.trim() || 'Walk-in physical document packet encoded by the College Secretary.',
         files: payloadFiles,
       })
 
@@ -243,7 +243,7 @@ export function AllDocumentsPage() {
     if (!file) return
     const sizeKb = Math.round(file.size / 1024)
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a template smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a template smaller than ${MAX_FILE_MB} MB.`)
       return
     }
     try {
@@ -446,9 +446,11 @@ export function AllDocumentsPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-ink-900">
-                  {unitTab} Submissions in this Folder
-                </h3>
+                <Tooltip content="List of active submissions filed under this specific document category and academic unit" placement="top">
+                  <h3 className="inline-block cursor-help text-base font-bold text-ink-900 transition-colors hover:text-brand-700">
+                    {unitTab} Submissions in this Folder
+                  </h3>
+                </Tooltip>
                 <p className="text-xs text-ink-500">
                   All active requests under {selectedFolderType.name} from {unitTab}
                 </p>
@@ -537,7 +539,7 @@ export function AllDocumentsPage() {
                             )}
                           </div>
 
-                          <div className="flex flex-col items-end gap-2">
+                          <div className="flex flex-wrap items-center sm:flex-col sm:items-end gap-2 w-full sm:w-auto">
                             <StatusBadge doc={doc} audience="staff" db={db} />
                             {delayed && <DelayedBadge audience="staff" />}
                             <WaitingTime doc={doc} />
@@ -546,7 +548,7 @@ export function AllDocumentsPage() {
                               to={`/app/documents/${doc.id}`}
                               className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
                             >
-                              Inspect & Route <ArrowRight className="size-3" />
+                              Inspect & Route <ArrowRight className="size-3 shrink-0" />
                             </Link>
                           </div>
                         </div>
@@ -736,12 +738,12 @@ export function AllDocumentsPage() {
         </div>
       )}
 
-      {/* Walk-In Document Encoding Dialog (REQ-REC-8) */}
+      {/* Walk-In Document Encoding Dialog */}
       <Dialog
         open={isWalkInOpen}
         onClose={() => setIsWalkInOpen(false)}
-        size="lg"
-        title="Encode Document Received in Person (REQ-REC-8)"
+        size="xl"
+        title="Encode Document Received in Person"
         description="Create an official CESS DocuFlow record for a physical document packet submitted at the counter. The record will be marked as encoded by the College Secretary."
         busy={walkInBusy}
         footer={
@@ -759,9 +761,13 @@ export function AllDocumentsPage() {
           </>
         }
       >
-        <form className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Requester (Student, Faculty, or Principal)" required>
+        <form className="space-y-6">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              label="Requester"
+              required
+              hint="Select the student, faculty member, or principal submitting the physical packet."
+            >
               <Select
                 value={requesterId}
                 onChange={(e) => handleRequesterChange(e.target.value)}

@@ -24,7 +24,7 @@ import {
 } from './engine'
 import type { Database, DocumentType, ExternalOfficeItem, User } from './types'
 
-export const DB_VERSION = 14
+export const DB_VERSION = 16
 export const DEMO_PASSWORD = 'cess2026'
 
 
@@ -39,6 +39,7 @@ const users: User[] = [
   { id: 'u-ids', name: 'Dr. Teresa Gomez', email: 'ids.principal@msunaawan.edu.ph', role: 'ids_principal', origin: 'IDS', department: 'Integrated Developmental School', position: 'IDS Principal', active: true, notificationPreference: 'both' },
   { id: 'u-dean', name: 'Dr. Ramon Villanueva', email: 'cess.dean@msunaawan.edu.ph', role: 'dean', department: 'College of Education and Social Sciences', position: 'College Dean', active: true, notificationPreference: 'both' },
   { id: 'u-ovcaa', name: 'Dr. Victor Salazar', email: 'ovcaa@msunaawan.edu.ph', role: 'ovcaa', department: 'Office of the Vice Chancellor for Academic Affairs', position: 'Vice Chancellor for Academic Affairs', active: true, notificationPreference: 'both' },
+  { id: 'u-vcaf', name: 'Dr. Carmelo Prudente', email: 'vcaf@msunaawan.edu.ph', role: 'vcaf', department: 'Office of the Vice Chancellor for Administration and Finance', position: 'Vice Chancellor for Administration and Finance', active: true, notificationPreference: 'both' },
   { id: 'u-chancellor', name: 'Dr. Antonio Cabrera', email: 'chancellor@msunaawan.edu.ph', role: 'chancellor', department: 'Office of the Chancellor', position: 'Chancellor', active: true, notificationPreference: 'both' },
 ]
 
@@ -257,6 +258,150 @@ export function createSeed(): Database {
       uploadedBy: 'Ms. Carmela Ortiz (College Secretary)',
       fileSize: '142 KB',
     },
+    syllabi: [
+      {
+        id: 'syl-1',
+        subjectCode: 'EDUC 101',
+        subjectTitle: 'The Child and Adolescent Learner',
+        facultyId: 'fac-1',
+        facultyName: 'Prof. Ana Lim',
+        facultyUserId: 'u-faculty-1',
+        department: 'Department of Secondary and Elementary Education',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'EDUC101_Syllabus_2026.pdf',
+        fileSizeKb: 450,
+        uploadedAt: '2026-08-20T09:00:00Z',
+        description: 'Outcome-based course syllabus covering developmental stages, learning theories, and adolescent behavior.',
+        status: 'active',
+      },
+      {
+        id: 'syl-2',
+        subjectCode: 'EDUC 205',
+        subjectTitle: 'Assessment in Learning 1',
+        facultyId: 'fac-1',
+        facultyName: 'Prof. Ana Lim',
+        facultyUserId: 'u-faculty-1',
+        department: 'Department of Secondary and Elementary Education',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'EDUC205_Syllabus_2026.pdf',
+        fileSizeKb: 520,
+        uploadedAt: '2026-08-22T10:30:00Z',
+        description: 'Assessment principles, development of traditional and authentic assessment tools, and TOS construction.',
+        status: 'active',
+      },
+      {
+        id: 'syl-3',
+        subjectCode: 'SOCSCI 110',
+        subjectTitle: 'Philippine History',
+        facultyId: 'fac-2',
+        facultyName: 'Prof. Ben Aquino',
+        facultyUserId: 'u-faculty-2',
+        department: 'Department of Social Sciences and Humanities',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'SOCSCI110_Syllabus_2026.pdf',
+        fileSizeKb: 610,
+        uploadedAt: '2026-08-18T14:00:00Z',
+        description: 'Critical analysis of primary sources, colonial experiences, and contemporary sociopolitical developments in the Philippines.',
+        status: 'active',
+      },
+      {
+        id: 'syl-4',
+        subjectCode: 'SOCSCI 220',
+        subjectTitle: 'Research Methods in the Social Sciences',
+        facultyId: 'fac-2',
+        facultyName: 'Prof. Ben Aquino',
+        facultyUserId: 'u-faculty-2',
+        department: 'Department of Social Sciences and Humanities',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'SOCSCI220_Syllabus_2026.pdf',
+        fileSizeKb: 720,
+        uploadedAt: '2026-08-25T11:15:00Z',
+        description: 'Quantitative and qualitative social science research designs, field methodologies, data collection, and ethics.',
+        status: 'active',
+      },
+      {
+        id: 'syl-5',
+        subjectCode: 'EDUC 310',
+        subjectTitle: 'Curriculum Development',
+        facultyId: 'fac-3',
+        facultyName: 'Dr. Liza Fernandez',
+        facultyUserId: 'u-chair',
+        department: 'Department of Secondary and Elementary Education',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'EDUC310_Syllabus_2026.pdf',
+        fileSizeKb: 480,
+        uploadedAt: '2026-08-19T08:45:00Z',
+        description: 'Curriculum concepts, models of curriculum planning, implementation, reform, and institutional evaluation.',
+        status: 'active',
+      },
+      {
+        id: 'syl-6',
+        subjectCode: 'ENG 102',
+        subjectTitle: 'Purposive Communication',
+        facultyId: 'fac-4',
+        facultyName: 'Prof. Rhea Mendez',
+        department: 'Department of Secondary and Elementary Education',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'ENG102_Syllabus_2026.pdf',
+        fileSizeKb: 390,
+        uploadedAt: '2026-08-21T13:20:00Z',
+        description: 'Writing, speaking, and presenting to different audiences in multimodal contemporary settings.',
+        status: 'active',
+      },
+      {
+        id: 'syl-7',
+        subjectCode: 'ENG 215',
+        subjectTitle: 'Teaching Literature',
+        facultyId: 'fac-4',
+        facultyName: 'Prof. Rhea Mendez',
+        department: 'Department of Secondary and Elementary Education',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'ENG215_Syllabus_2026.pdf',
+        fileSizeKb: 540,
+        uploadedAt: '2026-08-23T15:40:00Z',
+        description: 'Theories, approaches, and instructional materials for teaching literary genres across grade levels.',
+        status: 'active',
+      },
+      {
+        id: 'syl-8',
+        subjectCode: 'SCI 10',
+        subjectTitle: 'Integrated Science and Environmental Studies',
+        facultyId: 'fac-5',
+        facultyName: 'Mr. Jose Dela Cruz',
+        facultyUserId: 'u-faculty-3',
+        department: 'Integrated Developmental School',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'SCI10_Syllabus_2026.pdf',
+        fileSizeKb: 670,
+        uploadedAt: '2026-08-24T10:00:00Z',
+        description: 'High school integrated general science curriculum encompassing ecology, earth science, and environmental conservation.',
+        status: 'active',
+      },
+      {
+        id: 'syl-9',
+        subjectCode: 'MATH 10',
+        subjectTitle: 'Advanced Algebra and Trigonometry',
+        facultyId: 'fac-5',
+        facultyName: 'Mr. Jose Dela Cruz',
+        facultyUserId: 'u-faculty-3',
+        department: 'Integrated Developmental School',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        fileName: 'MATH10_Syllabus_2026.pdf',
+        fileSizeKb: 580,
+        uploadedAt: '2026-08-26T09:30:00Z',
+        description: 'Advanced secondary mathematics covering trigonometric identities, polynomial functions, and real-world modeling.',
+        status: 'active',
+      },
+    ],
     settings: { reminderEveryDays: 3 },
     counter: 100,
     whitelist: [
@@ -305,6 +450,7 @@ export function createSeed(): Database {
     ids_principal: U('u-ids'),
     dean: U('u-dean'),
     ovcaa: U('u-ovcaa'),
+    vcaf: U('u-vcaf'),
     chancellor: U('u-chancellor'),
   }
   const review = (docId: string, office: string, kind: ReviewKind, at: string, remarks = '') =>
@@ -376,7 +522,7 @@ export function createSeed(): Database {
     review(d.id, 'chairperson', 'endorse', ago(14, 3))
     review(d.id, 'ids_principal', 'endorse', ago(12, 6))
     review(d.id, 'dean', 'approve', ago(10, 2))
-    sendToExternal(db, sec, d.id, { office: 'hrmo', handedBy: 'Carmela Ortiz', remarks: 'For updating of service record.' }, ago(9, 6))
+    sendToExternal(db, sec, d.id, { office: 'hrmo', transferDate: ago(9, 6).slice(0, 10), handedBy: 'Carmela Ortiz', referenceNumber: 'HRMO-2026-0419', remarks: 'For updating of service record.' }, ago(9, 6))
   }
   // 12. Faculty CESS — FTL with the Office of the Chancellor.
   {
@@ -411,8 +557,8 @@ export function createSeed(): Database {
     checkRequirements(db, sec, d.id, { decision: 'complete', missing: [], reasons: '' }, ago(20, 20))
     review(d.id, 'chairperson', 'endorse', ago(19))
     review(d.id, 'dean', 'approve', ago(17, 4))
-    sendToExternal(db, sec, d.id, { office: 'registrar', handedBy: 'Carmela Ortiz', remarks: 'For grade encoding.' }, ago(17))
-    recordExternalReturn(db, sec, d.id, { remarks: 'Grade encoded by the Registrar.' }, ago(14, 3))
+    sendToExternal(db, sec, d.id, { office: 'registrar', transferDate: ago(17).slice(0, 10), handedBy: 'Carmela Ortiz', referenceNumber: 'REG-2026-0812', remarks: 'For grade encoding.' }, ago(17))
+    recordExternalReturn(db, sec, d.id, { returnDate: ago(14, 3).slice(0, 10), outcome: 'signed', remarks: 'Grade encoded by the Registrar.' }, ago(14, 3))
     markReady(db, sec, d.id, ago(14, 2))
     recordRelease(db, sec, d.id, { receivedBy: 'Paolo Reyes', signedFile: { name: 'INC_SOCSCI220_Signed_Release.pdf', sizeKb: 410 } }, ago(13))
   }

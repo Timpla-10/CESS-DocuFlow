@@ -16,11 +16,13 @@ import type {
   DocumentType,
   ExternalOfficeId,
   ExternalOfficeItem,
+  ExternalReturnOutcome,
   FacultyEntry,
   NotificationPreference,
   Origin,
   PendingRegistration,
   Role,
+  SyllabusRecord,
   SyllabusTemplate,
   User,
   WhitelistEntry,
@@ -34,12 +36,20 @@ function load(): Database {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Database
-      if (parsed.version === DB_VERSION || parsed.version === 12 || parsed.version === 11) {
+      if (parsed.version === DB_VERSION || parsed.version === 14 || parsed.version === 13 || parsed.version === 12 || parsed.version === 11) {
         parsed.version = DB_VERSION
         for (const u of parsed.users) {
           if (u.role === 'ids_principal' && !u.origin) {
             u.origin = 'IDS'
           }
+          if (!u.notificationPreference) {
+            u.notificationPreference = 'both'
+          }
+        }
+        if (!parsed.users.some((u) => u.role === 'vcaf')) {
+          const fresh = createSeed()
+          const vcafUser = fresh.users.find((u) => u.role === 'vcaf')
+          if (vcafUser) parsed.users.push(vcafUser)
         }
         return parsed
       }
@@ -107,14 +117,196 @@ async function mutate<T>(fn: (draft: Database, at: string) => T): Promise<T> {
 }
 
 export const api = {
-  async signIn(email: string, password: string, role?: Role): Promise<User> {
-    await wait(500)
+  async signIn(email: string, password: string): Promise<User> {
     const cleanEmail = email.trim().toLowerCase()
-    let user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
-    if (role && (!user || user.role !== role)) {
-      user = db.users.find((u) => u.role === role && u.active) ?? user
+    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+      throw new FriendlyError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
     }
-    if (!user || password !== DEMO_PASSWORD) throw new FriendlyError(MESSAGES.signInFailed)
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.user) {
+          const liveUser: User = {
+            id: data.user.id || data.user.user_id,
+            name: data.user.name,
+            email: data.user.email,
+            role: data.user.role,
+            origin: data.user.origin,
+            department: data.user.department,
+            position: data.user.position,
+            active: data.user.active ?? true,
+          }
+          const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail)
+          if (existingIdx >= 0) {
+            db.users[existingIdx] = { ...db.users[existingIdx], ...liveUser }
+          } else {
+            db.users.push(liveUser)
+          }
+          // PB-10 & PB-11: Sync live document types and requirement checklists from backend
+          try {
+            const dtRes = await fetch('/api/document-types', {
+              headers: { 'x-user-email': liveUser.email },
+            })
+            if (dtRes.ok) {
+              const dtData = await dtRes.json()
+              if (Array.isArray(dtData.documentTypes) && dtData.documentTypes.length > 0) {
+                for (const lt of dtData.documentTypes) {
+                  const existingIdx = db.documentTypes.findIndex(
+                    (t) => t.name.toLowerCase() === lt.name.toLowerCase() || t.id === String(lt.id)
+                  )
+                  const mappedReqs = (lt.requirements || []).map((r: any) => ({
+                    id: String(r.id || r.form_id),
+                    label: r.label || r.form_name,
+                    required: r.required !== undefined ? r.required : r.is_required,
+                    source: r.source || r.source_office,
+                    why: `Where to get it: ${r.source || r.source_office}`,
+                    templateUrl: r.template_url || r.templateUrl,
+                  }))
+                  const mappedType: DocumentType = {
+                    id: String(lt.id),
+                    name: lt.name,
+                    audience: lt.audience,
+                    summary: lt.summary,
+                    processingDays: [lt.standard_processing_days || 3, (lt.standard_processing_days || 3) + 2],
+                    cessRoute: ['chairperson', 'dean'],
+                    idsRoute: ['chairperson', 'ids_principal', 'dean'],
+                    higherApproval: lt.audience === 'faculty' ? ['ovcaa', 'chancellor'] : [],
+                    requirements: mappedReqs,
+                  }
+                  if (existingIdx >= 0) {
+                    db.documentTypes[existingIdx] = { ...db.documentTypes[existingIdx], ...mappedType }
+                  } else {
+                    db.documentTypes.push(mappedType)
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Backend sync for document types skipped:', e)
+          }
+
+          commit({ ...db })
+          return liveUser
+        }
+      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+        const errJson = await res.json().catch(() => null)
+        if (errJson?.error) {
+          throw new FriendlyError(errJson.error)
+        }
+      }
+    } catch (err) {
+      if (err instanceof FriendlyError) throw err
+      // Fallback to prototype mock if backend is offline
+    }
+
+    await wait(300)
+    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
+    if (!user || password !== DEMO_PASSWORD) {
+      throw new FriendlyError(MESSAGES.signInFailed)
+    }
+    if (!user.active) throw new FriendlyError(MESSAGES.accountInactive)
+    return user
+  },
+
+  async signInWithUniversityGoogle(email: string): Promise<User> {
+    const cleanEmail = email.trim().toLowerCase()
+    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+      throw new FriendlyError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
+    }
+
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.user) {
+          const liveUser: User = {
+            id: data.user.id || data.user.user_id,
+            name: data.user.name,
+            email: data.user.email,
+            role: data.user.role,
+            origin: data.user.origin,
+            department: data.user.department,
+            position: data.user.position,
+            active: data.user.active ?? true,
+          }
+          const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail)
+          if (existingIdx >= 0) {
+            db.users[existingIdx] = { ...db.users[existingIdx], ...liveUser }
+          } else {
+            db.users.push(liveUser)
+          }
+          // PB-10 & PB-11: Sync live document types and requirement checklists from backend
+          try {
+            const dtRes = await fetch('/api/document-types', {
+              headers: { 'x-user-email': liveUser.email },
+            })
+            if (dtRes.ok) {
+              const dtData = await dtRes.json()
+              if (Array.isArray(dtData.documentTypes) && dtData.documentTypes.length > 0) {
+                for (const lt of dtData.documentTypes) {
+                  const existingIdx = db.documentTypes.findIndex(
+                    (t) => t.name.toLowerCase() === lt.name.toLowerCase() || t.id === String(lt.id)
+                  )
+                  const mappedReqs = (lt.requirements || []).map((r: any) => ({
+                    id: String(r.id || r.form_id),
+                    label: r.label || r.form_name,
+                    required: r.required !== undefined ? r.required : r.is_required,
+                    source: r.source || r.source_office,
+                    why: `Where to get it: ${r.source || r.source_office}`,
+                    templateUrl: r.template_url || r.templateUrl,
+                  }))
+                  const mappedType: DocumentType = {
+                    id: String(lt.id),
+                    name: lt.name,
+                    audience: lt.audience,
+                    summary: lt.summary,
+                    processingDays: [lt.standard_processing_days || 3, (lt.standard_processing_days || 3) + 2],
+                    cessRoute: ['chairperson', 'dean'],
+                    idsRoute: ['chairperson', 'ids_principal', 'dean'],
+                    higherApproval: lt.audience === 'faculty' ? ['ovcaa', 'chancellor'] : [],
+                    requirements: mappedReqs,
+                  }
+                  if (existingIdx >= 0) {
+                    db.documentTypes[existingIdx] = { ...db.documentTypes[existingIdx], ...mappedType }
+                  } else {
+                    db.documentTypes.push(mappedType)
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Backend sync for document types skipped:', e)
+          }
+
+          commit({ ...db })
+          return liveUser
+        }
+      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+        const errJson = await res.json().catch(() => null)
+        if (errJson?.error) {
+          throw new FriendlyError(errJson.error)
+        }
+      }
+    } catch (err) {
+      if (err instanceof FriendlyError) throw err
+      // Fallback to prototype mock if backend is offline
+    }
+
+    await wait(300)
+    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
+    if (!user) {
+      throw new FriendlyError('No active university account was found for this Gmail address. Please register or contact the College Secretary.')
+    }
     if (!user.active) throw new FriendlyError(MESSAGES.accountInactive)
     return user
   },
@@ -122,7 +314,7 @@ export const api = {
   async requestPasswordReset(email: string): Promise<void> {
     await wait(600)
     if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(email.trim()))
-      throw new FriendlyError('Please enter your MSU at Naawan email address (it ends with @msunaawan.edu.ph).')
+      throw new FriendlyError('Please enter your official university Gmail address (ending with @msunaawan.edu.ph).')
   },
 
   submitRequest: (user: User, input: { typeId: string; title: string; description: string; files: engine.NewFile[] }) =>
@@ -152,8 +344,27 @@ export const api = {
       )
     }),
 
-  resubmit: (user: User, docId: string, input: { title: string; description: string; files: engine.NewFile[]; note: string }) =>
-    mutate((d, at) => engine.resubmit(d, user, docId, input, at)),
+  resubmit: async (user: User, docId: string, input: { title: string; description: string; files: engine.NewFile[]; note: string }) => {
+    // PB-18 / PB-19: Sync live backend if connected
+    try {
+      await fetch(`/api/documents/${docId}/resubmit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': user.email,
+        },
+        body: JSON.stringify({
+          title: input.title,
+          description: input.description,
+          notes: input.note,
+          files: input.files,
+        }),
+      })
+    } catch {
+      // Fallback gracefully to client store
+    }
+    return mutate((d, at) => engine.resubmit(d, user, docId, input, at))
+  },
 
   checkRequirements: (user: User, docId: string, input: { decision?: 'complete' | 'return' | 'reject'; missing: string[]; reasons: string }) =>
     mutate((d, at) => engine.checkRequirements(d, user, docId, input, at)),
@@ -161,11 +372,27 @@ export const api = {
   recordReview: (user: User, docId: string, input: { kind: engine.ReviewKind; remarks: string }) =>
     mutate((d, at) => engine.recordReview(d, user, docId, input, at)),
 
-  sendToExternal: (user: User, docId: string, input: { office: ExternalOfficeId; handedBy: string; remarks: string }) =>
-    mutate((d, at) => engine.sendToExternal(d, user, docId, input, at)),
+  sendToExternal: (
+    user: User,
+    docId: string,
+    input: {
+      office: ExternalOfficeId
+      transferDate?: string
+      handedBy: string
+      referenceNumber?: string
+      remarks: string
+    },
+  ) => mutate((d, at) => engine.sendToExternal(d, user, docId, input, at)),
 
-  recordExternalReturn: (user: User, docId: string, input: { remarks: string }) =>
-    mutate((d, at) => engine.recordExternalReturn(d, user, docId, input, at)),
+  recordExternalReturn: (
+    user: User,
+    docId: string,
+    input: {
+      returnDate?: string
+      outcome?: ExternalReturnOutcome
+      remarks: string
+    },
+  ) => mutate((d, at) => engine.recordExternalReturn(d, user, docId, input, at)),
 
   markReady: (user: User, docId: string) => mutate((d, at) => engine.markReady(d, user, docId, at)),
 
@@ -174,6 +401,14 @@ export const api = {
 
   postNotice: (user: User, input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string }) =>
     mutate((d, at) => engine.postNotice(d, user, input, at)),
+
+  updateNotice: (
+    user: User,
+    id: string,
+    input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string }
+  ) => mutate((d) => engine.updateNotice(d, user, id, input)),
+
+  deleteNotice: (user: User, id: string) => mutate((d) => engine.deleteNotice(d, user, id)),
 
   retryNotification: (user: User, id: string) => mutate((d) => engine.retryNotification(d, user, id)),
 
@@ -208,6 +443,7 @@ export const api = {
       origin?: Origin
       department: string
       position: string
+      notificationPreference?: NotificationPreference
     },
   ) =>
     mutate((d) => {
@@ -232,6 +468,9 @@ export const api = {
         existing.origin = origin
         existing.department = input.department.trim() || existing.department
         existing.position = input.position.trim() || existing.position
+        if (input.notificationPreference) {
+          existing.notificationPreference = input.notificationPreference
+        }
         return existing
       } else {
         const created: User = {
@@ -243,7 +482,7 @@ export const api = {
           department: input.department.trim() || 'College of Education and Social Sciences',
           position: input.position.trim() || (input.role === 'student' ? 'Student' : 'Faculty'),
           active: true,
-          notificationPreference: 'both',
+          notificationPreference: input.notificationPreference ?? 'both',
         }
         d.users.push(created)
         return created
@@ -393,6 +632,10 @@ export const api = {
       }
 
       // Add notification log
+      const pref = existing.notificationPreference ?? 'both'
+      const channels: ('email' | 'in_system')[] =
+        pref === 'email_only' ? ['email'] : pref === 'in_system_only' ? ['in_system'] : ['email', 'in_system']
+
       d.notifications.unshift({
         id: engine.nextId(d, 'n'),
         kind: 'update',
@@ -404,7 +647,7 @@ export const api = {
         at,
         result: 'sent',
         readBy: [],
-        channels: ['email', 'in_system'],
+        channels,
       })
 
       return existing
@@ -649,6 +892,34 @@ export const api = {
       const subject = fac.subjects.find((s) => s.code.trim().toLowerCase() === subjectCode.trim().toLowerCase())
       if (!subject) throw new FriendlyError(`Subject ${subjectCode} not found for this instructor.`)
       subject.syllabusFile = fileName.trim()
+
+      if (!d.syllabi) d.syllabi = []
+      const existingSyl = d.syllabi.find(
+        (s) =>
+          s.facultyId === facultyId &&
+          s.subjectCode.trim().toLowerCase() === subjectCode.trim().toLowerCase(),
+      )
+      if (existingSyl) {
+        existingSyl.fileName = fileName.trim()
+        existingSyl.uploadedAt = new Date().toISOString()
+        existingSyl.status = 'active'
+      } else {
+        d.syllabi.push({
+          id: engine.nextId(d, 'syl-'),
+          subjectCode: subject.code,
+          subjectTitle: subject.title,
+          facultyId: fac.id,
+          facultyName: fac.name,
+          facultyUserId: fac.userId,
+          department: fac.department,
+          academicYear: '2026-2027',
+          semester: '1st Semester',
+          fileName: fileName.trim(),
+          fileSizeKb: 450,
+          uploadedAt: new Date().toISOString(),
+          status: 'active',
+        })
+      }
     }),
 
   /** Faculty self-service: Remove syllabus from own subject. */
@@ -665,6 +936,161 @@ export const api = {
       const subject = fac.subjects.find((s) => s.code.trim().toLowerCase() === subjectCode.trim().toLowerCase())
       if (!subject) throw new FriendlyError(`Subject ${subjectCode} not found for this instructor.`)
       delete subject.syllabusFile
+
+      if (d.syllabi) {
+        d.syllabi = d.syllabi.filter(
+          (s) =>
+            !(
+              s.facultyId === facultyId &&
+              s.subjectCode.trim().toLowerCase() === subjectCode.trim().toLowerCase()
+            ),
+        )
+      }
+    }),
+
+  /**
+   * PB-56: Separate Syllabus Management - Upload or update a syllabus record.
+   */
+  uploadSyllabusRecord: (
+    actor: User,
+    payload: {
+      subjectCode: string
+      subjectTitle: string
+      academicYear?: string
+      semester?: string
+      fileName: string
+      fileSizeKb?: number
+      description?: string
+      department?: string
+    },
+  ) =>
+    mutate((d) => {
+      if (actor.role === 'student') {
+        throw new FriendlyError('Students are not permitted to upload course syllabi.')
+      }
+
+      const code = payload.subjectCode.trim().toUpperCase()
+      const title = payload.subjectTitle.trim()
+      const fileName = payload.fileName.trim()
+      const ay = payload.academicYear || '2026-2027'
+      const sem = payload.semester || '1st Semester'
+
+      if (!code) throw new FriendlyError('Course code is required (e.g. EDUC 101).')
+      if (!title) throw new FriendlyError('Course title is required.')
+      if (!fileName) throw new FriendlyError('Syllabus file is required.')
+
+      if (!d.syllabi) d.syllabi = []
+
+      let fac = d.faculty.find(
+        (f) =>
+          (f.userId && f.userId === actor.id) ||
+          f.name.trim().toLowerCase() === actor.name.trim().toLowerCase(),
+      )
+
+      if (!fac && actor.role === 'faculty') {
+        fac = {
+          id: engine.nextId(d, 'fac-'),
+          userId: actor.id,
+          name: actor.name,
+          department: actor.department || payload.department || 'College of Education and Social Sciences',
+          subjects: [],
+        }
+        d.faculty.push(fac)
+      }
+
+      const facultyName = fac ? fac.name : actor.name
+      const facultyId = fac ? fac.id : `fac-${actor.id}`
+      const department =
+        fac?.department || actor.department || payload.department || 'College of Education and Social Sciences'
+
+      const existingIdx = d.syllabi.findIndex(
+        (s) =>
+          s.subjectCode.trim().toUpperCase() === code &&
+          s.academicYear === ay &&
+          s.semester === sem,
+      )
+
+      if (existingIdx >= 0) {
+        const existing = d.syllabi[existingIdx]
+        if (
+          actor.role === 'faculty' &&
+          existing.facultyUserId &&
+          existing.facultyUserId !== actor.id
+        ) {
+          throw new FriendlyError('Only the assigned instructor or College Secretary can update this course syllabus.')
+        }
+
+        d.syllabi[existingIdx] = {
+          ...existing,
+          subjectTitle: title,
+          fileName,
+          fileSizeKb: payload.fileSizeKb || existing.fileSizeKb || 450,
+          description: payload.description || existing.description,
+          uploadedAt: new Date().toISOString(),
+          status: 'active',
+        }
+      } else {
+        const newRecord: SyllabusRecord = {
+          id: engine.nextId(d, 'syl-'),
+          subjectCode: code,
+          subjectTitle: title,
+          facultyId,
+          facultyName,
+          facultyUserId: actor.id,
+          department,
+          academicYear: ay,
+          semester: sem,
+          fileName,
+          fileSizeKb: payload.fileSizeKb || 450,
+          description: payload.description || 'Outcome-Based Education (OBE) course syllabus.',
+          uploadedAt: new Date().toISOString(),
+          status: 'active',
+        }
+        d.syllabi.push(newRecord)
+      }
+
+      if (fac) {
+        let sub = fac.subjects.find((s) => s.code.trim().toUpperCase() === code)
+        if (sub) {
+          sub.title = title
+          sub.syllabusFile = fileName
+        } else {
+          fac.subjects.push({ code, title, syllabusFile: fileName })
+        }
+      }
+    }),
+
+  /**
+   * PB-56: Separate Syllabus Management - Delete a syllabus record.
+   */
+  deleteSyllabusRecord: (actor: User, syllabusId: string) =>
+    mutate((d) => {
+      if (!d.syllabi) return
+      const target = d.syllabi.find((s) => s.id === syllabusId)
+      if (!target) throw new FriendlyError('Syllabus record not found.')
+
+      const isOwner =
+        (target.facultyUserId && target.facultyUserId === actor.id) ||
+        target.facultyName.trim().toLowerCase() === actor.name.trim().toLowerCase()
+      const isSec = actor.role === 'secretary'
+
+      if (!isOwner && !isSec) {
+        throw new FriendlyError('Only the assigned instructor or College Secretary can remove this course syllabus.')
+      }
+
+      d.syllabi = d.syllabi.filter((s) => s.id !== syllabusId)
+
+      const fac = d.faculty.find(
+        (f) => f.id === target.facultyId || (f.userId && f.userId === target.facultyUserId),
+      )
+      if (fac) {
+        const sub = fac.subjects.find(
+          (s) => s.code.trim().toUpperCase() === target.subjectCode.trim().toUpperCase(),
+        )
+        if (sub) {
+          delete sub.syllabusFile
+        }
+      }
     }),
 
   updateReminderDays: (actor: User, days: number) =>
