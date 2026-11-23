@@ -31,7 +31,7 @@ import {
 } from '../../components/documents'
 import { Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
-import { Badge, Button, Card, EmptyState, PageHeader, Segmented, cn } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, PageHeader, Segmented, Tooltip, cn } from '../../components/ui'
 import {
   OFFICE_LABEL,
   controlNumber,
@@ -446,9 +446,11 @@ export function AllDocumentsPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-ink-900">
-                  {unitTab} Submissions in this Folder
-                </h3>
+                <Tooltip content="List of active submissions filed under this specific document category and academic unit" placement="top">
+                  <h3 className="inline-block cursor-help text-base font-bold text-ink-900 transition-colors hover:text-brand-700">
+                    {unitTab} Submissions in this Folder
+                  </h3>
+                </Tooltip>
                 <p className="text-xs text-ink-500">
                   All active requests under {selectedFolderType.name} from {unitTab}
                 </p>

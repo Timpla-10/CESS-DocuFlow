@@ -650,9 +650,11 @@ export function MyDocumentsPage() {
           {activeTab === 'folders' && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-bold text-ink-950">
-                  Official Document Categories
-                </h2>
+                <Tooltip content="Official CESS document forms, guidelines, and PDF template downloads" placement="top">
+                  <h2 className="inline-block cursor-help text-lg font-bold text-ink-950 transition-colors hover:text-brand-700">
+                    Official Document Categories
+                  </h2>
+                </Tooltip>
                 <p className="text-xs text-ink-500">
                   Select a category folder to browse filed submissions, download official blank PDF templates, or submit a request under that category.
                 </p>

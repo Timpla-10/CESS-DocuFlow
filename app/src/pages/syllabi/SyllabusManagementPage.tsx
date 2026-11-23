@@ -825,9 +825,11 @@ export function SyllabusManagementPage() {
                     <FileText className="size-6" />
                   </div>
                   <div>
-                    <span className="text-2xs font-bold uppercase tracking-wider text-brand-700">
-                      Standard Institutional Template
-                    </span>
+                    <Tooltip content="Standard CESS Outcome-Based Education syllabus template format" placement="top">
+                      <span className="inline-block cursor-help text-2xs font-bold uppercase tracking-wider text-brand-700 transition-colors hover:text-brand-900">
+                        Standard Institutional Template
+                      </span>
+                    </Tooltip>
                     <h3 className="text-lg font-bold text-ink-950">
                       {syllabusTemplate.fileName}
                     </h3>
@@ -858,16 +860,18 @@ export function SyllabusManagementPage() {
 
               {/* OBE Guidelines Card */}
               <div className="space-y-3 rounded-xl border border-ink-200 bg-white p-5">
-                <h4 className="text-sm font-bold text-ink-950">
-                  <TextTooltip description="Outcome-Based Education: curriculum centered on measurable student learning outcomes.">
-                    OBE
-                  </TextTooltip>{' '}
-                  Syllabus & Table of Specifications (
-                  <TextTooltip description="Table of Specifications: exam blueprint aligning assessment items to cognitive domain levels.">
-                    TOS
-                  </TextTooltip>
-                  ) Format Guide
-                </h4>
+                <Tooltip content="Comprehensive guide to Outcome-Based Education course outlines and test blueprints" placement="top">
+                  <h4 className="inline-block cursor-help text-sm font-bold text-ink-950 transition-colors hover:text-brand-800">
+                    <TextTooltip description="Outcome-Based Education: curriculum centered on measurable student learning outcomes.">
+                      OBE
+                    </TextTooltip>{' '}
+                    Syllabus & Table of Specifications (
+                    <TextTooltip description="Table of Specifications: exam blueprint aligning assessment items to cognitive domain levels.">
+                      TOS
+                    </TextTooltip>
+                    ) Format Guide
+                  </h4>
+                </Tooltip>
                 <ul className="space-y-2 text-xs text-ink-700">
                   <li className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600" />

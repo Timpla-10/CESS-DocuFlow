@@ -176,9 +176,16 @@ function Sidebar({
           {sections.map((s, i) => (
             <div key={i}>
               {s.heading && isExpanded && (
-                <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-300">
-                  {s.heading}
-                </p>
+                <Tooltip content={`Section: ${s.heading}`} placement="right">
+                  <p className="mb-1.5 inline-block cursor-help px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-brand-300 transition-colors hover:text-white">
+                    {s.heading}
+                  </p>
+                </Tooltip>
+              )}
+              {s.heading && !isExpanded && i > 0 && (
+                <Tooltip content={`Section: ${s.heading}`} placement="right">
+                  <div className="mx-auto my-2.5 h-0.5 w-6 rounded-full bg-white/20 transition-colors hover:bg-white/60 cursor-help" />
+                </Tooltip>
               )}
               <ul className="space-y-1">
                 {s.items.map((it) => (

@@ -19,6 +19,7 @@ import {
   PieChart,
   Segmented,
   StatCard,
+  Tooltip,
 } from '../../components/ui'
 import { OFFICE_LABEL, locationLabelForStaff } from '../../content/language'
 import { daysWaiting, isDelayed, secretaryQueues } from '../../data/selectors'
@@ -184,9 +185,11 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        Submissions Awaiting Content Verification
-                      </h3>
+                      <Tooltip content="Submissions awaiting initial review and manual document verification before routing" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Submissions Awaiting Content Verification
+                        </h3>
+                      </Tooltip>
                       <p className="text-xs text-ink-500">
                         Automatic completeness check passed. Inspect attached document contents before logging and routing (oldest first).
                       </p>
@@ -222,9 +225,11 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        Approved Documents Ready for Release
-                      </h3>
+                      <Tooltip content="Documents with final approval ready for physical requester release or counter pickup" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Approved Documents Ready for Release
+                        </h3>
+                      </Tooltip>
                       <p className="text-xs text-ink-500">
                         Documents with final Dean approval awaiting requester collection at the counter.
                       </p>
@@ -259,9 +264,11 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        Submissions Returned to Requesters for Correction
-                      </h3>
+                      <Tooltip content="Documents requiring requester corrections before resuming office routing" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Submissions Returned to Requesters for Correction
+                        </h3>
+                      </Tooltip>
                       <p className="text-xs text-ink-500">
                         Documents returned by the Secretary or Reviewing Offices for file or content revisions.
                       </p>
@@ -296,9 +303,11 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-ink-900">
-                        Officially Disapproved & Rejected Records
-                      </h3>
+                      <Tooltip content="Submissions officially rejected by reviewing authorities and closed" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Officially Disapproved & Rejected Records
+                        </h3>
+                      </Tooltip>
                       <p className="text-xs text-ink-500">
                         Documents officially disapproved and closed by Reviewing Authorities.
                       </p>
