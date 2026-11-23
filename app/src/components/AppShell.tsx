@@ -21,7 +21,6 @@ export function AppShell() {
       return true
     }
   })
-  const [isHovered, setIsHovered] = useState(false)
   const location = useLocation()
   useEffect(() => setDrawer(false), [location.pathname])
 
@@ -37,7 +36,7 @@ export function AppShell() {
     })
   }
 
-  const isExpanded = isLocked || isHovered
+  const isExpanded = isLocked
 
   return (
     <div className="min-h-dvh bg-canvas">
@@ -45,19 +44,12 @@ export function AppShell() {
         Skip to main content
       </a>
 
-      {/* Desktop sidebar: mini-rail (72px) when unlocked, full (264px) when locked or hovered */}
+      {/* Desktop sidebar: mini-rail (72px) when collapsed, full (264px) when expanded */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 hidden transition-all duration-300 ease-in-out lg:block',
+          'fixed inset-y-0 left-0 hidden transition-all duration-300 ease-in-out lg:block z-30',
           isExpanded ? 'w-[264px]' : 'w-[72px]',
-          !isLocked && isHovered ? 'z-40 shadow-2xl ring-1 ring-black/15' : 'z-30'
         )}
-        onMouseEnter={() => {
-          if (!isLocked) setIsHovered(true)
-        }}
-        onMouseLeave={() => {
-          setIsHovered(false)
-        }}
       >
         <Sidebar
           isExpanded={isExpanded}
@@ -155,9 +147,11 @@ function Sidebar({
               </div>
             </>
           ) : (
-            <Link to="/app" aria-label="CESS DocuFlow" title="CESS DocuFlow">
-              <LogoMark size="sm" />
-            </Link>
+            <Tooltip content="CESS DocuFlow" placement="right">
+              <Link to="/app" aria-label="CESS DocuFlow" className="flex items-center justify-center">
+                <LogoMark size="sm" />
+              </Link>
+            </Tooltip>
           )}
         </div>
 
@@ -168,12 +162,13 @@ function Sidebar({
             <p className="mt-0.5 truncate text-sm font-bold">{formatRoleTitle(user)}</p>
           </div>
         ) : (
-          <div
-            className="mx-2 mb-2 mt-2 flex items-center justify-center rounded-xl bg-white/[0.09] py-2 px-1 ring-1 ring-inset ring-white/15"
-            title={`Signed in as ${user.name} (${ROLE_LABEL[user.role]})`}
-          >
-            <Avatar name={user.name} size="sm" />
-          </div>
+          <Tooltip content={`Signed in as ${user.name} (${ROLE_LABEL[user.role]})`} placement="right">
+            <div
+              className="mx-2 mb-2 mt-2 flex items-center justify-center rounded-xl bg-white/[0.09] py-2 px-1 ring-1 ring-inset ring-white/15 cursor-help"
+            >
+              <Avatar name={user.name} size="sm" />
+            </div>
+          </Tooltip>
         )}
 
         {/* Navigation items */}
@@ -188,7 +183,7 @@ function Sidebar({
               <ul className="space-y-1">
                 {s.items.map((it) => (
                   <li key={it.to}>
-                    <Tooltip content={it.label} placement="right" disabled={isExpanded}>
+                    <Tooltip content={it.label} placement="right" disabled={isExpanded} delayMs={50} className="w-full">
                       <NavLink
                         to={it.to}
                         end={it.to === '/app/documents'}
@@ -230,9 +225,11 @@ function Sidebar({
             Mindanao State University at Naawan
           </div>
         ) : (
-          <div className="border-t border-white/10 py-3 text-center text-[10px] font-bold text-brand-300">
-            MSU-N
-          </div>
+          <Tooltip content="College of Education and Social Sciences — MSU Naawan" placement="right">
+            <div className="border-t border-white/10 py-3 text-center text-[10px] font-bold text-brand-300 cursor-default">
+              MSU-N
+            </div>
+          </Tooltip>
         )}
       </div>
     </nav>

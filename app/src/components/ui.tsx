@@ -340,10 +340,10 @@ export function Tooltip({
       left = Math.max(16, Math.min(window.innerWidth - 16, rect.left + rect.width / 2))
     } else if (computed === 'left') {
       top = rect.top + rect.height / 2
-      left = rect.left - 6
+      left = rect.left - 8
     } else if (computed === 'right') {
       top = rect.top + rect.height / 2
-      left = rect.right + 6
+      left = rect.right + 10
     }
 
     setCoords({ top, left, computedPlacement: computed })
@@ -422,7 +422,12 @@ export function Tooltip({
                   ? 'translate(-100%, -50%)'
                   : 'translate(0, -50%)',
             }}
-            className="pointer-events-none z-[9999] max-w-xs whitespace-normal rounded-md bg-ink-950 px-2.5 py-1 text-center text-2xs font-medium leading-tight text-white shadow-xl ring-1 ring-white/15 border border-white/10 animate-fade-in"
+            className={cn(
+              'pointer-events-none z-[9999] max-w-xs rounded-lg bg-ink-950 px-3 py-1.5 text-xs font-semibold leading-tight text-white shadow-2xl ring-1 ring-white/20 border border-white/10 animate-fade-in',
+              coords.computedPlacement === 'right' || coords.computedPlacement === 'left'
+                ? 'whitespace-nowrap'
+                : 'whitespace-normal text-center text-2xs font-medium',
+            )}
           >
             {content}
           </div>,
