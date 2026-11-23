@@ -13,6 +13,8 @@ import {
   RotateCcw,
   Search,
   SearchX,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -111,7 +113,31 @@ export function useDocumentFilters(db: Database, docs: DocRecord[], initialSort:
         }
         if (!q) return true
         const req = userById(db, d.requesterId)
-        const hay = [controlNumber(d), d.title, typeOf(db, d)?.name, req?.name].join(' ').toLowerCase()
+        const type = typeOf(db, d)
+        const folder = db.folders?.find((f) => f.id === d.folderId)
+        const officeName = d.currentOffice ? (OFFICE_LABEL[d.currentOffice] ?? '') : ''
+        const locationStr = locationLabel(d, db)
+        const statusLabel = STATUS_FILTER_LABEL[d.status] ?? d.status
+
+        const hay = [
+          controlNumber(d),
+          d.id,
+          d.title,
+          d.description ?? '',
+          type?.name ?? '',
+          type?.summary ?? '',
+          folder?.name ?? '',
+          folder?.category ?? '',
+          req?.name ?? '',
+          req?.email ?? '',
+          req?.department ?? '',
+          d.origin,
+          statusLabel,
+          officeName,
+          locationStr,
+        ]
+          .join(' ')
+          .toLowerCase()
         return hay.includes(q)
       })
       .sort(filters.sort === 'oldest' ? byOldest : byNewest)
@@ -155,6 +181,15 @@ export function FilterBar({
 }) {
   const types = db.documentTypes.filter((t) => audience === 'all' || t.audience === audience)
   const statusList = statuses ?? (Object.keys(STATUS_FILTER_LABEL) as Status[])
+  const activeCount = [
+    !!filters.q,
+    !!filters.status,
+    !!filters.type,
+    !!filters.origin,
+    !!filters.office,
+    !!(filters.dateFrom || filters.dateTo),
+  ].filter(Boolean).length
+
   return (
     <div className="w-full min-w-0 space-y-3.5 border-b border-ink-100 p-3 sm:px-6 sm:py-5">
       <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 sm:gap-3.5">
@@ -266,6 +301,127 @@ export function FilterBar({
               Reset filters
             </button>
           )}
+        </div>
+      )}
+
+      {/* PB-36: Active Filter Chips with Individual Clear Controls across Queues and Repositories */}
+      {activeCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-ink-100 text-xs">
+          <div className="flex items-center gap-1.5 font-semibold text-ink-600">
+            <SlidersHorizontal className="size-3.5 text-brand-600" />
+            <span>Active Filters ({activeCount}):</span>
+          </div>
+
+          {filters.q && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>Search: “{filters.q}”</span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, q: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove search filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {filters.status && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>Status: {STATUS_FILTER_LABEL[filters.status] || filters.status}</span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, status: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove status filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {filters.type && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>Type: {types.find((t) => t.id === filters.type)?.name || filters.type}</span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, type: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove document type filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {filters.origin && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>Origin: {filters.origin}</span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, origin: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove origin filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {filters.office && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>
+                Office:{' '}
+                {filters.office.startsWith('ext:')
+                  ? db.externalOffices.find((e) => `ext:${e.id}` === filters.office)?.shortLabel || filters.office
+                  : OFFICE_LABEL[filters.office as OfficeId] || filters.office}
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, office: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove office filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {(filters.dateFrom || filters.dateTo) && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>
+                Date: {filters.dateFrom ? formatDate(filters.dateFrom) : 'Start'} to{' '}
+                {filters.dateTo ? formatDate(filters.dateTo) : 'Latest'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, dateFrom: '', dateTo: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove date range filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              setFilters({
+                ...filters,
+                q: '',
+                status: '',
+                type: '',
+                origin: '',
+                office: '',
+                dateFrom: '',
+                dateTo: '',
+              })
+            }
+            className="text-xs font-bold text-brand-700 hover:text-danger-700 hover:underline ml-1"
+          >
+            Clear all filters
+          </button>
         </div>
       )}
     </div>

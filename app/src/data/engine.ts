@@ -12,7 +12,8 @@
  * responsible for cloning (the mock API does this before each action).
  */
 import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel, isRequester } from '../content/language'
-import { daysSince, plural } from '../lib/time'
+import { daysSince, formatDate, plural } from '../lib/time'
+export { daysSince }
 import { EXTERNAL_RETURN_OUTCOMES } from './types'
 import type {
   Attachment,
@@ -793,7 +794,8 @@ export function runReminders(db: Database, now: number) {
     if (!office) continue
     const waited = daysSince(doc.officeSince, now)
     if (waited < every) continue
-    const last = db.notifications.find((n) => n.docId === doc.id && n.kind === 'reminder')
+    const reminders = db.notifications.filter((n) => n.docId === doc.id && n.kind === 'reminder')
+    const last = reminders.length > 0 ? reminders[reminders.length - 1] : undefined
     const lastAt = last && new Date(last.at).getTime() > new Date(doc.officeSince).getTime() ? last.at : doc.officeSince
     if (daysSince(lastAt, now) < every) continue
     const at = new Date(now).toISOString()
@@ -824,6 +826,63 @@ export function runReminders(db: Database, now: number) {
       })
     }
   }
+}
+
+/**
+ * PB-30: Sends an immediate 3-day follow-up reminder for a single document,
+ * strictly enforcing anti-duplicate rules so reminders are not sent more often than `reminderEveryDays`.
+ */
+export function sendSingleReminder(db: Database, docId: string, now: number): string {
+  const doc = getDoc(db, docId)
+  if (doc.status !== 'with_office' && doc.status !== 'submitted') {
+    throw new FriendlyError('Reminders can only be dispatched for active documents pending review.')
+  }
+  const office = doc.currentOffice
+  if (!office) throw new FriendlyError('This document is not currently assigned to an active reviewing office.')
+
+  const every = db.settings.reminderEveryDays
+  const waited = daysSince(doc.officeSince, now)
+  const reminders = db.notifications.filter((n) => n.docId === doc.id && n.kind === 'reminder')
+  const last = reminders.length > 0 ? reminders[reminders.length - 1] : undefined
+  const lastAt = last && new Date(last.at).getTime() > new Date(doc.officeSince).getTime() ? last.at : doc.officeSince
+
+  const daysSinceLast = daysSince(lastAt, now)
+  if (daysSinceLast < every && last) {
+    throw new FriendlyError(
+      `Anti-Duplicate Lock: A follow-up reminder was already dispatched on ${formatDate(lastAt)}. To prevent spam, reminders can only be sent once every ${every} days.`
+    )
+  }
+
+  const at = new Date(now).toISOString()
+  const type = getType(db, doc.typeId)
+  const acct = officeAccount(db, office)
+  const officeName = OFFICE_LABEL[office]
+  notify(db, {
+    kind: 'reminder',
+    recipientId: office,
+    recipientLabel: officeName,
+    recipientEmail: acct?.email ?? '',
+    doc,
+    subject: `Official Follow-Up Reminder: ${controlNumber(doc)} awaiting ${officeName} action`,
+    body: `Hello,\n\nThis is an official follow-up reminder from the College Secretary that document ${controlNumber(doc)} (${type.name}: “${doc.title}”) has been waiting with the ${officeName} for ${plural(waited, 'day')}.\n\nPlease review and record your decision at your earliest convenience: ${requesterLink(doc)}${SIGNOFF}`,
+    at,
+  })
+
+  const req = getUser(db, doc.requesterId)
+  if (req) {
+    notify(db, {
+      kind: 'update',
+      recipientId: req.id,
+      recipientLabel: req.name,
+      recipientEmail: req.email,
+      doc,
+      subject: `3-Day Follow-Up Update: ${type.name} (${controlNumber(doc)})`,
+      body: `Hello ${firstName(req)},\n\nYour request ${controlNumber(doc)} (${type.name}) has been with the ${officeName} for ${plural(waited, 'day')}. The College Secretary has dispatched an automated 3-day follow-up reminder to expedite your review.\n\nTrack your request status here: ${requesterLink(doc)}${SIGNOFF}`,
+      at,
+    })
+  }
+
+  return officeName
 }
 
 /* ------------------------------------------------------------------------ */

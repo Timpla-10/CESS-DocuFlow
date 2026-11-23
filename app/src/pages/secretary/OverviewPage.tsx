@@ -2,15 +2,23 @@ import {
   AlertTriangle,
   CheckCircle2,
   CheckSquare,
+  Clock,
   Inbox,
+  Lock,
   PackageCheck,
   RotateCcw,
+  Send,
+  ShieldAlert,
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useUser } from '../../app/session'
 import { DocumentList } from '../../components/documents'
+import { useToast } from '../../components/Toast'
 import {
+  Badge,
+  Button,
   ButtonLink,
   Callout,
   Card,
@@ -21,23 +29,81 @@ import {
   StatCard,
   Tooltip,
 } from '../../components/ui'
-import { OFFICE_LABEL, locationLabelForStaff } from '../../content/language'
-import { daysWaiting, isDelayed, secretaryQueues } from '../../data/selectors'
-import { useDb } from '../../data/store'
-import type { OfficeId } from '../../data/types'
-import { plural } from '../../lib/time'
+import { OFFICE_LABEL, controlNumber, locationLabelForStaff } from '../../content/language'
+import { daysSince } from '../../data/engine'
+import { daysWaiting, isDelayed, secretaryQueues, typeOf, userById } from '../../data/selectors'
+import { api, useDb } from '../../data/store'
+import type { DocRecord, OfficeId } from '../../data/types'
+import { plural, timeAgo } from '../../lib/time'
 
 export function OverviewPage() {
+  const user = useUser()
   const db = useDb()
+  const toast = useToast()
+  const [currentTime] = useState(() => Date.now())
+
   const queues = secretaryQueues(db)
   const allDocs = db.documents
   const delayedDocs = allDocs.filter((d) => isDelayed(db, d))
   const returnedDocs = allDocs.filter((d) => d.status === 'returned')
   const rejectedDocs = allDocs.filter((d) => d.status === 'rejected')
 
+  // PB-30: Aging (3+ days) and Overdue documents
+  const agingDocs = allDocs
+    .filter(
+      (d) =>
+        (d.status === 'with_office' || d.status === 'submitted') &&
+        (isDelayed(db, d) || daysWaiting(d) >= 3),
+    )
+    .sort((a, b) => daysWaiting(b) - daysWaiting(a))
+
   const [activeQueueTab, setActiveQueueTab] = useState<
-    'toCheck' | 'ready' | 'returned' | 'rejected'
+    'toCheck' | 'ready' | 'aging' | 'returned' | 'rejected'
   >('toCheck')
+
+  const [batchBusy, setBatchBusy] = useState(false)
+  const [sendingDocId, setSendingDocId] = useState<string | null>(null)
+
+  // PB-30: Batch automated 3-day follow-up reminders
+  const handleRunBatchFollowUps = async () => {
+    setBatchBusy(true)
+    try {
+      const sentCount = await api.triggerReminders(user)
+      if (sentCount > 0) {
+        toast.success(
+          '3-Day Follow-Ups Dispatched',
+          `Dispatched ${sentCount} automated reminder(s) to holding offices and requesters. Anti-duplicate intervals are updated.`,
+        )
+      } else {
+        toast.info(
+          'All Reminders Up-to-Date',
+          `No reminders needed at this time. All aging requests have already received updates within the ${db.settings.reminderEveryDays}-day anti-duplicate interval.`,
+        )
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to trigger follow-up reminders.'
+      toast.error('Follow-Up Error', msg)
+    } finally {
+      setBatchBusy(false)
+    }
+  }
+
+  // PB-30: Single document follow-up reminder with anti-duplicate validation
+  const handleSendDocReminder = async (doc: DocRecord) => {
+    setSendingDocId(doc.id)
+    try {
+      const officeName = await api.sendSingleReminder(user, doc.id)
+      toast.success(
+        'Follow-Up Sent',
+        `3-day follow-up reminder sent to ${officeName} and requester for ${controlNumber(doc)}. Anti-duplicate protection locked for ${db.settings.reminderEveryDays} days.`,
+      )
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not send reminder.'
+      toast.error('Reminder Blocked', msg)
+    } finally {
+      setSendingDocId(null)
+    }
+  }
 
   // Distribution by holding office with official institutional gradients
   const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
@@ -138,6 +204,127 @@ export function OverviewPage() {
         />
       </div>
 
+      {/* PB-30: Dedicated Secretary Monitoring View for Aging & Overdue Requests with 3-Day Follow-Ups */}
+      <Card className="overflow-hidden border-2 border-amber-200 bg-amber-50/20">
+        <div className="border-b border-amber-200 bg-amber-50/70 p-4 sm:px-6 sm:py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-white shadow-xs">
+                <ShieldAlert className="size-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-bold text-ink-950">
+                    Aging & Overdue Requests Monitor (PB-30)
+                  </h2>
+                  <Badge tone={agingDocs.length > 0 ? 'warning' : 'success'} dot={false}>
+                    {agingDocs.length} Aging / Overdue
+                  </Badge>
+                  <span className="text-2xs font-semibold text-ink-500 bg-white px-2 py-0.5 rounded border border-ink-200">
+                    Throttled Every {db.settings.reminderEveryDays} Days
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-ink-600">
+                  Monitors requests that exceed standard turnaround times or have waited 3+ days at review offices. Dispatches automated follow-up reminders with anti-duplicate locks.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              icon={Send}
+              loading={batchBusy}
+              onClick={handleRunBatchFollowUps}
+              className="shadow-sm"
+            >
+              Run Automated 3-Day Follow-Ups
+            </Button>
+          </div>
+        </div>
+
+        {agingDocs.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-center text-sm text-ink-500">
+            <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+            <span>All active documents are on-track and within standard turnaround times.</span>
+          </div>
+        ) : (
+          <div className="divide-y divide-ink-100">
+            {agingDocs.slice(0, 5).map((d) => {
+              const type = typeOf(db, d)
+              const req = userById(db, d.requesterId)
+              const overdue = isDelayed(db, d)
+              const days = daysWaiting(d)
+              const currentOfficeName = d.currentOffice ? OFFICE_LABEL[d.currentOffice] : 'Reviewing Office'
+
+              const docReminders = db.notifications.filter((n) => n.docId === d.id && n.kind === 'reminder')
+              const lastReminder = docReminders.length > 0 ? docReminders[docReminders.length - 1] : undefined
+              const daysSinceLast = lastReminder ? daysSince(lastReminder.at, currentTime) : 999
+              const isLocked = daysSinceLast < db.settings.reminderEveryDays
+
+              return (
+                <div key={d.id} className="p-4 sm:px-6 flex flex-wrap items-center justify-between gap-4 hover:bg-white/80 transition-colors">
+                  <div className="min-w-0 max-w-xl">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={`/app/documents/${d.id}`}
+                        className="font-bold text-ink-950 text-sm hover:text-brand-700 truncate"
+                      >
+                        {d.title}
+                      </Link>
+                      <Badge tone={overdue ? 'danger' : 'warning'} dot={false}>
+                        {overdue ? 'Turnaround Overdue' : 'Aging (3+ Days)'}
+                      </Badge>
+                      <span className="font-mono text-2xs text-ink-500 bg-white px-2 py-0.5 rounded border border-ink-200">
+                        {controlNumber(d)}
+                      </span>
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-600">
+                      <span>Type: <strong className="text-ink-800">{type?.name}</strong></span>
+                      <span>·</span>
+                      <span>Holding: <strong className="text-brand-900">{currentOfficeName}</strong></span>
+                      <span>·</span>
+                      <span>Requester: <strong className="text-ink-800">{req?.name}</strong> ({d.origin})</span>
+                      <span>·</span>
+                      <span className="flex items-center gap-1 font-semibold text-danger-700">
+                        <Clock className="size-3" /> Waiting {plural(days, 'day')} (SLA: {type ? `${type.processingDays[0]}–${type.processingDays[1]}d` : '3d'})
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    {lastReminder && isLocked ? (
+                      <div className="flex items-center gap-1.5 rounded-lg bg-ink-100 px-3 py-1.5 text-xs text-ink-700 ring-1 ring-inset ring-ink-200">
+                        <Lock className="size-3.5 text-ink-500" />
+                        <span>Follow-Up Sent {timeAgo(lastReminder.at)}</span>
+                        <span className="text-2xs text-ink-500 font-medium">
+                          (Next: in {db.settings.reminderEveryDays - daysSinceLast}d)
+                        </span>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        icon={Send}
+                        loading={sendingDocId === d.id}
+                        onClick={() => handleSendDocReminder(d)}
+                      >
+                        Send 3-Day Follow-Up
+                      </Button>
+                    )}
+                    <ButtonLink to={`/app/documents/${d.id}`} variant="ghost" size="sm">
+                      Inspect
+                    </ButtonLink>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Card>
+
       {/* Two Column Layout: Focused Task Center (Left) & Office Distribution (Right) */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left 2 Cols: Unified Task Workstation */}
@@ -149,7 +336,7 @@ export function OverviewPage() {
                 <span className="text-xs font-bold uppercase tracking-wider text-ink-500">
                   Secretary Workstation Queues
                 </span>
-                <Segmented<'toCheck' | 'ready' | 'returned' | 'rejected'>
+                <Segmented<'toCheck' | 'ready' | 'aging' | 'returned' | 'rejected'>
                   label="Workstation Queue Tabs"
                   value={activeQueueTab}
                   onChange={setActiveQueueTab}
@@ -163,6 +350,11 @@ export function OverviewPage() {
                       value: 'ready',
                       label: 'Ready for Release',
                       count: queues.ready.length,
+                    },
+                    {
+                      value: 'aging',
+                      label: 'Aging & Overdue',
+                      count: agingDocs.length,
                     },
                     {
                       value: 'returned',
@@ -255,6 +447,109 @@ export function OverviewPage() {
                     </div>
                   }
                 />
+              </div>
+            )}
+
+            {/* TAB: Aging & Overdue Requests Monitor (PB-30) */}
+            {activeQueueTab === 'aging' && (
+              <div>
+                <div className="border-b border-ink-100 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <Tooltip content="Documents exceeding standard SLA or waiting 3+ days with review offices" placement="top">
+                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
+                          Aging & Overdue Office Requests
+                        </h3>
+                      </Tooltip>
+                      <p className="text-xs text-ink-500">
+                        Review holding offices, waiting time, and dispatch 3-day follow-up reminders.
+                      </p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={Send}
+                      loading={batchBusy}
+                      onClick={handleRunBatchFollowUps}
+                    >
+                      Batch 3-Day Follow-Ups
+                    </Button>
+                  </div>
+                </div>
+
+                {agingDocs.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-ink-500">
+                    No documents are currently aging or overdue. All requests are progressing normally.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-ink-100">
+                    {agingDocs.map((d) => {
+                      const type = typeOf(db, d)
+                      const req = userById(db, d.requesterId)
+                      const overdue = isDelayed(db, d)
+                      const days = daysWaiting(d)
+                      const currentOfficeName = d.currentOffice ? OFFICE_LABEL[d.currentOffice] : 'Reviewing Office'
+
+                      const docReminders = db.notifications.filter((n) => n.docId === d.id && n.kind === 'reminder')
+                      const lastReminder = docReminders.length > 0 ? docReminders[docReminders.length - 1] : undefined
+                      const daysSinceLast = lastReminder ? daysSince(lastReminder.at, currentTime) : 999
+                      const isLocked = daysSinceLast < db.settings.reminderEveryDays
+
+                      return (
+                        <div key={d.id} className="p-4 sm:px-6 flex flex-wrap items-center justify-between gap-3 hover:bg-brand-50/40 transition-colors">
+                          <div className="min-w-0 max-w-lg">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Link
+                                to={`/app/documents/${d.id}`}
+                                className="font-bold text-ink-950 text-sm hover:text-brand-700 truncate"
+                              >
+                                {d.title}
+                              </Link>
+                              <Badge tone={overdue ? 'danger' : 'warning'} dot={false}>
+                                {overdue ? 'Overdue' : 'Aging (3+ Days)'}
+                              </Badge>
+                              <span className="font-mono text-2xs text-ink-500">
+                                {controlNumber(d)}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-ink-600">
+                              <span>{type?.name}</span>
+                              <span>·</span>
+                              <span>With <strong className="text-ink-900">{currentOfficeName}</strong></span>
+                              <span>·</span>
+                              <span>{req?.name} ({d.origin})</span>
+                              <span>·</span>
+                              <span className="font-medium text-danger-700">Waiting {plural(days, 'day')}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {lastReminder && isLocked ? (
+                              <Badge tone="neutral" dot={false} className="gap-1 font-mono text-2xs">
+                                <Lock className="size-3 text-ink-500" />
+                                Follow-Up Sent {timeAgo(lastReminder.at)}
+                              </Badge>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                icon={Send}
+                                loading={sendingDocId === d.id}
+                                onClick={() => handleSendDocReminder(d)}
+                              >
+                                Send 3-Day Follow-Up
+                              </Button>
+                            )}
+                            <ButtonLink to={`/app/documents/${d.id}`} variant="ghost" size="sm">
+                              Inspect
+                            </ButtonLink>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

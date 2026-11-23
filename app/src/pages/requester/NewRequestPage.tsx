@@ -6,12 +6,15 @@ import {
   Clock,
   Copy,
   Download,
+  Edit3,
+  Eye,
   FileCheck2,
   FileText,
   Info,
   Paperclip,
   Route,
   Send,
+  ShieldCheck,
   UploadCloud,
   X,
 } from 'lucide-react'
@@ -20,7 +23,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import { sessionFiles } from '../../components/documents'
-import { Field, Input, Select, Textarea } from '../../components/form'
+import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
 import { Badge, Button, ButtonLink, Card, CardHeader, PageHeader } from '../../components/ui'
 import { controlNumber, downloadGeneratedPdf, formatRoleTitle } from '../../content/language'
@@ -84,6 +87,11 @@ export function NewRequestPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submittedDoc, setSubmittedDoc] = useState<DocRecord | null>(null)
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
+
+  // PB-16: Pre-submission review screen with editing and confirmation
+  const [submissionStep, setSubmissionStep] = useState<'fill' | 'review'>('fill')
+  const [isCertified, setIsCertified] = useState(false)
+  const [previewFile, setPreviewFile] = useState<{ name: string; url: string } | null>(null)
 
   // Handle switching document type
   const handleTypeChange = (newTypeId: string) => {
@@ -254,8 +262,9 @@ export function NewRequestPage() {
     missingItemsSummary.push(`Required form: ${m.label}`)
   })
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
+  // PB-16: Step 1 Validation & Transition to Pre-Submission Review Screen
+  const handleProceedToReview = (e?: FormEvent) => {
+    if (e) e.preventDefault()
     setHasAttemptedSubmit(true)
     if (!selectedTypeId || !selectedType) {
       setErrors({ typeId: 'Please select a document type.' })
@@ -286,6 +295,19 @@ export function NewRequestPage() {
         'Submission Incomplete — Cannot Advance',
         `Missing ${missingItemsSummary.length} required item(s). Please attach all required forms and fill in required fields.`,
       )
+      return
+    }
+
+    setSubmissionStep('review')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    toast.info('Review Your Request', 'Please verify all request information and check the certification box before confirming submission.')
+  }
+
+  // PB-16: Step 2 Final Confirmed Submission
+  const handleConfirmedSubmit = async () => {
+    if (!selectedType) return
+    if (!isCertified) {
+      toast.error('Institutional Certification Required', 'Please check the certification box to confirm your request details before submitting.')
       return
     }
 
@@ -340,11 +362,63 @@ export function NewRequestPage() {
 
       <PageHeader
         eyebrow="New Submission"
-        title="Submit Document Request"
-        description="Choose your document type, attach your files, and submit your request."
+        title={submissionStep === 'fill' ? 'Submit Document Request' : 'Pre-Submission Review & Confirmation'}
+        description={
+          submissionStep === 'fill'
+            ? 'Choose your document type, attach your files, and prepare your request.'
+            : 'Carefully verify your document information, preview attachments, and confirm official submission.'
+        }
       />
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
+      {/* PB-16: 2-Step Stepper */}
+      <div className="rounded-xl border border-ink-200 bg-white p-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+          <button
+            type="button"
+            onClick={() => setSubmissionStep('fill')}
+            className={`flex items-center gap-2.5 text-left transition-colors ${
+              submissionStep === 'fill' ? 'text-brand-900 font-bold' : 'text-ink-600 hover:text-brand-700'
+            }`}
+          >
+            <span
+              className={`flex size-7 items-center justify-center rounded-full font-bold text-xs ${
+                submissionStep === 'fill'
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-emerald-600 text-white'
+              }`}
+            >
+              {submissionStep === 'review' ? <CheckCircle2 className="size-4" /> : '1'}
+            </span>
+            <div>
+              <span className="block font-bold">Step 1: Request Details & Form Attachments</span>
+              <span className="text-2xs text-ink-500">Document type, purpose, and required file uploads</span>
+            </div>
+          </button>
+          <div className="hidden sm:block h-px flex-1 bg-ink-200 mx-4" />
+          <div
+            className={`flex items-center gap-2.5 text-left ${
+              submissionStep === 'review' ? 'text-brand-900 font-bold' : 'text-ink-500'
+            }`}
+          >
+            <span
+              className={`flex size-7 items-center justify-center rounded-full font-bold text-xs ${
+                submissionStep === 'review'
+                  ? 'bg-brand-600 text-white ring-4 ring-brand-100'
+                  : 'bg-ink-100 text-ink-600'
+              }`}
+            >
+              2
+            </span>
+            <div>
+              <span className="block font-bold">Step 2: Pre-Submission Review & Confirmation</span>
+              <span className="text-2xs text-ink-500">Verify details, preview attachments, and certify</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {submissionStep === 'fill' ? (
+        <form onSubmit={handleProceedToReview} noValidate className="space-y-6">
         <div className="grid items-start gap-6 lg:grid-cols-12">
           {/* Main 8-Column Form Stream */}
           <div className="min-w-0 space-y-6 lg:col-span-7 xl:col-span-8">
@@ -859,11 +933,9 @@ export function NewRequestPage() {
             <Button
               type="submit"
               size="lg"
-              loading={isSubmitting}
-              loadingText="Submitting Request…"
-              iconRight={Send}
+              iconRight={ArrowRight}
             >
-              Submit Document Request
+              Proceed to Pre-Submission Review
             </Button>
           </div>
         </div>
@@ -997,12 +1069,10 @@ export function NewRequestPage() {
                   <Button
                     type="submit"
                     size="lg"
-                    loading={isSubmitting}
-                    loadingText="Submitting Request…"
-                    iconRight={Send}
+                    iconRight={ArrowRight}
                     className="w-full justify-center shadow-md"
                   >
-                    Submit Document Request
+                    Proceed to Review
                   </Button>
                   <ButtonLink
                     to={user.role === 'ids_principal' ? '/app/for-review' : '/app/my-documents'}
@@ -1025,6 +1095,357 @@ export function NewRequestPage() {
           </div>
         </div>
       </form>
+      ) : (
+        /* PB-16: Step 2 Pre-Submission Review Screen with Editing and Confirmation */
+        selectedType && (
+          <div className="space-y-6">
+            {/* Review Notice Banner */}
+            <div className="rounded-2xl border-2 border-brand-200 bg-brand-50/70 p-5 shadow-2xs">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-xs">
+                    <ShieldCheck className="size-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-extrabold text-brand-950">
+                      Pre-Submission Review & Verification (PB-16)
+                    </h3>
+                    <p className="text-xs text-ink-700 leading-relaxed">
+                      Please review all details, route parameters, and attached files before confirming official submission.
+                      You can edit fields directly or return to Step 1 to modify attachments.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  icon={ArrowLeft}
+                  onClick={() => setSubmissionStep('fill')}
+                >
+                  Back to Edit Details
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid items-start gap-6 lg:grid-cols-12">
+              {/* Main Review Column */}
+              <div className="min-w-0 space-y-6 lg:col-span-7 xl:col-span-8">
+                {/* Request Overview & In-Place Editing */}
+                <Card className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="size-4.5 text-brand-600" />
+                      <h4 className="font-bold text-ink-950">Document Details Review & In-Place Edit</h4>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      icon={Edit3}
+                      onClick={() => setSubmissionStep('fill')}
+                    >
+                      Return to Form
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-xl bg-ink-50/70 p-3.5 border border-ink-100">
+                        <span className="block text-2xs font-bold uppercase tracking-wider text-ink-500">Document Type</span>
+                        <span className="mt-0.5 block text-sm font-bold text-brand-950">{selectedType.name}</span>
+                        <span className="text-2xs text-ink-600">{selectedType.summary}</span>
+                      </div>
+                      <div className="rounded-xl bg-ink-50/70 p-3.5 border border-ink-100">
+                        <span className="block text-2xs font-bold uppercase tracking-wider text-ink-500">Routing Origin & SLA</span>
+                        <div className="mt-0.5 flex items-center gap-2">
+                          <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                            {derivedOrigin} Affiliation
+                          </Badge>
+                          <span className="text-2xs text-ink-600">({user.department})</span>
+                        </div>
+                        <span className="mt-1 block text-2xs text-brand-700 font-medium">
+                          Standard Processing: {selectedType.processingDays[0]}–{selectedType.processingDays[1]} working days
+                        </span>
+                      </div>
+                    </div>
+
+                    <Field label="Request Title / Subject" required>
+                      <Input
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Document title or subject"
+                      />
+                    </Field>
+
+                    <Field label="Purpose / Description of Request" required>
+                      <Textarea
+                        rows={3}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Purpose and context of request"
+                      />
+                    </Field>
+                  </div>
+                </Card>
+
+                {/* Attached Files Review Checklist */}
+                <Card className="p-5 sm:p-6">
+                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <FileCheck2 className="size-4.5 text-emerald-600" />
+                      <h4 className="font-bold text-ink-950">
+                        Verified Attached Files ({attachedFiles.length} {attachedFiles.length === 1 ? 'file' : 'files'})
+                      </h4>
+                    </div>
+                    <Badge tone="success" dot={false}>Completeness Passed</Badge>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {attachedFiles.map((f, i) => {
+                      const reqObj = selectedType.requirements.find((r) => r.id === f.requirementId)
+                      return (
+                        <div
+                          key={i}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white p-3.5 shadow-2xs hover:border-brand-300"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                              <FileText className="size-4.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate text-xs font-bold text-ink-950" title={f.name}>
+                                  {f.name}
+                                </span>
+                                <Badge tone="brand" dot={false} className="text-2xs">
+                                  {f.sizeKb >= 1024 ? `${(f.sizeKb / 1024).toFixed(1)} MB` : `${f.sizeKb} KB`}
+                                </Badge>
+                              </div>
+                              <p className="text-2xs text-ink-500 mt-0.5">
+                                {reqObj ? `Attached for: ${reqObj.label}` : 'Supporting document'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {f.fileObj && (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                icon={Eye}
+                                onClick={() => {
+                                  const url = URL.createObjectURL(f.fileObj!)
+                                  setPreviewFile({ name: f.name, url })
+                                }}
+                              >
+                                Inspect File
+                              </Button>
+                            )}
+                            <span className="text-2xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                              ✓ Ready
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Card>
+
+                {/* Institutional Certification & Submission Card */}
+                <Card className="p-5 sm:p-6 ring-2 ring-brand-300 bg-brand-50/20">
+                  <div className="flex items-center gap-2 border-b border-brand-100 pb-3">
+                    <ShieldCheck className="size-5 text-brand-700" />
+                    <h4 className="font-bold text-brand-950">Official Confirmation & Institutional Certification</h4>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-xl bg-white p-4 text-xs text-ink-700 ring-1 ring-brand-100 leading-relaxed">
+                      <p className="font-semibold text-ink-900 mb-1.5">Official Submission Declarations:</p>
+                      <ul className="list-disc list-inside space-y-1 text-ink-600">
+                        <li>I confirm that all statements made in this request are authentic and complete.</li>
+                        <li>I verify that the uploaded forms contain valid signatures and meet CESS institutional policies.</li>
+                        <li>I understand that once submitted, this request cannot be edited unless returned for revisions by a reviewing authority.</li>
+                      </ul>
+                    </div>
+
+                    <div className="rounded-xl border border-brand-200 bg-white p-4 shadow-2xs">
+                      <Checkbox
+                        checked={isCertified}
+                        onChange={(e) => setIsCertified(e.target.checked)}
+                        label={
+                          <span className="font-bold text-ink-950 text-sm">
+                            I certify that all details and attachments are authentic, complete, and ready for official administrative routing.
+                          </span>
+                        }
+                        hint="Check this box to confirm and enable the submission button."
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="lg"
+                        icon={ArrowLeft}
+                        onClick={() => setSubmissionStep('fill')}
+                      >
+                        Back to Edit Details
+                      </Button>
+                      <Button
+                        type="button"
+                        size="lg"
+                        iconRight={Send}
+                        disabled={!isCertified || !title.trim() || !description.trim()}
+                        loading={isSubmitting}
+                        loadingText="Submitting Request…"
+                        onClick={handleConfirmedSubmit}
+                        className="shadow-md"
+                      >
+                        Confirm & Officially Submit Request
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Right Sticky Sidebar for Review Screen */}
+              <div className="hidden min-w-0 space-y-6 lg:sticky lg:top-20 lg:col-span-5 xl:col-span-4 lg:block">
+                <Card className="p-5">
+                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
+                    <span className="font-bold text-ink-950 text-sm">Requester Credentials</span>
+                    <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                      {derivedOrigin}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 space-y-2.5 text-xs">
+                    <div>
+                      <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Requester</span>
+                      <span className="font-bold text-ink-900 text-sm">{user.name}</span>
+                    </div>
+                    <div>
+                      <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Email</span>
+                      <span className="font-medium text-ink-800 break-all">{user.email}</span>
+                    </div>
+                    <div>
+                      <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Department</span>
+                      <span className="font-medium text-ink-800">{user.department}</span>
+                    </div>
+                    <div className="pt-2 border-t border-ink-100 flex items-center justify-between text-2xs text-ink-500">
+                      <span>Sealed Timestamp Preview</span>
+                      <span className="font-semibold text-brand-800 font-mono">{formatDateTime(submissionTimePreview)}</span>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Routing Flow Preview */}
+                <Card className="p-5">
+                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
+                    <div className="flex items-center gap-1.5">
+                      <Route className="size-4 text-brand-600" aria-hidden="true" />
+                      <span className="font-bold text-ink-950 text-sm">Official Routing</span>
+                    </div>
+                    <span className="text-2xs font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                      {selectedType.processingDays[0]}–{selectedType.processingDays[1]} days
+                    </span>
+                  </div>
+                  <div className="mt-3 text-xs">
+                    <ol className="relative ml-2.5 space-y-3 border-l-2 border-brand-200 pl-4 text-xs">
+                      <li className="relative">
+                        <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-600 ring-4 ring-white" />
+                        <span className="font-bold text-ink-900">1. College Secretary</span>
+                        <p className="text-2xs text-ink-500">Completeness & content verification</p>
+                      </li>
+                      <li className="relative">
+                        <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-400 ring-4 ring-white" />
+                        <span className="font-bold text-ink-900">2. Department Chairperson</span>
+                        <p className="text-2xs text-ink-500">Academic & curricular recommendation</p>
+                      </li>
+                      {derivedOrigin === 'IDS' && user.role !== 'ids_principal' && (
+                        <li className="relative">
+                          <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-warning-500 ring-4 ring-white" />
+                          <span className="font-bold text-warning-900">3. IDS Principal Review</span>
+                          <p className="text-2xs text-warning-700">Developmental school review & sign-off</p>
+                        </li>
+                      )}
+                      <li className="relative">
+                        <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-300 ring-4 ring-white" />
+                        <span className="font-bold text-ink-900">
+                          {derivedOrigin === 'IDS' && user.role !== 'ids_principal' ? '4. College Dean' : '3. College Dean'}
+                        </span>
+                        <p className="text-2xs text-ink-500">Final collegiate endorsement & seal</p>
+                      </li>
+                      <li className="relative">
+                        <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-success-500 ring-4 ring-white" />
+                        <span className="font-bold text-ink-900">
+                          {derivedOrigin === 'IDS' && user.role !== 'ids_principal' ? '5. Document Release' : '4. Document Release'}
+                        </span>
+                        <p className="text-2xs text-ink-500">Signed document collection & record</p>
+                      </li>
+                    </ol>
+                  </div>
+                </Card>
+
+                <Card className="p-5 ring-1 ring-brand-200">
+                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
+                    <span className="font-bold text-ink-950 text-sm">Submission Status</span>
+                    <Badge tone={isCertified ? 'success' : 'warning'} dot={false}>
+                      {isCertified ? 'Certified' : 'Awaiting Check'}
+                    </Badge>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    <Button
+                      type="button"
+                      size="lg"
+                      iconRight={Send}
+                      disabled={!isCertified || !title.trim() || !description.trim()}
+                      loading={isSubmitting}
+                      loadingText="Submitting Request…"
+                      onClick={handleConfirmedSubmit}
+                      className="w-full justify-center shadow-md"
+                    >
+                      Confirm & Officially Submit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setSubmissionStep('fill')}
+                      className="w-full justify-center"
+                    >
+                      Back to Edit Details
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
+        )
+      )}
+
+      {/* File Quick Preview Dialog for Requester Review */}
+      {previewFile && (
+        <Dialog
+          open={!!previewFile}
+          onClose={() => setPreviewFile(null)}
+          size="lg"
+          title={`Attached Document Preview: ${previewFile.name}`}
+          footer={
+            <div className="flex justify-end w-full">
+              <Button variant="secondary" onClick={() => setPreviewFile(null)}>Close Preview</Button>
+            </div>
+          }
+        >
+          <div className="p-4 flex flex-col items-center">
+            {previewFile.name.toLowerCase().endsWith('.pdf') ? (
+              <iframe src={previewFile.url} className="w-full h-[500px] rounded-lg border border-ink-200" title={previewFile.name} />
+            ) : (
+              <img src={previewFile.url} alt={previewFile.name} className="max-h-[500px] w-auto rounded-lg object-contain shadow-xs" />
+            )}
+          </div>
+        </Dialog>
+      )}
       {/* Submission Confirmation Modal (REQ-SUB-5, REQ-SUB-6, REQ-REC-1, REQ-REC-2) */}
       {submittedDoc && (
         <Dialog

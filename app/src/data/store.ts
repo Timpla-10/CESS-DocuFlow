@@ -1416,6 +1416,32 @@ export const api = {
       d.settings.reminderEveryDays = days
     }),
 
+  /** PB-30: Batch trigger automated 3-day follow-up reminders across all eligible waiting documents */
+  triggerReminders: (actor: User) => {
+    let sentCount = 0
+    mutate((d) => {
+      if (actor.role !== 'secretary' && actor.role !== 'dean') {
+        throw new FriendlyError('Only the College Secretary or Dean can dispatch follow-up reminders.')
+      }
+      const before = d.notifications.length
+      engine.runReminders(d, Date.now())
+      sentCount = d.notifications.length - before
+    })
+    return sentCount
+  },
+
+  /** PB-30: Dispatch an immediate follow-up reminder for a specific aging document, enforcing anti-duplicate rules */
+  sendSingleReminder: (actor: User, docId: string) => {
+    let officeName = ''
+    mutate((d) => {
+      if (actor.role !== 'secretary' && actor.role !== 'dean') {
+        throw new FriendlyError('Only the College Secretary or Dean can dispatch follow-up reminders.')
+      }
+      officeName = engine.sendSingleReminder(d, docId, Date.now())
+    })
+    return officeName
+  },
+
   resetDemo() {
     commit(createSeed())
   },

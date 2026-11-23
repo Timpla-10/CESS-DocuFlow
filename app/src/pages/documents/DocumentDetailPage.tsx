@@ -154,6 +154,14 @@ export function DocumentDetailPage() {
   const userAudience: 'requester' | 'staff' = isDocRequester ? 'requester' : isReqUser ? 'requester' : 'staff'
   const message = requesterMessage(doc, delayed, db)
 
+  // PB-32: Estimated turnaround target date based on standard SLA days
+  const estimatedCompletionDate =
+    docType && doc.submittedAt
+      ? new Date(
+          new Date(doc.submittedAt).getTime() + (docType.processingDays[1] || 5) * 24 * 60 * 60 * 1000,
+        ).toISOString()
+      : null
+
   // Action authorizations
   const canResubmit = isDocRequester && doc.status === 'returned'
   const canSecretaryCheck = user.role === 'secretary' && doc.status === 'submitted'
@@ -539,6 +547,164 @@ export function DocumentDetailPage() {
                   . Origin has been established as <strong>{doc.origin}</strong> from your account affiliation, and timestamp{' '}
                   <strong>{formatDateTime(doc.submittedAt)}</strong> has been officially sealed.
                 </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PB-32: Requester Progress Detail View for Own Requests */}
+      {isDocRequester && (
+        <div className="space-y-4">
+          {/* Prominent Return Reasons Card for Returned Requests */}
+          {doc.status === 'returned' && (
+            <div className="rounded-2xl border-2 border-danger-300 bg-danger-50/90 p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-danger-600 text-white shadow-xs">
+                    <AlertCircle className="size-6" />
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-extrabold text-danger-950">
+                        Action Needed: Document Returned for Revision (PB-32)
+                      </h3>
+                      <Badge tone="danger" dot={false}>Unlocked for Resubmission</Badge>
+                    </div>
+                    <p className="text-xs text-danger-900 leading-relaxed">
+                      Your document was returned by{' '}
+                      <strong>{doc.returnInfo?.office ?? 'the reviewing authority'}</strong>
+                      {doc.returnInfo?.by ? ` (${doc.returnInfo.by})` : ''} on{' '}
+                      <strong>{doc.returnInfo?.at ? formatDateTime(doc.returnInfo.at) : 'recently'}</strong>.
+                      Please review the correction details below, make required revisions, and resubmit.
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  size="md"
+                  variant="primary"
+                  icon={RotateCcw}
+                  onClick={handleOpenResubmit}
+                  className="shadow-sm shrink-0"
+                >
+                  Fix Details & Resubmit Request
+                </Button>
+              </div>
+
+              {/* Specific Return Remarks Box */}
+              <div className="mt-4 rounded-xl bg-white p-4 ring-1 ring-danger-200 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-danger-800">
+                  <span>Official Return Remarks / Instructions:</span>
+                </div>
+                <p className="text-sm font-semibold text-ink-950 whitespace-pre-wrap">
+                  {doc.returnInfo?.reasons || 'Please update your attached forms and address reviewer comments.'}
+                </p>
+
+                {doc.returnInfo?.missing && doc.returnInfo.missing.length > 0 && (
+                  <div className="pt-2 border-t border-danger-100">
+                    <p className="text-xs font-bold text-danger-900 mb-1">Flagged Incomplete or Missing Forms:</p>
+                    <ul className="list-disc list-inside space-y-0.5 text-xs text-danger-800 font-medium">
+                      {doc.returnInfo.missing.map((mid) => (
+                        <li key={mid}>
+                          {docType?.requirements.find((r) => r.id === mid)?.label ?? mid}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Permitted Stage and Complete Timestamps Overview Card */}
+          <div className="rounded-2xl border border-brand-200 bg-white p-5 shadow-2xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex size-7 items-center justify-center rounded-lg bg-brand-100 text-brand-700 font-bold text-xs">
+                  ✓
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-ink-950">
+                    Requester Progress & Routing Status (PB-32)
+                  </h3>
+                  <p className="text-2xs text-ink-500">
+                    Verified stage, holding office, and sealed timestamps for your request
+                  </p>
+                </div>
+              </div>
+              <StatusBadge doc={doc} audience="requester" db={db} />
+            </div>
+
+            {/* Timestamps Grid */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+              <div className="rounded-xl bg-ink-50/70 p-3 border border-ink-100">
+                <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Submitted Timestamp</span>
+                <span className="mt-0.5 font-bold text-ink-900 block font-mono text-2xs">{formatDateTime(doc.submittedAt)}</span>
+                <span className="text-3xs text-ink-500">Official sealed timestamp</span>
+              </div>
+              <div className="rounded-xl bg-ink-50/70 p-3 border border-ink-100">
+                <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Holding Office Arrival</span>
+                <span className="mt-0.5 font-bold text-ink-900 block font-mono text-2xs">
+                  {doc.officeSince ? formatDateTime(doc.officeSince) : formatDateTime(doc.submittedAt)}
+                </span>
+                <span className="text-3xs text-ink-500">Waiting {plural(daysWaiting(doc), 'day')}</span>
+              </div>
+              <div className="rounded-xl bg-ink-50/70 p-3 border border-ink-100">
+                <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Estimated Completion</span>
+                <span className="mt-0.5 font-bold text-brand-900 block text-2xs">
+                  {estimatedCompletionDate ? formatDate(estimatedCompletionDate) : '3–5 working days'}
+                </span>
+                <span className="text-3xs text-brand-700">Standard institutional SLA</span>
+              </div>
+              <div className="rounded-xl bg-ink-50/70 p-3 border border-ink-100">
+                <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Permitted Stage</span>
+                <span className="mt-0.5 font-bold text-ink-900 block truncate text-2xs">
+                  {currentStep?.label ?? locationLabel(doc, db)}
+                </span>
+                <span className="text-3xs text-ink-500">Stage {doc.routeIndex + 1} of {doc.route.length}</span>
+              </div>
+            </div>
+
+            {/* Permitted Stages Progress Stepper */}
+            <div className="mt-4 pt-3 border-t border-ink-100">
+              <span className="block text-2xs font-bold uppercase tracking-wider text-ink-500 mb-2">
+                Official Routing Stages ({doc.origin} Path):
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+                {doc.route.map((step, idx) => {
+                  const isPast = idx < doc.routeIndex
+                  const isCurrent = idx === doc.routeIndex
+                  const isReturnedStep = doc.status === 'returned' && isCurrent
+                  const isDone = doc.status === 'released' || (doc.status === 'ready' && idx === doc.route.length - 1)
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`rounded-lg p-2.5 text-xs transition-all border ${
+                        isDone || isPast
+                          ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900'
+                          : isReturnedStep
+                          ? 'border-danger-300 bg-danger-50/70 text-danger-900 ring-2 ring-danger-200'
+                          : isCurrent
+                          ? 'border-brand-300 bg-brand-50/70 text-brand-950 ring-2 ring-brand-200'
+                          : 'border-ink-200 bg-ink-50/50 text-ink-500'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-2xs">
+                        <span className={`flex size-4 items-center justify-center rounded-full text-3xs ${
+                          isDone || isPast ? 'bg-emerald-600 text-white' : isCurrent ? 'bg-brand-600 text-white' : 'bg-ink-200 text-ink-700'
+                        }`}>
+                          {isDone || isPast ? '✓' : idx + 1}
+                        </span>
+                        <span className="truncate">{step.label ?? OFFICE_LABEL[step.office]}</span>
+                      </div>
+                      <p className="mt-1 text-3xs truncate">
+                        {isDone || isPast ? 'Completed' : isReturnedStep ? 'Returned for Revision' : isCurrent ? 'Active Stage' : 'Upcoming'}
+                      </p>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -1047,6 +1213,11 @@ export function DocumentDetailPage() {
                     ? `${docType.processingDays[0]} to ${docType.processingDays[1]} working days`
                     : '—',
                   hint: delayed ? 'Past the standard turnaround threshold (Delayed)' : 'Within normal timeframe',
+                },
+                {
+                  label: 'Estimated Turnaround Target',
+                  value: estimatedCompletionDate ? formatDate(estimatedCompletionDate) : '—',
+                  hint: docType ? `Target completion within ${docType.processingDays[1]} working days` : undefined,
                 },
               ]}
             />
