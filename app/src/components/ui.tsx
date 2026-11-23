@@ -477,12 +477,51 @@ export function PageHeader({
   actions?: ReactNode
   eyebrow?: ReactNode
 }) {
+  const [isHovered, setIsHovered] = useState(false)
+
   return (
-    <header className="mb-4 sm:mb-6 flex w-full min-w-0 max-w-full animate-fade-up flex-wrap items-end justify-between gap-3 sm:gap-4">
+    <header className="mb-4 sm:mb-6 flex w-full min-w-0 max-w-full animate-fade-up flex-wrap items-start justify-between gap-3 sm:gap-4">
       <div className="w-full min-w-0 max-w-3xl flex-1 sm:w-auto">
-        {eyebrow && <div className="mb-1 truncate text-2xs font-bold uppercase tracking-[0.08em] text-brand-600 sm:text-xs">{eyebrow}</div>}
-        <h1 className="text-balance break-words text-xl font-extrabold tracking-tight text-brand-900 sm:text-2xl lg:text-[28px]">{title}</h1>
-        {description && <p className="mt-1 break-words text-xs leading-relaxed text-ink-600 sm:text-[15px]">{description}</p>}
+        {eyebrow && (
+          <div className="mb-1 truncate text-2xs font-bold uppercase tracking-[0.08em] text-brand-600 sm:text-xs">
+            {eyebrow}
+          </div>
+        )}
+        <div
+          className="inline-block max-w-full"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <h1
+            tabIndex={description ? 0 : undefined}
+            onClick={() => Boolean(description) && setIsHovered((prev) => !prev)}
+            onFocus={() => setIsHovered(true)}
+            onBlur={() => setIsHovered(false)}
+            className={cn(
+              'text-balance break-words text-xl font-extrabold tracking-tight text-brand-900 sm:text-2xl lg:text-[28px]',
+              Boolean(description) && 'cursor-pointer transition-colors hover:text-brand-700',
+            )}
+          >
+            {title}
+          </h1>
+
+          {description && (
+            <div
+              className={cn(
+                'grid transition-all duration-200 ease-out',
+                isHovered
+                  ? 'grid-rows-[1fr] opacity-100 mt-1'
+                  : 'grid-rows-[0fr] opacity-0 mt-0 pointer-events-none',
+              )}
+            >
+              <div className="overflow-hidden">
+                <p className="break-words text-xs leading-relaxed text-ink-600 sm:text-[15px]">
+                  {description}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
       {actions && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </header>
