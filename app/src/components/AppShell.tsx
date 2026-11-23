@@ -172,7 +172,7 @@ function Sidebar({
         )}
 
         {/* Navigation items */}
-        <div className={cn('flex-1 space-y-4 overflow-y-auto py-3', isExpanded ? 'px-3' : 'px-2')}>
+        <div className={cn('flex-1 space-y-4 overflow-y-auto sidebar-scrollbar py-3', isExpanded ? 'px-3' : 'px-2')}>
           {sections.map((s, i) => (
             <div key={i}>
               {s.heading && isExpanded && (
