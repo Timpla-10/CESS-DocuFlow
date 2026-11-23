@@ -581,6 +581,7 @@ export function DocumentDetailPage() {
                 ? 'warning'
                 : 'brand'
             }
+            defaultOpen={doc.status === 'returned' || doc.status === 'rejected'}
             title={message.title}
           >
             <p>{message.body}</p>
