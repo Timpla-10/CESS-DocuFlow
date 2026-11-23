@@ -580,9 +580,9 @@ export function MyDocumentsPage() {
             actions={
               <div className="flex flex-wrap items-center gap-2">
                 {user.role === 'faculty' && (
-                  <Tooltip content="Separate syllabus upload, viewing, and retrieval management (PB-56)">
+                  <Tooltip content="Separate syllabus upload, viewing, and retrieval management">
                     <ButtonLink to="/app/syllabi" variant="secondary" icon={BookOpen}>
-                      Course Syllabi (PB-56)
+                      Course Syllabi
                     </ButtonLink>
                   </Tooltip>
                 )}

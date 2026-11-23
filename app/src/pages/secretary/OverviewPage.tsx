@@ -215,7 +215,7 @@ export function OverviewPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-base font-bold text-ink-950">
-                    Aging & Overdue Requests Monitor (PB-30)
+                    Aging & Overdue Requests Monitor
                   </h2>
                   <Badge tone={agingDocs.length > 0 ? 'warning' : 'success'} dot={false}>
                     {agingDocs.length} Aging / Overdue

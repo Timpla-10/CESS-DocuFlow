@@ -567,7 +567,7 @@ export function DocumentDetailPage() {
                   <div className="space-y-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base font-extrabold text-danger-950">
-                        Action Needed: Document Returned for Revision (PB-32)
+                        Action Needed: Document Returned for Revision
                       </h3>
                       <Badge tone="danger" dot={false}>Unlocked for Resubmission</Badge>
                     </div>
@@ -626,7 +626,7 @@ export function DocumentDetailPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-ink-950">
-                    Requester Progress & Routing Status (PB-32)
+                    Requester Progress & Routing Status
                   </h3>
                   <p className="text-2xs text-ink-500">
                     Verified stage, holding office, and sealed timestamps for your request

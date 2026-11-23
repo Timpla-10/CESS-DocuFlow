@@ -316,7 +316,7 @@ export function SyllabusManagementPage() {
         '3. Official Table of Specifications (TOS) indicating Bloom levels and cognitive domains.',
         '4. Course policies on attendance, academic integrity, and grade computation.',
         '',
-        'This electronic course syllabus is maintained and certified under CESS DocuFlow (PB-56).',
+        'This electronic course syllabus is maintained and certified under CESS DocuFlow.',
       ],
     )
     toast.info('Downloading Syllabus', `Retrieved ${fileName}.`)

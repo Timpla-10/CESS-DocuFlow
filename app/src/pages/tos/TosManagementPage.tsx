@@ -438,7 +438,7 @@ export function TosManagementPage() {
     <div className="space-y-6">
       {/* Page Header with hover-reveal description */}
       <PageHeader
-        eyebrow="Academic Assessment & Examination Blueprints (PB-57)"
+        eyebrow="Academic Assessment & Examination Blueprints"
         title="Table of Specifications (TOS) Management"
         description="Manage, upload, view, and retrieve official course Tables of Specifications (TOS) separately from course syllabi and administrative document requests."
         actions={

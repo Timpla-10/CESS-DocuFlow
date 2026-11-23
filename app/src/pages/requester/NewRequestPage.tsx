@@ -1108,7 +1108,7 @@ export function NewRequestPage() {
                   </div>
                   <div className="space-y-1">
                     <h3 className="text-base font-extrabold text-brand-950">
-                      Pre-Submission Review & Verification (PB-16)
+                      Pre-Submission Review & Verification
                     </h3>
                     <p className="text-xs text-ink-700 leading-relaxed">
                       Please review all details, route parameters, and attached files before confirming official submission.
