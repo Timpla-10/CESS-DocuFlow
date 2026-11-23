@@ -210,6 +210,8 @@ export interface DocRecord {
   contentVerification?: ContentVerification
   /** True when the record was encoded by the College Secretary for a walk-in submission (REQ-REC-8). */
   encodedBySecretary?: boolean
+  /** PB-58: Custom folder assignment in the document repository. */
+  folderId?: string
   release?: {
     receivedBy: string
     at: string
@@ -287,6 +289,79 @@ export interface SyllabusRecord {
   status: 'active' | 'archived'
 }
 
+/**
+ * PB-57: Table of Specifications (TOS) Template.
+ * Standard institutional test blueprint template maintained by the College Secretary.
+ */
+export interface TosTemplate {
+  fileName: string
+  fileUrl?: string
+  updatedAt: string
+  uploadedBy: string
+  fileSize?: string
+}
+
+export interface TosCognitiveLevels {
+  remembering?: number
+  understanding?: number
+  applying?: number
+  analyzing?: number
+  evaluating?: number
+  creating?: number
+}
+
+/**
+ * PB-57: Table of Specifications (TOS) Record.
+ * Dedicated curriculum assessment blueprint mapping examination questions to cognitive levels
+ * (Remembering, Understanding, Applying, Analyzing, Evaluating, Creating) and Course Learning Outcomes (CLOs).
+ * Managed and organized strictly separately from course syllabi and general administrative requests.
+ */
+export interface TosRecord {
+  id: string
+  subjectCode: string
+  subjectTitle: string
+  facultyId: string
+  facultyName: string
+  facultyUserId?: string
+  department: string
+  academicYear: string
+  semester: string
+  term: 'Midterm' | 'Final' | 'Midterm & Final'
+  examType: string
+  totalItems: number
+  cognitiveDistribution?: TosCognitiveLevels
+  fileName: string
+  fileUrl?: string
+  fileSizeKb?: number
+  uploadedAt: string
+  description?: string
+  status: 'active' | 'archived'
+}
+
+export type FolderCategory = 'academic' | 'administrative' | 'accreditation' | 'financial' | 'general'
+
+/**
+ * PB-58: Custom Document Repository Folder.
+ * Allows authorized users (Secretary, Dean, Chairs, Faculty) to create, name, rename,
+ * and manage folders in the document repository to organize documents by type, category, or purpose.
+ * Enforces role-based access control to prevent unauthorized modifications.
+ */
+export interface DocumentFolder {
+  id: string
+  name: string
+  description?: string
+  category: FolderCategory
+  purpose?: string
+  createdBy: string
+  createdByName: string
+  createdByRole: Role
+  createdAt: string
+  updatedAt: string
+  isSystem?: boolean
+  origin?: Origin
+  allowedRoles?: Role[]
+}
+
 export interface FacultyEntry {
   id: string
   userId?: string
@@ -337,6 +412,9 @@ export interface Database {
   faculty: FacultyEntry[]
   syllabusTemplate?: SyllabusTemplate
   syllabi?: SyllabusRecord[]
+  tosTemplate?: TosTemplate
+  tos?: TosRecord[]
+  folders?: DocumentFolder[]
   settings: Settings
   counter: number
   whitelist: WhitelistEntry[]

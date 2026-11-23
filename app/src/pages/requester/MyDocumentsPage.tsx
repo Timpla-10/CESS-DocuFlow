@@ -9,10 +9,12 @@ import {
   Clock,
   Database as DatabaseIcon,
   Download,
+  Edit3,
   FileCheck2,
   FilePlus2,
   Folder,
   FolderOpen,
+  FolderPlus,
   History,
   LayoutGrid,
   List,
@@ -20,10 +22,13 @@ import {
   PackageCheck,
   RotateCcw,
   Send,
+  Trash2,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
+import { ActionNeededBanner } from '../../components/ActionNeededBanner'
+import { Dialog } from '../../components/Dialog'
 import {
   DelayedBadge,
   DocumentList,
@@ -32,6 +37,8 @@ import {
   WaitingTime,
   useDocumentFilters,
 } from '../../components/documents'
+import { Field, Input, Select, Textarea } from '../../components/form'
+import { useToast } from '../../components/Toast'
 import {
   Badge,
   Button,
@@ -52,8 +59,8 @@ import {
 } from '../../content/language'
 import { lastSubmittedAt } from '../../data/engine'
 import { isDelayed, typeOf, visibleDocuments } from '../../data/selectors'
-import { useDb } from '../../data/store'
-import type { DocRecord, DocumentType } from '../../data/types'
+import { api, useDb } from '../../data/store'
+import type { DocRecord, DocumentFolder, DocumentType, FolderCategory } from '../../data/types'
 import { fetchRequesterDocumentRequests } from '../../lib/supabase'
 import { formatDate, formatDateTime, timeAgo } from '../../lib/time'
 
@@ -131,9 +138,123 @@ export function MyDocumentsPage() {
     [myDocs],
   )
 
+  const toast = useToast()
+
   // Folder drill-down
   const folderParam = searchParams.get('folder')
   const selectedType = allowedTypes.find((t) => t.id === folderParam)
+
+  // Custom folder drill-down (PB-58)
+  const [folderSubTab, setFolderSubTab] = useState<'categories' | 'custom'>('categories')
+  const customFolderParam = searchParams.get('customFolder')
+  const selectedCustomFolder = (db.folders || []).find((f) => f.id === customFolderParam)
+
+  const openCustomFolder = (fldId: string) => {
+    setSearchParams({ customFolder: fldId })
+  }
+
+  // Create folder state (for authorized faculty/staff)
+  const canCreateFolder = user.role !== 'student'
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [newFolderCategory, setNewFolderCategory] = useState<FolderCategory>('academic')
+  const [newFolderPurpose, setNewFolderPurpose] = useState('')
+  const [newFolderDescription, setNewFolderDescription] = useState('')
+  const [createFolderBusy, setCreateFolderBusy] = useState(false)
+
+  // Edit folder state
+  const [editingFolder, setEditingFolder] = useState<DocumentFolder | null>(null)
+  const [editFolderName, setEditFolderName] = useState('')
+  const [editFolderCategory, setEditFolderCategory] = useState<FolderCategory>('academic')
+  const [editFolderPurpose, setEditFolderPurpose] = useState('')
+  const [editFolderDescription, setEditFolderDescription] = useState('')
+  const [editFolderBusy, setEditFolderBusy] = useState(false)
+
+  // Delete folder state
+  const [deletingFolder, setDeletingFolder] = useState<DocumentFolder | null>(null)
+  const [deleteFolderBusy, setDeleteFolderBusy] = useState(false)
+
+  const canManageFolder = (folder: DocumentFolder) => {
+    if (user.role === 'secretary' || user.role === 'dean') return true
+    return folder.createdBy === user.id
+  }
+
+  const canDeleteFolder = (folder: DocumentFolder) => {
+    if (folder.isSystem) return false
+    if (user.role === 'secretary' || user.role === 'dean') return true
+    return folder.createdBy === user.id
+  }
+
+  const handleCreateFolder = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!newFolderName.trim()) {
+      toast.error('Folder Name Required', 'Please enter a name for the folder.')
+      return
+    }
+    setCreateFolderBusy(true)
+    try {
+      await api.createDocumentFolder(user, {
+        name: newFolderName.trim(),
+        category: newFolderCategory,
+        purpose: newFolderPurpose.trim() || undefined,
+        description: newFolderDescription.trim() || undefined,
+        origin: user.origin,
+      })
+      toast.success('Folder Created', `Successfully created folder "${newFolderName.trim()}".`)
+      setIsCreateFolderOpen(false)
+      setNewFolderName('')
+      setNewFolderPurpose('')
+      setNewFolderDescription('')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create folder.'
+      toast.error('Creation Failed', msg)
+    } finally {
+      setCreateFolderBusy(false)
+    }
+  }
+
+  const handleEditFolder = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editingFolder) return
+    if (!editFolderName.trim()) {
+      toast.error('Folder Name Required', 'Please enter a valid folder name.')
+      return
+    }
+    setEditFolderBusy(true)
+    try {
+      await api.renameDocumentFolder(user, editingFolder.id, {
+        name: editFolderName.trim(),
+        category: editFolderCategory,
+        purpose: editFolderPurpose.trim() || undefined,
+        description: editFolderDescription.trim() || undefined,
+      })
+      toast.success('Folder Updated', `Updated folder "${editFolderName.trim()}".`)
+      setEditingFolder(null)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update folder.'
+      toast.error('Update Failed', msg)
+    } finally {
+      setEditFolderBusy(false)
+    }
+  }
+
+  const handleDeleteFolder = async () => {
+    if (!deletingFolder) return
+    setDeleteFolderBusy(true)
+    try {
+      await api.deleteDocumentFolder(user, deletingFolder.id)
+      toast.success('Folder Deleted', `Folder "${deletingFolder.name}" was removed.`)
+      if (customFolderParam === deletingFolder.id) {
+        closeFolder()
+      }
+      setDeletingFolder(null)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete folder.'
+      toast.error('Delete Failed', msg)
+    } finally {
+      setDeleteFolderBusy(false)
+    }
+  }
 
   // Comprehensive Filter System (REQ-MON-4: status, type, date range, search)
   const { filters, setFilters, result, active, clear } = useDocumentFilters(db, myDocs, 'newest')
@@ -173,7 +294,140 @@ export function MyDocumentsPage() {
       {/* ------------------------------------------------------------------ */}
       {/* CASE A: Specific Folder is Selected (Drill-Down View)              */}
       {/* ------------------------------------------------------------------ */}
-      {selectedType ? (
+      {selectedCustomFolder ? (
+        <div className="space-y-6">
+          {/* Breadcrumbs and Back Button */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={closeFolder}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-900 transition-colors"
+            >
+              <ArrowLeft className="size-4" aria-hidden /> Back to all requests & folders
+            </button>
+            <div className="flex items-center gap-2 text-xs font-medium text-ink-500">
+              <span className="hover:underline cursor-pointer" onClick={closeFolder}>
+                Folders
+              </span>
+              <span>/</span>
+              <span className="font-bold text-ink-900">{selectedCustomFolder.name}</span>
+            </div>
+          </div>
+
+          {/* Folder Details Banner */}
+          <Card className="overflow-hidden border-brand-200 bg-gradient-to-b from-brand-50/60 to-white">
+            <div className="p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-2xl">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-11 items-center justify-center rounded-xl bg-brand-600 text-white shadow-xs">
+                      <FolderOpen className="size-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge tone="brand" dot={false} className="capitalize">
+                          {selectedCustomFolder.category}
+                        </Badge>
+                        {selectedCustomFolder.isSystem && (
+                          <Badge tone="neutral" dot={false}>Official Repository</Badge>
+                        )}
+                      </div>
+                      <h2 className="mt-1 text-xl font-extrabold text-brand-950 sm:text-2xl">
+                        {selectedCustomFolder.name}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {selectedCustomFolder.description && (
+                    <p className="mt-3 text-sm leading-relaxed text-ink-700">
+                      {selectedCustomFolder.description}
+                    </p>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-ink-600">
+                    {selectedCustomFolder.purpose && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-800 ring-1 ring-ink-200">
+                        <strong>Purpose:</strong> {selectedCustomFolder.purpose}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-700 ring-1 ring-ink-200">
+                      Created by: <strong className="text-ink-900">{selectedCustomFolder.createdByName}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {canManageFolder(selectedCustomFolder) && (
+                    <Button
+                      variant="secondary"
+                      icon={Edit3}
+                      onClick={() => {
+                        setEditFolderName(selectedCustomFolder.name)
+                        setEditFolderCategory(selectedCustomFolder.category)
+                        setEditFolderPurpose(selectedCustomFolder.purpose || '')
+                        setEditFolderDescription(selectedCustomFolder.description || '')
+                        setEditingFolder(selectedCustomFolder)
+                      }}
+                    >
+                      Rename / Edit
+                    </Button>
+                  )}
+                  {canDeleteFolder(selectedCustomFolder) && (
+                    <Button
+                      variant="danger"
+                      icon={Trash2}
+                      onClick={() => setDeletingFolder(selectedCustomFolder)}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Submissions inside this Custom Folder */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-ink-900">
+                  Your Documents in this Folder
+                </h3>
+                <p className="text-xs text-ink-500">
+                  All requests submitted by you organized in {selectedCustomFolder.name}
+                </p>
+              </div>
+              <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
+                {myDocs.filter((d) => d.folderId === selectedCustomFolder.id).length} record(s)
+              </span>
+            </div>
+
+            {(() => {
+              const folderDocs = myDocs.filter((d) => d.folderId === selectedCustomFolder.id)
+              if (folderDocs.length === 0) {
+                return (
+                  <Card className="p-8">
+                    <EmptyState
+                      icon={FolderOpen}
+                      title={`No requests filed in "${selectedCustomFolder.name}"`}
+                    >
+                      You haven't assigned any of your document requests to this folder yet. You can assign documents to this folder from the document details page.
+                    </EmptyState>
+                  </Card>
+                )
+              }
+
+              return (
+                <div className="grid gap-3 sm:grid-cols-1">
+                  {folderDocs.map((doc) => (
+                    <RequesterDocumentCard key={doc.id} doc={doc} db={db} />
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      ) : selectedType ? (
         <div className="space-y-6">
           {/* Breadcrumbs and Back Button */}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -362,31 +616,8 @@ export function MyDocumentsPage() {
             </div>
           </div>
 
-          {/* High-priority Action Callouts (REQ-MON-2 / REQ-MON-3) */}
-          {returnedDocs.length > 0 && (
-            <Callout
-              tone="danger"
-              icon={AlertCircle}
-              title={`${returnedDocs.length === 1 ? 'A document needs attention' : `${returnedDocs.length} documents need attention`}`}
-            >
-              <p>
-                {returnedDocs.length === 1
-                  ? 'Your document was returned for correction. Review the office comments below, update the required files, and resubmit.'
-                  : 'Some of your documents were returned for correction. Review the reviewer comments and resubmit to resume review.'}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {returnedDocs.map((doc) => (
-                  <Link
-                    key={doc.id}
-                    to={`/app/documents/${doc.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-700 shadow-2xs"
-                  >
-                    <RotateCcw className="size-3.5" /> Fix {doc.title} ({controlNumber(doc)})
-                  </Link>
-                ))}
-              </div>
-            </Callout>
-          )}
+          {/* PB-09: High-priority Action-Needed Banner for Returned Requests */}
+          <ActionNeededBanner docs={returnedDocs} />
 
           {readyDocs.length > 0 && (
             <Callout
@@ -645,117 +876,471 @@ export function MyDocumentsPage() {
           )}
 
           {/* ---------------------------------------------------------------- */}
-          {/* TAB 2: OFFICIAL DOCUMENT CATEGORY FOLDERS                        */}
+          {/* TAB 2: DOCUMENT REPOSITORIES & CUSTOM FOLDERS (PB-58)            */}
           {/* ---------------------------------------------------------------- */}
           {activeTab === 'folders' && (
             <div className="space-y-4">
-              <div>
-                <Tooltip content="Official CESS document forms, guidelines, and PDF template downloads" placement="top">
-                  <h2 className="inline-block cursor-help text-lg font-bold text-ink-950 transition-colors hover:text-brand-700">
-                    Official Document Categories
-                  </h2>
-                </Tooltip>
-                <p className="text-xs text-ink-500">
-                  Select a category folder to browse filed submissions, download official blank PDF templates, or submit a request under that category.
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 pb-3">
+                <div className="flex items-center gap-1.5 rounded-xl bg-ink-100/70 p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setFolderSubTab('categories')}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 font-bold transition-all',
+                      folderSubTab === 'categories'
+                        ? 'bg-white text-brand-950 shadow-2xs ring-1 ring-ink-200/50'
+                        : 'text-ink-600 hover:text-ink-950',
+                    )}
+                  >
+                    <Folder className="size-3.5" />
+                    <span>Official Categories ({allowedTypes.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFolderSubTab('custom')}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 font-bold transition-all',
+                      folderSubTab === 'custom'
+                        ? 'bg-white text-brand-950 shadow-2xs ring-1 ring-ink-200/50'
+                        : 'text-ink-600 hover:text-ink-950',
+                    )}
+                  >
+                    <FolderOpen className="size-3.5" />
+                    <span>Custom Folders ({(db.folders || []).length})</span>
+                  </button>
+                </div>
+
+                {folderSubTab === 'custom' && canCreateFolder && (
+                  <Button
+                    size="sm"
+                    icon={FolderPlus}
+                    onClick={() => {
+                      setNewFolderName('')
+                      setNewFolderCategory('academic')
+                      setNewFolderPurpose('')
+                      setNewFolderDescription('')
+                      setIsCreateFolderOpen(true)
+                    }}
+                  >
+                    + Create Folder
+                  </Button>
+                )}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-                {allowedTypes.map((t) => {
-                  const typeDocs = myDocs.filter((d) => d.typeId === t.id)
-                  const returnedCount = typeDocs.filter((d) => d.status === 'returned').length
-                  const readyCount = typeDocs.filter((d) => d.status === 'ready').length
-                  const inReviewCount = typeDocs.filter(
-                    (d) => d.status !== 'returned' && d.status !== 'ready' && !d.archived,
-                  ).length
+              {folderSubTab === 'categories' ? (
+                <div className="space-y-4">
+                  <div>
+                    <Tooltip content="Official CESS document forms, guidelines, and PDF template downloads" placement="top">
+                      <h2 className="inline-block cursor-help text-lg font-bold text-ink-950 transition-colors hover:text-brand-700">
+                        Official Document Categories
+                      </h2>
+                    </Tooltip>
+                    <p className="text-xs text-ink-500">
+                      Select a category folder to browse filed submissions, download official blank PDF templates, or submit a request under that category.
+                    </p>
+                  </div>
 
-                  return (
-                    <Card
-                      key={t.id}
-                      className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
-                    >
-                      <div className="p-5 sm:p-6">
-                        <div className="flex items-start justify-between gap-3">
-                          <div
-                            onClick={() => openFolder(t.id)}
-                            className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
-                          >
-                            <Folder className="size-6" />
-                          </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+                    {allowedTypes.map((t) => {
+                      const typeDocs = myDocs.filter((d) => d.typeId === t.id)
+                      const returnedCount = typeDocs.filter((d) => d.status === 'returned').length
+                      const readyCount = typeDocs.filter((d) => d.status === 'ready').length
+                      const inReviewCount = typeDocs.filter(
+                        (d) => d.status !== 'returned' && d.status !== 'ready' && !d.archived,
+                      ).length
 
-                          <div className="flex flex-wrap items-center justify-end gap-1.5">
-                            {returnedCount > 0 && (
-                              <Badge tone="danger" dot={false}>
-                                {returnedCount} Needs Revision
-                              </Badge>
-                            )}
-                            {readyCount > 0 && (
-                              <Badge tone="success" dot={false}>
-                                {readyCount} Ready to Collect
-                              </Badge>
-                            )}
-                            {inReviewCount > 0 && (
-                              <Badge tone="brand" dot={false}>
-                                {inReviewCount} In Routing
-                              </Badge>
-                            )}
-                            <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
-                              {typeDocs.length === 0
-                                ? '0 requests'
-                                : typeDocs.length === 1
-                                ? '1 request'
-                                : `${typeDocs.length} requests`}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4">
-                          <h3
-                            onClick={() => openFolder(t.id)}
-                            className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
-                          >
-                            {t.name}
-                          </h3>
-                          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
-                            {t.summary}
-                          </p>
-                        </div>
-
-                        <div className="mt-4 flex flex-wrap items-center gap-2 text-2xs text-ink-500">
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="size-3.5 text-brand-600" />
-                            Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Folder Card Actions */}
-                      <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
-                        <button
-                          type="button"
-                          onClick={() => openFolder(t.id)}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                      return (
+                        <Card
+                          key={t.id}
+                          className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
                         >
-                          Open Folder <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-                        </button>
+                          <div className="p-5 sm:p-6">
+                            <div className="flex items-start justify-between gap-3">
+                              <div
+                                onClick={() => openFolder(t.id)}
+                                className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
+                              >
+                                <Folder className="size-6" />
+                              </div>
 
-                        {canSubmit && (
-                          <Link
-                            to={`/app/requests/new?type=${t.id}`}
-                            className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
-                          >
-                            <FilePlus2 className="size-3 text-brand-600" /> + New Request
-                          </Link>
-                        )}
-                      </div>
+                              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                {returnedCount > 0 && (
+                                  <Badge tone="danger" dot={false}>
+                                    {returnedCount} Needs Revision
+                                  </Badge>
+                                )}
+                                {readyCount > 0 && (
+                                  <Badge tone="success" dot={false}>
+                                    {readyCount} Ready to Collect
+                                  </Badge>
+                                )}
+                                {inReviewCount > 0 && (
+                                  <Badge tone="brand" dot={false}>
+                                    {inReviewCount} In Routing
+                                  </Badge>
+                                )}
+                                <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
+                                  {typeDocs.length === 0
+                                    ? '0 requests'
+                                    : typeDocs.length === 1
+                                    ? '1 request'
+                                    : `${typeDocs.length} requests`}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="mt-4">
+                              <h3
+                                onClick={() => openFolder(t.id)}
+                                className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
+                              >
+                                {t.name}
+                              </h3>
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+                                {t.summary}
+                              </p>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap items-center gap-2 text-2xs text-ink-500">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="size-3.5 text-brand-600" />
+                                Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Folder Card Actions */}
+                          <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
+                            <button
+                              type="button"
+                              onClick={() => openFolder(t.id)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                            >
+                              Open Folder <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                            </button>
+
+                            {canSubmit && (
+                              <Link
+                                to={`/app/requests/new?type=${t.id}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
+                              >
+                                <FilePlus2 className="size-3 text-brand-600" /> + New Request
+                              </Link>
+                            )}
+                          </div>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* CUSTOM FOLDERS TAB (PB-58) */
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-ink-950">
+                      Custom Repository Folders
+                    </h2>
+                    <p className="text-xs text-ink-500">
+                      Organized portfolios, accreditation documents, and departmental folders for easy retrieval.
+                    </p>
+                  </div>
+
+                  {(db.folders || []).length === 0 ? (
+                    <Card className="p-8">
+                      <EmptyState
+                        icon={FolderOpen}
+                        title="No custom folders available"
+                        action={
+                          canCreateFolder ? (
+                            <Button
+                              icon={FolderPlus}
+                              onClick={() => {
+                                setNewFolderName('')
+                                setNewFolderCategory('academic')
+                                setNewFolderPurpose('')
+                                setNewFolderDescription('')
+                                setIsCreateFolderOpen(true)
+                              }}
+                            >
+                              + Create Custom Folder
+                            </Button>
+                          ) : undefined
+                        }
+                      >
+                        Custom repository folders organize documents by committee, project, or audit purpose.
+                      </EmptyState>
                     </Card>
-                  )
-                })}
-              </div>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+                      {(db.folders || []).map((f) => {
+                        const folderDocs = myDocs.filter((d) => d.folderId === f.id)
+                        return (
+                          <Card
+                            key={f.id}
+                            className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
+                          >
+                            <div className="p-5 sm:p-6">
+                              <div className="flex items-start justify-between gap-3">
+                                <div
+                                  onClick={() => openCustomFolder(f.id)}
+                                  className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
+                                >
+                                  <FolderOpen className="size-6" />
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                  <Badge tone="brand" dot={false} className="capitalize text-3xs">
+                                    {f.category}
+                                  </Badge>
+                                  {f.isSystem && (
+                                    <Badge tone="neutral" dot={false} className="text-3xs">
+                                      Official
+                                    </Badge>
+                                  )}
+                                  <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
+                                    {folderDocs.length === 1 ? '1 request' : `${folderDocs.length} requests`}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="mt-4">
+                                <h3
+                                  onClick={() => openCustomFolder(f.id)}
+                                  className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
+                                >
+                                  {f.name}
+                                </h3>
+                                {f.description && (
+                                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+                                    {f.description}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100 pt-3 text-2xs text-ink-500">
+                                <span>
+                                  Created by <strong>{f.createdByName}</strong>
+                                </span>
+                                <span>{formatDate(f.updatedAt)}</span>
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
+                              <button
+                                type="button"
+                                onClick={() => openCustomFolder(f.id)}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                              >
+                                View My Files <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                              </button>
+
+                              <div className="flex items-center gap-2">
+                                {canManageFolder(f) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditFolderName(f.name)
+                                      setEditFolderCategory(f.category)
+                                      setEditFolderPurpose(f.purpose || '')
+                                      setEditFolderDescription(f.description || '')
+                                      setEditingFolder(f)
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-ink-700 shadow-2xs ring-1 ring-ink-200 hover:bg-ink-50"
+                                  >
+                                    <Edit3 className="size-3" /> Edit
+                                  </button>
+                                )}
+                                {canDeleteFolder(f) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletingFolder(f)}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-danger-700 shadow-2xs ring-1 ring-danger-200 hover:bg-danger-50"
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
+
+      {/* PB-58: Create Custom Folder Dialog */}
+      <Dialog
+        open={isCreateFolderOpen}
+        onClose={() => setIsCreateFolderOpen(false)}
+        title="Create Custom Folder"
+        description="Organize your document requests, course portfolios, or evaluation files into a dedicated repository folder."
+        busy={createFolderBusy}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setIsCreateFolderOpen(false)}
+              disabled={createFolderBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateFolder}
+              loading={createFolderBusy}
+              icon={FolderPlus}
+            >
+              Create Folder
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleCreateFolder} className="space-y-4">
+          <Field label="Folder Name" required>
+            <Input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="e.g. 1st Sem Course Portfolios"
+              required
+            />
+          </Field>
+
+          <Field label="Folder Category" required>
+            <Select
+              value={newFolderCategory}
+              onChange={(e) => setNewFolderCategory(e.target.value as FolderCategory)}
+            >
+              <option value="academic">Academic Curriculum</option>
+              <option value="administrative">Administrative & HR</option>
+              <option value="accreditation">Accreditation Quality</option>
+              <option value="financial">Financial & Grants</option>
+              <option value="general">General Repository</option>
+            </Select>
+          </Field>
+
+          <Field label="Purpose" optional>
+            <Input
+              value={newFolderPurpose}
+              onChange={(e) => setNewFolderPurpose(e.target.value)}
+              placeholder="e.g. Organizing course syllabi and instructional files"
+            />
+          </Field>
+
+          <Field label="Description" optional>
+            <Textarea
+              rows={3}
+              value={newFolderDescription}
+              onChange={(e) => setNewFolderDescription(e.target.value)}
+              placeholder="Optional notes or details about files stored here..."
+            />
+          </Field>
+        </form>
+      </Dialog>
+
+      {/* PB-58: Edit Folder Dialog */}
+      <Dialog
+        open={editingFolder !== null}
+        onClose={() => setEditingFolder(null)}
+        title={`Rename / Edit Folder — ${editingFolder?.name}`}
+        description="Update folder name or descriptive details."
+        busy={editFolderBusy}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setEditingFolder(null)}
+              disabled={editFolderBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditFolder}
+              loading={editFolderBusy}
+              icon={Edit3}
+            >
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditFolder} className="space-y-4">
+          <Field label="Folder Name" required>
+            <Input
+              value={editFolderName}
+              onChange={(e) => setEditFolderName(e.target.value)}
+              required
+            />
+          </Field>
+
+          <Field label="Folder Category" required>
+            <Select
+              value={editFolderCategory}
+              onChange={(e) => setEditFolderCategory(e.target.value as FolderCategory)}
+            >
+              <option value="academic">Academic Curriculum</option>
+              <option value="administrative">Administrative & HR</option>
+              <option value="accreditation">Accreditation Quality</option>
+              <option value="financial">Financial & Grants</option>
+              <option value="general">General Repository</option>
+            </Select>
+          </Field>
+
+          <Field label="Purpose" optional>
+            <Input
+              value={editFolderPurpose}
+              onChange={(e) => setEditFolderPurpose(e.target.value)}
+            />
+          </Field>
+
+          <Field label="Description" optional>
+            <Textarea
+              rows={3}
+              value={editFolderDescription}
+              onChange={(e) => setEditFolderDescription(e.target.value)}
+            />
+          </Field>
+        </form>
+      </Dialog>
+
+      {/* PB-58: Delete Folder Dialog */}
+      <Dialog
+        open={deletingFolder !== null}
+        onClose={() => setDeletingFolder(null)}
+        title="Delete Folder"
+        description={`Are you sure you want to delete folder "${deletingFolder?.name}"? Your document requests will remain safe in the repository and will be unfiled.`}
+        busy={deleteFolderBusy}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setDeletingFolder(null)}
+              disabled={deleteFolderBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteFolder}
+              loading={deleteFolderBusy}
+              icon={Trash2}
+            >
+              Delete Folder
+            </Button>
+          </>
+        }
+      >
+        <div className="rounded-xl border border-danger-200 bg-danger-50/70 p-4 text-xs text-danger-900">
+          <p className="font-bold">Confirm Deletion</p>
+          <p className="mt-1">
+            Official system categories cannot be deleted. Any user files filed under this folder will remain in your document list.
+          </p>
+        </div>
+      </Dialog>
     </div>
   )
 }
@@ -810,6 +1395,14 @@ function RequesterDocumentCard({ doc, db }: { doc: DocRecord; db: any }) {
                 • {docType.name}
               </span>
             )}
+            {doc.folderId && (() => {
+              const fld = (db.folders || []).find((f: DocumentFolder) => f.id === doc.folderId)
+              return fld ? (
+                <span className="inline-flex items-center gap-1 text-2xs font-semibold text-brand-800 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                  <Folder className="size-3 text-brand-600" /> {fld.name}
+                </span>
+              ) : null
+            })()}
           </div>
 
           {/* Title */}

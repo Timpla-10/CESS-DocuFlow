@@ -13,17 +13,21 @@ import * as engine from './engine'
 import { DB_VERSION, DEMO_PASSWORD, createSeed } from './seed'
 import type {
   Database,
+  DocumentFolder,
   DocumentType,
   ExternalOfficeId,
   ExternalOfficeItem,
   ExternalReturnOutcome,
   FacultyEntry,
+  FolderCategory,
   NotificationPreference,
   Origin,
   PendingRegistration,
   Role,
   SyllabusRecord,
   SyllabusTemplate,
+  TosCognitiveLevels,
+  TosRecord,
   User,
   WhitelistEntry,
 } from './types'
@@ -1091,6 +1095,318 @@ export const api = {
           delete sub.syllabusFile
         }
       }
+    }),
+
+  /**
+   * PB-57: Dedicated Table of Specifications (TOS) Management - Update template.
+   */
+  updateTosTemplate: (actor: User, fileName: string, fileSize?: string) =>
+    mutate((d) => {
+      if (actor.role !== 'secretary') {
+        throw new FriendlyError('Only the College Secretary is authorized to update the institutional TOS template.')
+      }
+      d.tosTemplate = {
+        fileName,
+        updatedAt: new Date().toISOString(),
+        uploadedBy: `${actor.name} (College Secretary)`,
+        fileSize: fileSize || '94 KB',
+      }
+    }),
+
+  /**
+   * PB-57: Dedicated Table of Specifications (TOS) Management - Upload/Replace TOS.
+   */
+  uploadTosRecord: (
+    actor: User,
+    payload: {
+      subjectCode: string
+      subjectTitle: string
+      academicYear?: string
+      semester?: string
+      term?: 'Midterm' | 'Final' | 'Midterm & Final'
+      examType?: string
+      totalItems?: number
+      cognitiveDistribution?: TosCognitiveLevels
+      fileName: string
+      fileSizeKb?: number
+      description?: string
+      department?: string
+    },
+  ) =>
+    mutate((d) => {
+      if (actor.role === 'student') {
+        throw new FriendlyError('Students are not permitted to upload Tables of Specifications.')
+      }
+
+      const code = payload.subjectCode.trim().toUpperCase()
+      const title = payload.subjectTitle.trim()
+      const fileName = payload.fileName.trim()
+      const ay = payload.academicYear || '2026-2027'
+      const sem = payload.semester || '1st Semester'
+      const term = payload.term || 'Midterm'
+      const examType = payload.examType || `${term} Examination`
+      const totalItems = payload.totalItems || 50
+
+      if (!code) throw new FriendlyError('Course code is required (e.g. EDUC 101).')
+      if (!title) throw new FriendlyError('Course title is required.')
+      if (!fileName) throw new FriendlyError('TOS file is required.')
+
+      if (!d.tos) d.tos = []
+
+      let fac = d.faculty.find(
+        (f) =>
+          (f.userId && f.userId === actor.id) ||
+          f.name.trim().toLowerCase() === actor.name.trim().toLowerCase(),
+      )
+
+      if (!fac && actor.role === 'faculty') {
+        fac = {
+          id: engine.nextId(d, 'fac-'),
+          userId: actor.id,
+          name: actor.name,
+          department: actor.department || payload.department || 'College of Education and Social Sciences',
+          subjects: [],
+        }
+        d.faculty.push(fac)
+      }
+
+      const facultyName = fac ? fac.name : actor.name
+      const facultyId = fac ? fac.id : `fac-${actor.id}`
+      const department =
+        fac?.department || actor.department || payload.department || 'College of Education and Social Sciences'
+
+      const existingIdx = d.tos.findIndex(
+        (t) =>
+          t.subjectCode.trim().toUpperCase() === code &&
+          t.academicYear === ay &&
+          t.semester === sem &&
+          t.term === term,
+      )
+
+      if (existingIdx >= 0) {
+        const existing = d.tos[existingIdx]
+        if (
+          actor.role === 'faculty' &&
+          existing.facultyUserId &&
+          existing.facultyUserId !== actor.id
+        ) {
+          throw new FriendlyError('Only the assigned instructor or College Secretary can update this Table of Specifications.')
+        }
+
+        d.tos[existingIdx] = {
+          ...existing,
+          subjectTitle: title,
+          examType,
+          totalItems,
+          cognitiveDistribution: payload.cognitiveDistribution || existing.cognitiveDistribution,
+          fileName,
+          fileSizeKb: payload.fileSizeKb || existing.fileSizeKb || 115,
+          description: payload.description || existing.description,
+          uploadedAt: new Date().toISOString(),
+          status: 'active',
+        }
+      } else {
+        const newRecord: TosRecord = {
+          id: engine.nextId(d, 'tos-'),
+          subjectCode: code,
+          subjectTitle: title,
+          facultyId,
+          facultyName,
+          facultyUserId: actor.id,
+          department,
+          academicYear: ay,
+          semester: sem,
+          term,
+          examType,
+          totalItems,
+          cognitiveDistribution: payload.cognitiveDistribution || {
+            remembering: 15,
+            understanding: 15,
+            applying: 10,
+            analyzing: 5,
+            evaluating: 3,
+            creating: 2,
+          },
+          fileName,
+          fileSizeKb: payload.fileSizeKb || 115,
+          description: payload.description || `${term} assessment examination blueprint.`,
+          uploadedAt: new Date().toISOString(),
+          status: 'active',
+        }
+        d.tos.push(newRecord)
+      }
+    }),
+
+  /**
+   * PB-57: Dedicated Table of Specifications (TOS) Management - Delete TOS record.
+   */
+  deleteTosRecord: (actor: User, tosId: string) =>
+    mutate((d) => {
+      if (!d.tos) return
+      const target = d.tos.find((t) => t.id === tosId)
+      if (!target) throw new FriendlyError('TOS record not found.')
+
+      const isOwner =
+        (target.facultyUserId && target.facultyUserId === actor.id) ||
+        target.facultyName.trim().toLowerCase() === actor.name.trim().toLowerCase()
+      const isSec = actor.role === 'secretary'
+      const isDean = actor.role === 'dean'
+
+      if (!isOwner && !isSec && !isDean) {
+        throw new FriendlyError('Only the assigned instructor or College Secretary can remove this Table of Specifications.')
+      }
+
+      d.tos = d.tos.filter((t) => t.id !== tosId)
+    }),
+
+  /**
+   * PB-58: Create and Manage Document Folders - Create Folder.
+   */
+  createDocumentFolder: (
+    actor: User,
+    payload: {
+      name: string
+      description?: string
+      category?: FolderCategory
+      purpose?: string
+      origin?: Origin
+      allowedRoles?: Role[]
+    },
+  ) =>
+    mutate((d) => {
+      if (actor.role === 'student') {
+        throw new FriendlyError('Students are not authorized to create repository folders.')
+      }
+
+      const name = payload.name.trim()
+      if (!name) throw new FriendlyError('Folder name is required.')
+
+      if (!d.folders) d.folders = []
+
+      const exists = d.folders.some((f) => f.name.toLowerCase() === name.toLowerCase())
+      if (exists) throw new FriendlyError(`A folder named "${name}" already exists.`)
+
+      const folder: DocumentFolder = {
+        id: engine.nextId(d, 'fld-'),
+        name,
+        description: payload.description?.trim() || 'Custom document collection folder.',
+        category: payload.category || 'general',
+        purpose: payload.purpose?.trim() || 'Organize and manage academic documents.',
+        createdBy: actor.id,
+        createdByName: actor.name,
+        createdByRole: actor.role,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isSystem: false,
+        origin: payload.origin ?? actor.origin ?? 'CESS',
+        allowedRoles: payload.allowedRoles,
+      }
+
+      d.folders.push(folder)
+      return folder
+    }),
+
+  /**
+   * PB-58: Create and Manage Document Folders - Rename / Edit Folder.
+   */
+  renameDocumentFolder: (
+    actor: User,
+    folderId: string,
+    payload: {
+      name: string
+      description?: string
+      category?: FolderCategory
+      purpose?: string
+    },
+  ) =>
+    mutate((d) => {
+      if (!d.folders) throw new FriendlyError('Folder not found.')
+      const folder = d.folders.find((f) => f.id === folderId)
+      if (!folder) throw new FriendlyError('Folder not found.')
+
+      if (folder.isSystem && actor.role !== 'secretary') {
+        throw new FriendlyError('System folders can only be modified by the College Secretary.')
+      }
+
+      const isOwner = folder.createdBy === actor.id
+      const isPrivileged = actor.role === 'secretary' || actor.role === 'dean'
+
+      if (!isOwner && !isPrivileged) {
+        throw new FriendlyError('You do not have permission to modify this folder.')
+      }
+
+      const name = payload.name.trim()
+      if (!name) throw new FriendlyError('Folder name is required.')
+
+      const duplicate = d.folders.some(
+        (f) => f.id !== folderId && f.name.toLowerCase() === name.toLowerCase(),
+      )
+      if (duplicate) throw new FriendlyError(`A folder named "${name}" already exists.`)
+
+      folder.name = name
+      if (payload.description !== undefined) folder.description = payload.description.trim()
+      if (payload.category) folder.category = payload.category
+      if (payload.purpose !== undefined) folder.purpose = payload.purpose.trim()
+      folder.updatedAt = new Date().toISOString()
+    }),
+
+  /**
+   * PB-58: Create and Manage Document Folders - Delete Folder.
+   */
+  deleteDocumentFolder: (actor: User, folderId: string) =>
+    mutate((d) => {
+      if (!d.folders) return
+      const folder = d.folders.find((f) => f.id === folderId)
+      if (!folder) throw new FriendlyError('Folder not found.')
+
+      if (folder.isSystem) {
+        throw new FriendlyError('Official system category folders cannot be deleted.')
+      }
+
+      const isOwner = folder.createdBy === actor.id
+      const isPrivileged = actor.role === 'secretary' || actor.role === 'dean'
+
+      if (!isOwner && !isPrivileged) {
+        throw new FriendlyError('You do not have permission to delete this folder.')
+      }
+
+      d.folders = d.folders.filter((f) => f.id !== folderId)
+
+      // Unassign documents in this folder
+      d.documents.forEach((doc) => {
+        if (doc.folderId === folderId) {
+          delete doc.folderId
+        }
+      })
+    }),
+
+  /**
+   * PB-58: Move / Assign Document to Folder.
+   */
+  moveDocumentToFolder: (actor: User, docId: string, folderId: string | null) =>
+    mutate((d) => {
+      const doc = d.documents.find((doc) => doc.id === docId)
+      if (!doc) throw new FriendlyError('Document not found.')
+
+      const isRequester = doc.requesterId === actor.id
+      const isStaff =
+        actor.role === 'secretary' ||
+        actor.role === 'dean' ||
+        actor.role === 'chairperson' ||
+        actor.role === 'ids_principal'
+
+      if (!isRequester && !isStaff) {
+        throw new FriendlyError('You are not authorized to organize this document.')
+      }
+
+      if (folderId) {
+        const folder = (d.folders || []).find((f) => f.id === folderId)
+        if (!folder) throw new FriendlyError('Target folder not found.')
+        doc.folderId = folderId
+      } else {
+        delete doc.folderId
+      }
+      doc.updatedAt = new Date().toISOString()
     }),
 
   updateReminderDays: (actor: User, days: number) =>

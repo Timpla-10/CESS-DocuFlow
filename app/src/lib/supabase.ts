@@ -13,7 +13,7 @@
 
 import { FriendlyError, controlNumber as getControlNumber } from '../content/language'
 import { getDb } from '../data/store'
-import type { Database, DocRecord, OfficeId, Status, SyllabusRecord, User } from '../data/types'
+import type { Database, DocRecord, OfficeId, Status, SyllabusRecord, TosRecord, User } from '../data/types'
 
 export interface SupabaseOffice {
   office_id: number
@@ -38,14 +38,14 @@ export interface SupabaseDocumentRequest {
   description: string | null
   origin: 'CESS' | 'IDS'
   current_status:
-    | 'Submitted'
-    | 'Under_Review'
-    | 'Returned'
-    | 'Rejected'
-    | 'With_External_Office'
-    | 'Ready_for_Release'
-    | 'Released'
-    | 'Archived'
+  | 'Submitted'
+  | 'Under_Review'
+  | 'Returned'
+  | 'Rejected'
+  | 'With_External_Office'
+  | 'Ready_for_Release'
+  | 'Released'
+  | 'Archived'
   current_office_id: number | null
   submitted_at: string
   last_updated_at: string
@@ -414,4 +414,63 @@ export async function fetchSupabaseSyllabi(
   }
 
   return syllabi
+}
+
+/**
+ * PB-57: Fetch Table of Specifications (TOS) blueprints with local store fallback.
+ * Strictly enforces role-based access:
+ *  - Faculty can view all, but edit/upload only for their assigned courses.
+ *  - Chairperson, Dean, IDS Principal, and Secretary have read access.
+ *  - Students are NOT authorized to access or view Table of Specifications (PB-57).
+ */
+export async function fetchSupabaseTos(
+  user: User,
+  filters?: {
+    academicYear?: string
+    semester?: string
+    department?: string
+    term?: string
+    subjectCode?: string
+    facultyId?: string
+    q?: string
+  },
+): Promise<TosRecord[]> {
+  // Students are not authorized to view or retrieve Table of Specifications (PB-57)
+  if (!user || user.role === 'student') {
+    return []
+  }
+
+  // Local state fallback
+  const db = getDb()
+  let tosList = db.tos ? [...db.tos] : []
+
+  if (filters?.academicYear) {
+    tosList = tosList.filter((t) => t.academicYear === filters.academicYear)
+  }
+  if (filters?.semester) {
+    tosList = tosList.filter((t) => t.semester === filters.semester)
+  }
+  if (filters?.department && filters.department !== 'all') {
+    tosList = tosList.filter((t) => t.department === filters.department)
+  }
+  if (filters?.term && filters.term !== 'all') {
+    tosList = tosList.filter((t) => t.term === filters.term)
+  }
+  if (filters?.facultyId) {
+    tosList = tosList.filter(
+      (t) => t.facultyId === filters.facultyId || t.facultyUserId === filters.facultyId,
+    )
+  }
+  if (filters?.q) {
+    const q = filters.q.trim().toLowerCase()
+    tosList = tosList.filter((t) => {
+      const code = t.subjectCode.toLowerCase()
+      const title = t.subjectTitle.toLowerCase()
+      const fac = t.facultyName.toLowerCase()
+      const dept = t.department.toLowerCase()
+      return code.includes(q) || title.includes(q) || fac.includes(q) || dept.includes(q)
+    })
+  }
+
+  return tosList
 }

@@ -27,6 +27,7 @@ import { RequirementsCheckPage } from './pages/secretary/RequirementsCheckPage'
 import { SettingsPage } from './pages/secretary/SettingsPage'
 import { UserManagementPage } from './pages/secretary/UserManagementPage'
 import { SyllabusManagementPage } from './pages/syllabi/SyllabusManagementPage'
+import { TosManagementPage } from './pages/tos/TosManagementPage'
 
 const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor']
 
@@ -204,6 +205,16 @@ export default function App() {
                 element={
                   <Protected allowedRoles={['faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
                     <SyllabusManagementPage />
+                  </Protected>
+                }
+              />
+
+              {/* PB-57: Dedicated Table of Specifications (TOS) Management Module (Students are not authorized) */}
+              <Route
+                path="tos"
+                element={
+                  <Protected allowedRoles={['faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
+                    <TosManagementPage />
                   </Protected>
                 }
               />

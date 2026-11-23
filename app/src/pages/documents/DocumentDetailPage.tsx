@@ -7,6 +7,8 @@ import {
   Eye,
   FileCheck2,
   FileText,
+  Folder,
+  FolderOpen,
   PackageCheck,
   Paperclip,
   RotateCcw,
@@ -122,6 +124,11 @@ export function DocumentDetailPage() {
   const [releaseBusy, setReleaseBusy] = useState(false)
   const [releaseErrors, setReleaseErrors] = useState<{ receivedBy?: string }>({})
 
+  // Folder state (PB-58)
+  const [isMoveFolderOpen, setIsMoveFolderOpen] = useState(false)
+  const [targetFolderId, setTargetFolderId] = useState(doc?.folderId ?? '')
+  const [moveFolderBusy, setMoveFolderBusy] = useState(false)
+
   if (!doc || !canView(user, doc)) {
     return (
       <Card className="mx-auto mt-8 max-w-lg p-8 text-center">
@@ -166,6 +173,35 @@ export function DocumentDetailPage() {
     user.role === 'secretary' && doc.status === 'with_external'
 
   const canSecretaryRelease = user.role === 'secretary' && doc.status === 'ready'
+
+  const canOrganizeFolder =
+    isDocRequester ||
+    user.role === 'secretary' ||
+    user.role === 'dean' ||
+    user.role === 'chairperson' ||
+    user.role === 'ids_principal'
+
+  const currentFolder = (db.folders || []).find((f) => f.id === doc.folderId)
+
+  const handleMoveFolder = async (e: FormEvent) => {
+    e.preventDefault()
+    setMoveFolderBusy(true)
+    try {
+      await api.moveDocumentToFolder(user, doc.id, targetFolderId || null)
+      toast.success(
+        'Folder Assignment Saved',
+        targetFolderId
+          ? 'Document successfully organized into the selected folder.'
+          : 'Document moved to root repository (unassigned).',
+      )
+      setIsMoveFolderOpen(false)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update folder assignment.'
+      toast.error('Update Failed', msg)
+    } finally {
+      setMoveFolderBusy(false)
+    }
+  }
 
   const currentAttachments = doc.attachments.filter((a) => a.revision === doc.revision)
 
@@ -931,6 +967,37 @@ export function DocumentDetailPage() {
                   label: 'Control Number & Revision',
                   value: <span className="font-mono font-bold text-brand-900">{controlNumber(doc)}</span>,
                   hint: `Revision ${String(doc.revision).padStart(2, '0')}${doc.encodedBySecretary ? ' · Walk-in encoded by College Secretary' : ''}`,
+                },
+                {
+                  label: 'Repository Folder',
+                  value: (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {currentFolder ? (
+                        <div className="flex items-center gap-1.5 font-semibold text-ink-900">
+                          <Folder className="size-4 text-brand-600" />
+                          <span>{currentFolder.name}</span>
+                          <Badge tone="brand" dot={false} className="capitalize text-3xs">
+                            {currentFolder.category}
+                          </Badge>
+                        </div>
+                      ) : (
+                        <span className="text-ink-500 italic">Unassigned (Root Repository)</span>
+                      )}
+                      {canOrganizeFolder && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetFolderId(doc.folderId ?? '')
+                            setIsMoveFolderOpen(true)
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
+                        >
+                          <FolderOpen className="size-3" /> Change Folder
+                        </button>
+                      )}
+                    </div>
+                  ),
+                  hint: currentFolder?.purpose || 'Custom repository folder classification',
                 },
                 {
                   label: 'Document Type',
@@ -1780,6 +1847,49 @@ export function DocumentDetailPage() {
               )}
             </div>
           </div>
+        </form>
+      </Dialog>
+
+      {/* PB-58: Move / Assign Document to Folder Dialog */}
+      <Dialog
+        open={isMoveFolderOpen}
+        onClose={() => setIsMoveFolderOpen(false)}
+        title="Organize Document into Folder"
+        description="Assign this document request to a dedicated folder to categorize it for accreditation, departmental reviews, or special portfolios."
+        busy={moveFolderBusy}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setIsMoveFolderOpen(false)}
+              disabled={moveFolderBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMoveFolder}
+              loading={moveFolderBusy}
+              icon={Folder}
+            >
+              Save Folder
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleMoveFolder} className="space-y-4">
+          <Field label="Repository Folder" hint="Choose a custom folder to organize this document, or leave unassigned">
+            <Select
+              value={targetFolderId}
+              onChange={(e) => setTargetFolderId(e.target.value)}
+            >
+              <option value="">-- None (Root Repository) --</option>
+              {(db.folders || []).map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f.category})
+                </option>
+              ))}
+            </Select>
+          </Field>
         </form>
       </Dialog>
 

@@ -3,6 +3,7 @@ import {
   BookOpen,
   Building2,
   ClipboardCheck,
+  FileSpreadsheet,
   Files,
   FolderOpen,
   GraduationCap,
@@ -33,6 +34,7 @@ export interface NavSection {
 
 const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty Directory', icon: GraduationCap }
 const syllabiNav: NavItem = { to: '/app/syllabi', label: 'Course Syllabi', icon: BookOpen }
+const tosNav: NavItem = { to: '/app/tos', label: 'Table of Specifications', icon: FileSpreadsheet }
 const notices: NavItem = {
   to: '/app/notices',
   label: 'Notices and Minutes',
@@ -99,6 +101,7 @@ export function navFor(role: Role): NavSection[] {
               },
               countTone: 'warning',
             },
+            tosNav,
           ],
         },
         {
@@ -122,6 +125,7 @@ export function navFor(role: Role): NavSection[] {
           items: [
             { to: '/app/documents', label: 'All Documents', icon: Files },
             syllabiNav,
+            tosNav,
             { to: '/app/archive', label: 'Archive', icon: Archive },
             { to: '/app/email-log', label: 'Email Log', icon: Mail },
           ],
@@ -164,7 +168,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [syllabiNav, directory],
+          items: [syllabiNav, tosNav, directory],
         },
       ]
     case 'dean':
@@ -190,6 +194,7 @@ export function navFor(role: Role): NavSection[] {
           items: [
             { ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length },
             syllabiNav,
+            tosNav,
             directory,
           ],
         },
@@ -214,6 +219,7 @@ export function navFor(role: Role): NavSection[] {
               icon: FolderOpen,
             },
             syllabiNav,
+            tosNav,
           ],
         },
       ]

@@ -402,6 +402,176 @@ export function createSeed(): Database {
         status: 'active',
       },
     ],
+    tosTemplate: {
+      fileName: 'CESS_Standard_Table_of_Specifications_Template_2026.xlsx',
+      updatedAt: '2026-03-01T08:00:00Z',
+      uploadedBy: 'Ms. Carmela Ortiz (College Secretary)',
+      fileSize: '94 KB',
+    },
+    tos: [
+      {
+        id: 'tos-1',
+        subjectCode: 'EDUC 101',
+        subjectTitle: 'The Child and Adolescent Learner',
+        facultyId: 'fac-1',
+        facultyName: 'Prof. Ana Lim',
+        facultyUserId: 'u-faculty-1',
+        department: 'Department of Secondary and Elementary Education',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        term: 'Midterm',
+        examType: 'Midterm Examination',
+        totalItems: 50,
+        cognitiveDistribution: {
+          remembering: 15,
+          understanding: 15,
+          applying: 10,
+          analyzing: 5,
+          evaluating: 3,
+          creating: 2,
+        },
+        fileName: 'EDUC101_Midterm_TOS_2026.xlsx',
+        fileSizeKb: 112,
+        uploadedAt: '2026-09-15T10:00:00Z',
+        description: 'Standard 50-item midterm examination blueprint covering adolescent development theories and biological foundations.',
+        status: 'active',
+      },
+      {
+        id: 'tos-2',
+        subjectCode: 'EDUC 205',
+        subjectTitle: 'Assessment in Learning 1',
+        facultyId: 'fac-1',
+        facultyName: 'Prof. Ana Lim',
+        facultyUserId: 'u-faculty-1',
+        department: 'Department of Secondary and Elementary Education',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        term: 'Final',
+        examType: 'Final Examination',
+        totalItems: 100,
+        cognitiveDistribution: {
+          remembering: 20,
+          understanding: 25,
+          applying: 30,
+          analyzing: 15,
+          evaluating: 5,
+          creating: 5,
+        },
+        fileName: 'EDUC205_Final_TOS_2026.xlsx',
+        fileSizeKb: 135,
+        uploadedAt: '2026-09-18T14:20:00Z',
+        description: 'Comprehensive 100-item final examination TOS aligned with OBE standards and authentic performance assessment.',
+        status: 'active',
+      },
+      {
+        id: 'tos-3',
+        subjectCode: 'SOCSCI 110',
+        subjectTitle: 'Philippine History',
+        facultyId: 'fac-2',
+        facultyName: 'Prof. Ben Aquino',
+        facultyUserId: 'u-faculty-2',
+        department: 'Department of Social Sciences and Humanities',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        term: 'Midterm',
+        examType: 'Midterm Examination',
+        totalItems: 60,
+        cognitiveDistribution: {
+          remembering: 20,
+          understanding: 20,
+          applying: 10,
+          analyzing: 5,
+          evaluating: 3,
+          creating: 2,
+        },
+        fileName: 'SOCSCI110_Midterm_TOS_2026.xlsx',
+        fileSizeKb: 108,
+        uploadedAt: '2026-09-14T09:15:00Z',
+        description: '60-item test blueprint mapping primary source analysis, colonial policies, and the Philippine revolution.',
+        status: 'active',
+      },
+      {
+        id: 'tos-4',
+        subjectCode: 'SCI 10',
+        subjectTitle: 'Integrated Science and Environmental Studies',
+        facultyId: 'fac-5',
+        facultyName: 'Mr. Jose Dela Cruz',
+        facultyUserId: 'u-faculty-3',
+        department: 'Integrated Developmental School',
+        academicYear: '2026-2027',
+        semester: '1st Semester',
+        term: 'Midterm',
+        examType: 'Midterm Examination',
+        totalItems: 50,
+        cognitiveDistribution: {
+          remembering: 15,
+          understanding: 15,
+          applying: 10,
+          analyzing: 5,
+          evaluating: 3,
+          creating: 2,
+        },
+        fileName: 'SCI10_Midterm_TOS_2026.xlsx',
+        fileSizeKb: 98,
+        uploadedAt: '2026-09-19T11:00:00Z',
+        description: 'IDS High School 50-item quarterly test blueprint on ecosystem dynamics and geological processes.',
+        status: 'active',
+      },
+    ],
+    folders: [
+      {
+        id: 'fld-1',
+        name: 'AY 2026-2027 Accreditation Portfolios',
+        description: 'Official files, syllabi, TOS blueprints, and endorsement packages organized for university level accreditation compliance.',
+        category: 'accreditation',
+        purpose: 'Institutional accreditation documentation and quality assurance audits.',
+        createdBy: 'u-sec-1',
+        createdByName: 'Ms. Carmela Ortiz',
+        createdByRole: 'secretary',
+        createdAt: '2026-08-10T08:00:00Z',
+        updatedAt: '2026-08-10T08:00:00Z',
+        isSystem: true,
+      },
+      {
+        id: 'fld-2',
+        name: 'Faculty Promotion & Rank Evaluation Files',
+        description: 'Teaching load proofs, publication endorsements, and committee evaluations for academic ranking and promotion.',
+        category: 'administrative',
+        purpose: 'Annual college faculty rank evaluation and NBC 461 documents.',
+        createdBy: 'u-dean-1',
+        createdByName: 'Dr. Roberto Mendoza',
+        createdByRole: 'dean',
+        createdAt: '2026-08-12T09:30:00Z',
+        updatedAt: '2026-08-12T09:30:00Z',
+        isSystem: false,
+      },
+      {
+        id: 'fld-3',
+        name: 'Curriculum Revision & OBE Alignment Records',
+        description: 'Departmental meeting minutes, OBE curriculum mapping matrices, and CHED CMO compliance files.',
+        category: 'academic',
+        purpose: 'Curriculum enhancement proposals and syllabus alignment records.',
+        createdBy: 'u-chair-1',
+        createdByName: 'Dr. Evelyn Morales',
+        createdByRole: 'chairperson',
+        createdAt: '2026-08-15T14:00:00Z',
+        updatedAt: '2026-08-15T14:00:00Z',
+        isSystem: false,
+      },
+      {
+        id: 'fld-4',
+        name: 'IDS Laboratory & Special Budget Proposals',
+        description: 'Science laboratory requisitions, equipment grants, and special project clearances for MSUN-IDS.',
+        category: 'financial',
+        purpose: 'External funding coordination and equipment procurement tracking.',
+        createdBy: 'u-principal-1',
+        createdByName: 'Prof. Danilo Santos',
+        createdByRole: 'ids_principal',
+        createdAt: '2026-08-18T16:00:00Z',
+        updatedAt: '2026-08-18T16:00:00Z',
+        isSystem: false,
+      },
+    ],
     settings: { reminderEveryDays: 3 },
     counter: 100,
     whitelist: [
@@ -468,6 +638,7 @@ export function createSeed(): Database {
   // 2. Faculty — released.
   {
     const d = submitRequest(db, U('u-faculty-2'), { typeId: 'syllabus', title: 'SOCSCI 110 Syllabus and TOS — 1st Semester', description: 'Updated syllabus with revised course outcomes.', files: [f('sy-syllabus', 'SOCSCI110_Syllabus.pdf', 860), f('sy-tos', 'SOCSCI110_TOS.pdf', 310)] }, ago(30))
+    d.folderId = 'fld-3'
     checkRequirements(db, sec, d.id, { decision: 'complete', missing: [], reasons: '' }, ago(29, 20))
     review(d.id, 'chairperson', 'endorse', ago(28, 3))
     review(d.id, 'dean', 'approve', ago(27, 6))
@@ -502,6 +673,7 @@ export function createSeed(): Database {
   // 8. Faculty CESS — Syllabus ready for pickup.
   {
     const d = submitRequest(db, U('u-faculty-1'), { typeId: 'syllabus', title: 'EDUC 205 Syllabus and TOS — 1st Semester', description: 'Syllabus with updated assessment tasks.', files: [f('sy-syllabus', 'EDUC205_Syllabus.pdf', 940), f('sy-tos', 'EDUC205_TOS.pdf', 300)] }, ago(6))
+    d.folderId = 'fld-1'
     checkRequirements(db, sec, d.id, { decision: 'complete', missing: [], reasons: '' }, ago(5, 20))
     review(d.id, 'chairperson', 'endorse', ago(4, 3))
     review(d.id, 'dean', 'approve', ago(1, 8))
@@ -535,6 +707,7 @@ export function createSeed(): Database {
   // 13. Faculty CESS — Endorsement returned by the Dean.
   {
     const d = submitRequest(db, U('u-faculty-2'), { typeId: 'endorsement', title: 'Endorsement for promotion to Assistant Professor I', description: 'Requesting the College’s endorsement for my application for promotion.', files: [f('en-letter', 'Letter_Promotion_Aquino.pdf'), f('en-pds', 'PDS_Aquino.pdf', 1100)] }, ago(7, 2))
+    d.folderId = 'fld-2'
     checkRequirements(db, sec, d.id, { decision: 'complete', missing: [], reasons: '' }, ago(7))
     review(d.id, 'chairperson', 'endorse', ago(5, 4))
     review(d.id, 'dean', 'return', ago(0, 6), 'Please attach your updated certificates of trainings attended in the last three years, and sign page 4 of your Personal Data Sheet.')

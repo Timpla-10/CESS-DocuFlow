@@ -5,11 +5,11 @@ import {
   FilePlus2,
   FolderOpen,
   PackageCheck,
-  RotateCcw,
   Send,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../app/session'
+import { ActionNeededBanner } from '../../components/ActionNeededBanner'
 import {
   DocumentList,
   FilterBar,
@@ -73,32 +73,8 @@ function RequesterDashboard() {
         }
       />
 
-      {/* High-priority Action Callouts */}
-      {returnedDocs.length > 0 && (
-        <Callout
-          tone="danger"
-          icon={AlertCircle}
-          title={`${returnedDocs.length === 1 ? 'A document needs attention' : `${returnedDocs.length} documents need attention`}`}
-        >
-          <p>
-            {returnedDocs.length === 1
-              ? 'Your document was returned for correction. Review the comments and resubmit.'
-              : 'Some documents were returned for correction. Review the comments and resubmit.'}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {returnedDocs.map((doc) => (
-              <Link
-                key={doc.id}
-                to={`/app/documents/${doc.id}`}
-                className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-700"
-              >
-                <RotateCcw className="size-3.5 shrink-0" />
-                <span className="truncate">Fix {doc.title}</span>
-              </Link>
-            ))}
-          </div>
-        </Callout>
-      )}
+      {/* PB-09: High-priority Action-Needed Banner for Returned Requests */}
+      <ActionNeededBanner docs={returnedDocs} />
 
       {readyDocs.length > 0 && (
         <Callout
