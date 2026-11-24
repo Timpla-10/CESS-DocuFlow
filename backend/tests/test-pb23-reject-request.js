@@ -12,6 +12,12 @@
  *   4. Requester can see outcome (rejectionReason, rejectionInfo, history, and notification)
  *   5. Normal routing stops unless approved reopen path exists
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const DocumentModel = require('../models/documentModel');
 const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');

@@ -11,6 +11,13 @@
  *   3. Success/failure messages are clear
  */
 const assert = require('assert');
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+// Note: Set ALLOW_HEADER_AUTH=true in backend/.env.staging for PB-03's legacy x-user-email headers.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const supabase = require('../config/database');
 const UserModel = require('../models/userModel');

@@ -11,6 +11,12 @@
  *   3. Logout ends the session (immediate server-side revocation + token invalidation + security audit log)
  */
 const assert = require('assert');
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized and SessionModel.clear() cannot run unless targeting verified staging.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const supabase = require('../config/database');
 const SessionModel = require('../models/sessionModel');
