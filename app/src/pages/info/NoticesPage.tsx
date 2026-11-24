@@ -325,14 +325,14 @@ export function NoticesPage() {
 
   const handleDownload = (n: Notice) => {
     downloadGeneratedPdf(
-      n.fileName || `${n.title.replace(/\s+/g, '_')}.pdf`,
-      `${n.kind === 'notice' ? 'OFFICIAL COLLEGE NOTICE' : 'APPROVED MINUTES OF MEETING'}: ${n.title}`,
+      n.title.replace(/\s+/g, '_') + '_Summary.pdf',
+      `${n.kind === 'notice' ? 'COLLEGE NOTICE SUMMARY' : 'MEETING MINUTES SUMMARY'}: ${n.title}`,
       [
         'MINDANAO STATE UNIVERSITY AT NAAWAN',
         'COLLEGE OF EDUCATION AND SOCIAL SCIENCES',
         'OFFICIAL COLLEGE ANNOUNCEMENT & CIRCULAR',
         '',
-        `Category: ${n.kind === 'notice' ? 'Official College Notice' : 'Approved Minutes of Meeting'}`,
+        `Category: ${n.kind === 'notice' ? 'College Notice' : 'Meeting Minutes'}`,
         `Title: ${n.title}`,
         `Target Audience: ${AUDIENCE_LABELS[n.targetAudience || 'all']}`,
         `Released By: ${n.postedBy} (${n.postedByOffice})`,
@@ -347,7 +347,7 @@ export function NoticesPage() {
         'This electronic circular was published through the CESS DocuFlow Announcements system.',
       ],
     )
-    toast.info('Document Downloaded', `Downloaded ${n.fileName || 'Announcement.pdf'}.`)
+    toast.info('Summary Downloaded', n.title)
   }
 
   return (
@@ -767,7 +767,7 @@ export function NoticesPage() {
               type="text"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              placeholder="e.g. Notice_FacultyMeeting_Oct23.pdf"
+              placeholder="e.g. Announcement.pdf"
             />
           </Field>
         </form>
@@ -926,7 +926,7 @@ export function NoticesPage() {
                 icon={Download}
                 onClick={() => handleDownload(viewingNotice)}
               >
-                Download PDF Copy
+                Download PDF Summary
               </Button>
               <Button variant="primary" onClick={() => setViewingNotice(null)}>
                 Close

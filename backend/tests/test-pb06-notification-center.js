@@ -15,7 +15,8 @@ const assert = require('assert');
 const app = require('../server');
 const supabase = require('../config/database');
 const NotificationModel = require('../models/notificationModel');
-const { getPasswordsForRole, provisionVerifiedUser } = require('../services/authService');
+const { provisionVerifiedUser } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
 
 const TEST_USERS = {
   student: {

@@ -9,7 +9,7 @@
  * Any reviewing office may return a document to the requester with reasons.
  *
  * Every function mutates the given `db` draft and returns it. Callers are
- * responsible for cloning (the mock API does this before each action).
+ * responsible for cloning (the caller does this before each action).
  */
 import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel, isRequester } from '../content/language'
 import { daysSince, formatDate, plural } from '../lib/time'
@@ -45,6 +45,7 @@ export const ACCEPTED_EXT = ['.pdf', '.jpg', '.jpeg', '.png']
 export interface NewFile {
   requirementId?: string
   name: string
+  fileUrl?: string
   sizeKb: number
 }
 
@@ -146,14 +147,6 @@ function officeAccount(db: Database, office: OfficeId): User | undefined {
   return db.users.find((u) => ROLE_OFFICE[u.role] === office && u.active)
 }
 
-function resolveChannels(db: Database, recipientId: string): ('email' | 'in_system')[] {
-  const u = getUser(db, recipientId) || officeAccount(db, recipientId as OfficeId)
-  const pref = u?.notificationPreference ?? 'both'
-  if (pref === 'email_only') return ['email']
-  if (pref === 'in_system_only') return ['in_system']
-  return ['email', 'in_system']
-}
-
 function notify(
   db: Database,
   n: {
@@ -168,7 +161,6 @@ function notify(
     result?: 'sent' | 'failed'
   },
 ) {
-  const channels = resolveChannels(db, n.recipientId)
   const log: NotificationLog = {
     id: nextId(db, 'n'),
     kind: n.kind,
@@ -181,7 +173,7 @@ function notify(
     at: n.at,
     result: n.result ?? 'sent',
     readBy: [],
-    channels,
+    channels: ['in_system'],
   }
   db.notifications.unshift(log)
   return log
@@ -364,6 +356,7 @@ function toAttachment(db: Database, f: NewFile, revision: number, by: string, at
     id: nextId(db, 'a'),
     requirementId: f.requirementId,
     name: f.name,
+    fileUrl: f.fileUrl,
     sizeKb: f.sizeKb,
     revision,
     uploadedAt: at,
@@ -1128,6 +1121,5 @@ export function retryNotification(db: Database, actor: User, id: string) {
   if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can resend emails.')
   const n = db.notifications.find((x) => x.id === id)
   if (!n) throw new FriendlyError('We couldn’t find that email in the log.')
-  n.result = 'sent'
-  n.at = new Date().toISOString()
+  throw new FriendlyError('Email delivery is unavailable for this browser log entry.')
 }

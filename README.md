@@ -53,6 +53,12 @@
 
 4. Open your browser and navigate to `http://localhost:5173`.
 
+### Connect the backend
+
+Install backend dependencies with `npm --prefix backend ci`, configure Supabase and SMTP using `backend/.env.example`, then run `npm --prefix backend start`. Local Vite proxies API requests to port 5000. For a separately hosted frontend, set `VITE_API_BASE_URL` to the backend origin before building.
+
+Sign-in requires a provisioned institutional account. Pre-registered members can use **Forgot Password** to set their password through their university inbox. The app starts without example accounts or records.
+
 ### Verify the frontend build
 
 From the repository root, run the same install and build commands used for Vercel and the GitHub frontend build check.
@@ -74,7 +80,7 @@ CESS Docuflow/
 │   ├── src/
 │   │   ├── components/      # UI components and shells
 │   │   ├── pages/           # Application views and routes
-│   │   ├── data/            # Mock store, seed data, and selectors
+│   │   ├── data/            # Browser state, workflow logic, and selectors
 │   │   └── lib/             # Utilities and helpers
 │   ├── public/              # Static assets
 │   └── package.json

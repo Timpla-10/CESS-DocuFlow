@@ -1,3 +1,4 @@
+import { downloadStoredFile } from './storedFiles'
 import { OFFICE_LABEL, ROLE_OFFICE, controlNumber, downloadGeneratedPdf } from '../content/language'
 import type { DocRecord, User } from '../data/types'
 
@@ -156,14 +157,14 @@ export function verifyNonPublicSecureToken(
 
 /**
  * Executes a permission-checked, secure download of an official document or attachment.
- * Blocks unauthorized users and watermarks the exported audit file with security metadata.
+ * Downloads the original attachment or exports the routing summary.
  */
-export function downloadPermittedDocument(
+export async function downloadPermittedDocument(
   user: User,
   doc: DocRecord,
-  attachment?: { id: string; name: string; sizeKb: number },
+  attachment?: { id: string; name: string; fileUrl?: string },
   docTypeName?: string,
-): { success: boolean; error?: string } {
+): Promise<{ success: boolean; error?: string }> {
   const check = checkDocumentAccess(user, doc)
   if (!check.permitted) {
     return {
@@ -176,29 +177,11 @@ export function downloadPermittedDocument(
   const timestamp = new Date().toLocaleString()
 
   if (attachment) {
-    const fileName = attachment.name.endsWith('.pdf') ? attachment.name : `${attachment.name}.pdf`
-    downloadGeneratedPdf(
-      fileName,
-      `Official Institutional Copy: ${attachment.name}`,
-      [
-        'MINDANAO STATE UNIVERSITY AT NAAWAN',
-        'COLLEGE OF EDUCATION AND SOCIAL SCIENCES',
-        'CESS DOCUFLOW — SECURE DOCUMENT REPOSITORY',
-        '',
-        `Control Number: ${ctrlNo}`,
-        `Document Title: ${doc.title}`,
-        `Document Type: ${docTypeName || doc.typeId}`,
-        `Attached File: ${attachment.name} (${Math.max(1, Math.round(attachment.sizeKb))} KB)`,
-        `Authorized Downloader: ${user.name} (${user.email})`,
-        `Access Permission Scope: ${check.scopeLabel}`,
-        `Download Timestamp: ${timestamp}`,
-        `Security Classification: Protected Non-Public Institutional Record`,
-        '',
-        'CONFIDENTIALITY NOTICE:',
-        'This electronic document has been verified through permission-scoped access controls.',
-        'Distribution or copying without institutional authorization is strictly prohibited.',
-      ],
-    )
+    try {
+      await downloadStoredFile(attachment.fileUrl, attachment.name)
+    } catch {
+      return { success: false, error: 'The original attachment is unavailable.' }
+    }
   } else {
     downloadGeneratedPdf(
       `${ctrlNo}_Official_Routing_Summary.pdf`,

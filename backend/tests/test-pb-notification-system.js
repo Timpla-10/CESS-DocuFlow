@@ -16,7 +16,8 @@ const app = require('../server');
 const DocumentModel = require('../models/documentModel');
 const NotificationModel = require('../models/notificationModel');
 const AuthService = require('../services/authService');
-const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
+const { provisionVerifiedUser } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
 
 const TEST_STUDENT = {
   idNumber: '2023-0142',

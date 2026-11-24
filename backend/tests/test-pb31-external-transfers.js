@@ -1,3 +1,5 @@
+process.env.NODE_ENV = 'test';
+
 /**
  * Integration Test Suite for Ticket PB-31:
  * "Record external-office transfers [P1]"

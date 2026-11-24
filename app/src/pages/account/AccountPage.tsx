@@ -63,7 +63,7 @@ export function AccountPage() {
     }
   }
 
-  const handlePasswordSubmit = (e: FormEvent) => {
+  const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!currentPw) {
       setPwError('Please enter your current password.')
@@ -80,13 +80,17 @@ export function AccountPage() {
 
     setPwBusy(true)
     setPwError(null)
-    setTimeout(() => {
-      setPwBusy(false)
+    try {
+      await api.changePassword(currentPw, newPw, confirmPw)
       setCurrentPw('')
       setNewPw('')
       setConfirmPw('')
       toast.success('Password Updated', 'Your account password has been changed successfully.')
-    }, 600)
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : 'Unable to change your password.')
+    } finally {
+      setPwBusy(false)
+    }
   }
 
   return (

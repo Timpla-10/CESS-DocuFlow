@@ -1,3 +1,4 @@
+import { apiFetch } from './authApi'
 /**
  * Supabase PostgreSQL client and Document_Request repository (PB-08 / SRS 3.7 / REQ-MON-1..4).
  *
@@ -212,12 +213,7 @@ export async function fetchRequesterDocumentRequests(
     if (filters?.dateFrom) params.set('dateFrom', filters.dateFrom)
     if (filters?.dateTo) params.set('dateTo', filters.dateTo)
 
-    const res = await fetch(`/api/documents?${params.toString()}`, {
-      headers: {
-        'x-user-email': user.email,
-        'x-user-id': user.id,
-      },
-    })
+    const res = await apiFetch(`/api/documents?${params.toString()}`)
 
     if (res.ok) {
       const json = await res.json()
@@ -337,12 +333,7 @@ export async function fetchSupabaseSyllabi(
     if (filters?.facultyId) params.set('facultyId', filters.facultyId)
     if (filters?.q) params.set('q', filters.q)
 
-    const res = await fetch(`/api/syllabi?${params.toString()}`, {
-      headers: {
-        'x-user-email': user.email,
-        'x-user-id': user.id,
-      },
-    })
+    const res = await apiFetch(`/api/syllabi?${params.toString()}`)
 
     if (res.ok) {
       const json = await res.json()
@@ -357,31 +348,6 @@ export async function fetchSupabaseSyllabi(
   // Local state fallback
   const db = getDb()
   let syllabi = db.syllabi ? [...db.syllabi] : []
-
-  // If db.syllabi is empty, derive from db.faculty.subjects
-  if (syllabi.length === 0 && db.faculty) {
-    db.faculty.forEach((f) => {
-      f.subjects.forEach((s) => {
-        if (s.syllabusFile) {
-          syllabi.push({
-            id: `syl-${f.id}-${s.code.replace(/\s+/g, '_')}`,
-            subjectCode: s.code,
-            subjectTitle: s.title,
-            facultyId: f.id,
-            facultyName: f.name,
-            facultyUserId: f.userId,
-            department: f.department,
-            academicYear: '2026-2027',
-            semester: '1st Semester',
-            fileName: s.syllabusFile,
-            fileSizeKb: 450,
-            uploadedAt: new Date().toISOString(),
-            status: 'active',
-          })
-        }
-      })
-    })
-  }
 
   // Filter by academic year
   if (filters?.academicYear) {

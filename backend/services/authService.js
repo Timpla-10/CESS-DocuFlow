@@ -16,13 +16,11 @@ const {
 /**
  * PB-03: Account Security & Password Reset State
  * - Stores one-time password reset token hashes (never raw passwords)
- * - Tracks custom password hashes after password reset/change
  * - Maintains sanitized account security logs where passwords are NEVER exposed
  */
 const RESET_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const MIN_PASSWORD_LENGTH = 8;
 const passwordResetTokens = new Map(); // tokenHash -> { email, userId, expiresAt, used, createdAt }
-const customPasswordHashes = new Map(); // email -> sha256(password)
 const securityAuditLogs = []; // Sanitized security event log entries
 
 const SENSITIVE_KEYS = new Set([
@@ -117,39 +115,6 @@ function recordSecurityEvent({
   return entry;
 }
 
-/**
- * Returns the primary role-based password (e.g. "secretary123", "student123", "faculty123")
- * and valid variations for roles with dots/underscores.
- */
-function getPasswordsForRole(role, origin, email = '') {
-  const emailPrefix = email ? email.split('@')[0].toLowerCase() : '';
-  const valid = new Set();
-
-  if (emailPrefix) {
-    valid.add(`${emailPrefix}123`);
-    valid.add(`${emailPrefix.replace(/[._]/g, '')}123`);
-  }
-
-  if (role === 'faculty' && origin === 'IDS') {
-    valid.add('ids.faculty123');
-    valid.add('idsfaculty123');
-    valid.add('faculty123');
-  } else if (role === 'ids_principal') {
-    valid.add('ids.principal123');
-    valid.add('ids_principal123');
-    valid.add('idsprincipal123');
-    valid.add('principal123');
-  } else if (role) {
-    valid.add(`${role}123`);
-  }
-
-  const list = Array.from(valid);
-  return {
-    primary: list[0] || 'student123',
-    validSet: valid,
-  };
-}
-
 function splitFullName(fullName) {
   const clean = (fullName || 'University User').trim();
   const parts = clean.split(/\s+/);
@@ -179,15 +144,7 @@ async function provisionVerifiedUser({
   const safeRole = ALL_ROLES.includes(role) ? role : ROLES.STUDENT;
   const safeOrigin = origin === 'IDS' ? 'IDS' : 'CESS';
   const dbRoleName = toDbRoleName(safeRole, safeOrigin);
-  const { primary: rolePassword, validSet } = getPasswordsForRole(safeRole, safeOrigin, cleanEmail);
-  const targetPassword = password || rolePassword;
   const { firstName, lastName } = splitFullName(name);
-
-  if (validSet.has(targetPassword)) {
-    customPasswordHashes.delete(cleanEmail);
-  } else {
-    customPasswordHashes.set(cleanEmail, sha256(targetPassword));
-  }
 
   // 1. Check or create in Supabase Auth
   const { data: usersList } = await supabase.auth.admin.listUsers({ perPage: 200 });
@@ -200,7 +157,7 @@ async function provisionVerifiedUser({
   if (!authUserId) {
     const { data: createdAuth, error: authErr } = await supabase.auth.admin.createUser({
       email: cleanEmail,
-      password: targetPassword,
+      password: password || crypto.randomBytes(32).toString('hex'),
       email_confirm: true,
       user_metadata: {
         name,
@@ -210,11 +167,9 @@ async function provisionVerifiedUser({
     });
     if (authErr) throw new Error(`Auth creation failed: ${authErr.message}`);
     authUserId = createdAuth.user.id;
-  } else {
-    await supabase.auth.admin.updateUserById(authUserId, {
-      password: targetPassword,
-      email_confirm: true,
-    });
+  } else if (password) {
+    const { error } = await supabase.auth.admin.updateUserById(authUserId, { password, email_confirm: true });
+    if (error) throw error;
   }
 
   // 2. Upsert into `"User"` table
@@ -297,41 +252,12 @@ const AuthService = {
       throw err;
     }
 
-    const { validSet } = getPasswordsForRole(profile.role, profile.origin, cleanEmail);
-    const hasCustomPassword = customPasswordHashes.has(cleanEmail);
-
-    if (hasCustomPassword) {
-      if (sha256(password) !== customPasswordHashes.get(cleanEmail)) {
-        recordSecurityEvent({
-          event: 'login_failed',
-          email: cleanEmail,
-          userId: profile.id,
-          status: 'failure',
-          message: 'Failed sign-in attempt with invalid password.',
-          secretsToRedact: [password],
-        });
-        const err = new Error('We couldn’t sign you in. Please check your university email and password.');
-        err.status = 401;
-        throw err;
-      }
-    } else if (!validSet.has(password)) {
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
-      if (signInErr) {
-        recordSecurityEvent({
-          event: 'login_failed',
-          email: cleanEmail,
-          userId: profile.id,
-          status: 'failure',
-          message: 'Failed sign-in attempt with invalid password.',
-          secretsToRedact: [password],
-        });
-        const err = new Error('We couldn’t sign you in. Please check your university email and password.');
-        err.status = 401;
-        throw err;
-      }
+    const { error: signInErr } = await supabase.createPasswordAuthClient().auth.signInWithPassword({ email: cleanEmail, password });
+    if (signInErr) {
+      recordSecurityEvent({ event: 'login_failed', email: cleanEmail, userId: profile.id, status: 'failure', message: 'Failed sign-in attempt with invalid password.', secretsToRedact: [password] });
+      const err = new Error('We couldn’t sign you in. Please check your university email and password.');
+      err.status = 401;
+      throw err;
     }
 
     recordSecurityEvent({
@@ -372,7 +298,7 @@ const AuthService = {
    * - Password/secrets are never exposed in logs
    * - Success and failure messages are clear
    */
-  async requestPasswordReset(email, options = {}) {
+  async requestPasswordReset(email) {
     const cleanEmail = (email || '').trim().toLowerCase();
 
     if (!cleanEmail) {
@@ -416,7 +342,7 @@ const AuthService = {
       throw err;
     }
 
-    if (profile.account_status === 'Pending_Verification' || !profile.is_whitelisted) {
+    if (!profile.is_whitelisted) {
       recordSecurityEvent({
         event: 'password_reset_request_failed',
         email: cleanEmail,
@@ -431,7 +357,7 @@ const AuthService = {
       throw err;
     }
 
-    if (profile.account_status === 'Inactive' || !profile.active) {
+    if (profile.account_status === 'Inactive') {
       recordSecurityEvent({
         event: 'password_reset_request_failed',
         email: cleanEmail,
@@ -449,9 +375,7 @@ const AuthService = {
     // Generate cryptographically secure one-time recovery token & dynamic 6-digit OTP code
     const rawToken = crypto.randomBytes(24).toString('hex');
     const tokenHash = sha256(rawToken);
-    const otpCode = crypto.randomInt
-      ? crypto.randomInt(100000, 1000000).toString()
-      : Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
     const otpHash = sha256(otpCode);
     const expiresAt = Date.now() + RESET_TOKEN_TTL_MS;
 
@@ -465,18 +389,13 @@ const AuthService = {
     passwordResetTokens.set(tokenHash, tokenRecord);
     passwordResetTokens.set(otpHash, tokenRecord);
 
-    // Also accept Figma demo code in non-production for instant prototyping
-    if (process.env.NODE_ENV !== 'production') {
-      passwordResetTokens.set(sha256('658485'), tokenRecord);
-    }
-
-    // Best-effort trigger of Supabase Auth email recovery link (non-blocking if rate-limited)
-    try {
-      await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: options.redirectTo || 'http://localhost:5173/reset-password',
-      });
-    } catch {
-      // Recovery token is managed deterministically above
+    const delivery = await EmailService.sendPasswordResetEmail({ to: cleanEmail, name: profile.name || cleanEmail, code: otpCode, resetToken: rawToken, expiresAt });
+    if (!delivery.success) {
+      passwordResetTokens.delete(tokenHash);
+      passwordResetTokens.delete(otpHash);
+      const err = new Error('DocuFlow could not send the verification email. Try again later.');
+      err.status = 503;
+      throw err;
     }
 
     recordSecurityEvent({
@@ -491,23 +410,10 @@ const AuthService = {
       },
     });
 
-    // Dispatch real email via Nodemailer
-    EmailService.sendPasswordResetEmail({
-      to: cleanEmail,
-      name: profile.name || cleanEmail,
-      code: otpCode,
-      resetToken: rawToken,
-      expiresAt,
-    }).catch((mailErr) => {
-      console.warn(`[Nodemailer] Warning: Could not deliver reset email to ${cleanEmail}:`, mailErr.message);
-    });
-
     return {
       success: true,
       email: cleanEmail,
       message: `Password reset instructions have been sent to your registered university email (${cleanEmail}).`,
-      resetToken: rawToken,
-      code: otpCode,
       expiresAt: new Date(expiresAt).toISOString(),
     };
   },
@@ -622,8 +528,8 @@ const AuthService = {
     }
 
     const profile = await UserModel.findByEmail(targetEmail);
-    if (!profile || !profile.active) {
-      const err = new Error('Registered university account is no longer active.');
+    if (!profile || profile.id !== tokenRecord.userId || !profile.is_whitelisted || profile.account_status === 'Inactive') {
+      const err = new Error('Registered university account is unavailable.');
       err.status = 403;
       throw err;
     }
@@ -639,14 +545,12 @@ const AuthService = {
       throw err;
     }
 
-    const { validSet } = getPasswordsForRole(profile.role, profile.origin, targetEmail);
-    if (validSet.has(newPassword)) {
-      customPasswordHashes.delete(targetEmail);
-    } else {
-      customPasswordHashes.set(targetEmail, sha256(newPassword));
+    if (profile.account_status === 'Pending_Verification') {
+      const { error } = await supabase.from('User').update({ account_status: 'Active' })
+        .eq('user_id', profile.id).eq('account_status', 'Pending_Verification').eq('is_whitelisted', true);
+      if (error) throw error;
     }
 
-    // Invalidate token immediately (single-use)
     tokenRecord.used = true;
 
     recordSecurityEvent({
@@ -738,21 +642,8 @@ const AuthService = {
     }
 
     // Verify current password
-    const { validSet } = getPasswordsForRole(actor.role, actor.origin, cleanEmail);
-    const hasCustomPassword = customPasswordHashes.has(cleanEmail);
-    let currentValid = false;
-
-    if (hasCustomPassword) {
-      currentValid = sha256(currentPassword) === customPasswordHashes.get(cleanEmail);
-    } else if (validSet.has(currentPassword)) {
-      currentValid = true;
-    } else {
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: currentPassword,
-      });
-      currentValid = !signInErr;
-    }
+    const { error: signInErr } = await supabase.createPasswordAuthClient().auth.signInWithPassword({ email: cleanEmail, password: currentPassword });
+    const currentValid = !signInErr;
 
     if (!currentValid) {
       recordSecurityEvent({
@@ -784,12 +675,6 @@ const AuthService = {
       throw err;
     }
 
-    if (validSet.has(newPassword)) {
-      customPasswordHashes.delete(cleanEmail);
-    } else {
-      customPasswordHashes.set(cleanEmail, sha256(newPassword));
-    }
-
     recordSecurityEvent({
       event: 'password_changed',
       email: cleanEmail,
@@ -819,55 +704,6 @@ const AuthService = {
    */
   getSecurityLogs() {
     return securityAuditLogs.map((entry) => sanitizeForLog(entry));
-  },
-
-  /**
-   * PB-02: Sign In with University Google Workspace (@msunaawan.edu.ph)
-   */
-  async loginWithGoogle(email, rememberMe = true) {
-    const cleanEmail = (email || '').trim().toLowerCase();
-
-    if (!isInstitutionalEmail(cleanEmail)) {
-      const err = new Error('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.');
-      err.status = 400;
-      throw err;
-    }
-
-    const profile = await UserModel.findByEmail(cleanEmail);
-    if (!profile) {
-      const err = new Error(
-        'No active university account was found for this Gmail address. Please register or contact the College Secretary.'
-      );
-      err.status = 404;
-      throw err;
-    }
-
-    if (!profile.active) {
-      const err = new Error('Your account is inactive or pending College Secretary verification.');
-      err.status = 403;
-      throw err;
-    }
-
-    const session = SessionModel.createSession({
-      userId: profile.id,
-      email: cleanEmail,
-      role: profile.role,
-      origin: profile.origin,
-      rememberMe: Boolean(rememberMe),
-    });
-
-    return {
-      verified: true,
-      user: profile,
-      token: session.token,
-      rememberMe: session.rememberMe,
-      session: {
-        sessionId: session.sessionId,
-        rememberMe: session.rememberMe,
-        expiresAt: session.expiresAt,
-        ttlMs: session.ttlMs,
-      },
-    };
   },
 
   /**
@@ -912,6 +748,12 @@ const AuthService = {
       throw err;
     }
 
+    if (typeof input.password !== 'string' || input.password.length < MIN_PASSWORD_LENGTH) {
+      const err = new Error('Choose a password with at least 8 characters.');
+      err.status = 400;
+      throw err;
+    }
+
     const existingUser = await UserModel.findByEmail(cleanEmail);
 
     if (existingUser && existingUser.account_status === 'Active') {
@@ -920,35 +762,10 @@ const AuthService = {
       throw err;
     }
 
-    // 1. If already pre-registered in "User" with is_whitelisted = true -> Auto-Verify & Activate!
-    if (existingUser && existingUser.is_whitelisted) {
-      const activated = await provisionVerifiedUser({
-        email: cleanEmail,
-        password: input.password,
-        name: existingUser.name || cleanName,
-        role: existingUser.role,
-        origin: existingUser.origin || input.origin || 'CESS',
-        department: existingUser.department || input.department || 'CESS',
-        accountStatus: 'Active',
-        isWhitelisted: true,
-      });
-
-      // Send real email notification via Nodemailer
-      EmailService.sendAccountActivatedEmail({
-        to: cleanEmail,
-        name: existingUser.name || cleanName,
-        role: existingUser.role,
-        department: existingUser.department || input.department || 'CESS',
-      }).catch((mailErr) => {
-        console.warn(`[Nodemailer] Warning: Could not deliver activation email to ${cleanEmail}:`, mailErr.message);
-      });
-
-      return {
-        status: 'activated',
-        verificationSource: 'whitelist',
-        message: 'Account verified against the official masterlist whitelist and activated immediately.',
-        user: activated,
-      };
+    if (existingUser?.is_whitelisted || existingUser?.account_status === 'Inactive') {
+      const err = new Error('An account already exists for this email. Use Forgot Password to set your password or contact the College Secretary.');
+      err.status = 409;
+      throw err;
     }
 
     if (existingUser && existingUser.account_status === 'Pending_Verification') {
@@ -960,7 +777,7 @@ const AuthService = {
     }
 
     // 2. Not on Whitelist -> Create in "User" with account_status = 'Pending_Verification', is_whitelisted = false
-    const requestedRole = ALL_ROLES.includes(input.requestedRole)
+    const requestedRole = [ROLES.STUDENT, ROLES.FACULTY].includes(input.requestedRole)
       ? input.requestedRole
       : ROLES.STUDENT;
 
@@ -1097,13 +914,14 @@ const AuthService = {
       const cleanEmail = (item.email || '').trim().toLowerCase();
       if (!isInstitutionalEmail(cleanEmail)) continue;
 
+      const existing = await UserModel.findByEmail(cleanEmail);
       const saved = await provisionVerifiedUser({
         email: cleanEmail,
         name: (item.name || '').trim(),
         role: item.role || ROLES.STUDENT,
         origin: item.origin === 'IDS' ? 'IDS' : 'CESS',
         department: (item.department || 'CESS').trim(),
-        accountStatus: 'Active',
+        accountStatus: existing?.active ? 'Active' : 'Pending_Verification',
         isWhitelisted: true,
       });
       results.push(saved);
@@ -1151,7 +969,6 @@ const AuthService = {
 module.exports = {
   ...AuthService,
   provisionVerifiedUser,
-  getPasswordsForRole,
   sanitizeForLog,
   recordSecurityEvent,
 };

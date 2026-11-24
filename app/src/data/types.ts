@@ -96,6 +96,7 @@ export interface DocumentType {
   requirements: Requirement[]
   /** Downloadable blank form template file name (REQ-REQT-9, REQ-REQT-10). */
   templateName?: string
+  templateUrl?: string
   /** Standard processing time in working days [min, max] (REQ-WFM-7). */
   processingDays: [number, number]
   /** Ordered reviewing offices for CESS origin (REQ-ROUTE-1, REQ-ROUTE-2). */
@@ -122,6 +123,7 @@ export interface Attachment {
   id: string
   requirementId?: string
   name: string
+  fileUrl?: string
   sizeKb: number
   revision: number
   uploadedAt: string
@@ -287,6 +289,7 @@ export interface Subject {
 
 export interface SyllabusTemplate {
   fileName: string
+  fileUrl?: string
   updatedAt: string
   uploadedBy: string
   fileSize?: string
@@ -295,6 +298,7 @@ export interface SyllabusTemplate {
 export interface SyllabusVersion {
   version: number
   fileName: string
+  fileUrl?: string
   fileSizeKb?: number
   uploadedAt: string
   uploadedBy: string

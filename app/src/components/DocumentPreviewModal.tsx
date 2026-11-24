@@ -1,7 +1,6 @@
+import { formatSize } from './documents'
 import {
-  AlertCircle,
   Check,
-  CheckCircle2,
   Download,
   FileCheck2,
   FileText,
@@ -26,7 +25,7 @@ import {
 import type { Database, DocRecord } from '../data/types'
 import { typeOf } from '../data/selectors'
 import { formatDateTime } from '../lib/time'
-import { formatSize, sessionFiles } from './documents'
+import { openStoredFile } from '../lib/storedFiles'
 import { cn } from './ui'
 import { useSession } from '../app/session'
 import {
@@ -103,9 +102,27 @@ export function DocumentPreviewModal({
   const toast = useToast()
   const [isCopiedLink, setIsCopiedLink] = useState(false)
 
-  if (!open) return null
-
   const access = user ? checkDocumentAccess(user, doc) : { permitted: false, scope: 'denied' as const, scopeLabel: 'Restricted', reason: 'You must be signed in to access this document.' }
+  const activeAttachment = attachments.find((a) => a.id === activeTab)
+  const source = access.permitted ? activeAttachment?.fileUrl : undefined
+  const [preview, setPreview] = useState<{ source: string; url?: string }>()
+  useEffect(() => {
+    if (!open || !source) return
+    let active = true
+    let release: (() => void) | undefined
+    openStoredFile(source).then((file) => {
+      if (active) {
+        release = file.release
+        setPreview({ source, url: file.url })
+      } else {
+        file.release()
+      }
+    }).catch(() => { if (active) setPreview({ source }) })
+    return () => { active = false; release?.() }
+  }, [open, source])
+  const blobUrl = preview?.source === source ? preview?.url : undefined
+
+  if (!open) return null
   if (!access.permitted) {
     return createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -136,13 +153,9 @@ export function DocumentPreviewModal({
     )
   }
 
-  const activeAttachment = attachments.find((a) => a.id === activeTab)
-  const activeReq = docType?.requirements.find((r) => r.id === activeAttachment?.requirementId)
-  const blobUrl = activeAttachment ? sessionFiles.get(activeAttachment.id) : undefined
-
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!user) return
-    const res = downloadPermittedDocument(user, doc, activeAttachment, docType?.name)
+    const res = await downloadPermittedDocument(user, doc, activeAttachment, docType?.name)
     if (!res.success) {
       toast.error('Download Blocked', res.error || 'Access restricted.')
     } else {
@@ -370,8 +383,10 @@ export function DocumentPreviewModal({
                 />
               )}
             </div>
+          ) : activeAttachment ? (
+            <p role="status" className="rounded-lg bg-white p-6 text-sm text-ink-700">{source && preview?.source !== source ? 'Loading attachment…' : 'The original attachment is unavailable for preview.'}</p>
           ) : (
-            /* High-Fidelity Official Digital Document Sheet (A4 Institutional Layout) */
+            /* Routing summary */
             <div className="document-print-sheet relative min-h-[1123px] w-[794px] select-text rounded-sm bg-white p-12 font-serif text-slate-900 shadow-2xl">
               {/* Official Translucent Watermark */}
               <div
@@ -413,7 +428,7 @@ export function DocumentPreviewModal({
                       College of Education and Social Sciences
                     </p>
                     <p className="text-[11px] text-slate-600">
-                      9023 Naawan, Misamis Oriental · Telefax: (088) 222-5555
+                      9023 Naawan, Misamis Oriental
                     </p>
                     <p className="text-[10px] font-medium text-slate-500 italic mt-0.5">
                       DocuFlow Electronic Academic & Administrative Document Tracking System
@@ -474,7 +489,7 @@ export function DocumentPreviewModal({
                         Affiliation / Department:
                       </td>
                       <td className="p-2.5 text-slate-900">
-                        {requester?.department ?? 'CESS Academic Faculty'}
+                        {requester?.department ?? 'Unavailable'}
                       </td>
                       <td className="bg-slate-100 p-2.5 font-bold text-slate-700">
                         Unit of Origin:
@@ -516,133 +531,19 @@ export function DocumentPreviewModal({
                   </p>
                 </div>
               </div>
-
-              {/* Section 2: Attachment Verification & File Details */}
-              <div className="mt-8">
-                <h3 className="border-b border-slate-300 pb-1 text-xs font-black uppercase tracking-wider text-slate-900 font-sans">
-                  II. Form & Attachment Verification
-                </h3>
-                <div className="mt-3 rounded border border-slate-200 p-4 font-sans text-xs bg-white">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-bold text-slate-950">
-                        {activeAttachment ? activeAttachment.name : `${docType?.name} Electronic Filing`}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-600">
-                        Classification:{' '}
-                        <span className="font-semibold text-slate-900">
-                          {activeAttachment?.isSignedCopy
-                            ? 'Final Scanned Signed Copy (Official Release)'
-                            : activeReq?.label ?? 'Required Form / Attachment'}
-                        </span>
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        File Size:{' '}
-                        {activeAttachment ? formatSize(activeAttachment.sizeKb) : 'Standard E-Form'} ·
-                        Uploaded by: {activeAttachment?.uploadedBy ?? requester?.name ?? 'Requester'} ·{' '}
-                        Revision {activeAttachment?.revision ?? doc.revision}
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200">
-                      <CheckCircle2 className="size-3.5 text-emerald-600" />
-                      Content Verified
-                    </span>
-                  </div>
-
-                  {/* Simulated Form Field Details Tailored to Document Type */}
-                  <div className="mt-4 pt-3 border-t border-slate-200 grid grid-cols-2 gap-3 text-xs">
-                    <div className="rounded bg-slate-50 p-2.5 border border-slate-200">
-                      <span className="block font-bold text-[10px] uppercase text-slate-500">
-                        Checklist Requirement
-                      </span>
-                      <span className="font-semibold text-slate-900">
-                        {activeReq?.label ?? 'Mandatory Institutional Form'}
-                      </span>
-                    </div>
-                    <div className="rounded bg-slate-50 p-2.5 border border-slate-200">
-                      <span className="block font-bold text-[10px] uppercase text-slate-500">
-                        Verification Authority
-                      </span>
-                      <span className="font-semibold text-slate-900">
-                        College Secretary Office & Academic Dean
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Reviewing Offices Endorsement Stamps */}
-              <div className="mt-8 font-sans">
-                <h3 className="border-b border-slate-300 pb-1 text-xs font-black uppercase tracking-wider text-slate-900">
-                  III. Official Action & Institutional Review Stamps
-                </h3>
-
-                <div className="mt-4 grid grid-cols-3 gap-3">
-                  {/* Secretary Stamp */}
-                  <div className="border-2 border-dashed border-slate-300 rounded p-3 text-center bg-slate-50/50">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      College Secretary
-                    </span>
-                    <span className="inline-flex items-center justify-center gap-1 mt-1 text-xs font-bold text-brand-800">
-                      <CheckCircle2 className="size-3.5" />
-                      <span>CHECKED COMPLETE</span>
-                    </span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      Verified by Secretary
-                    </p>
-                  </div>
-
-                  {/* Department Chairperson / IDS Principal */}
-                  <div className="border-2 border-dashed border-slate-300 rounded p-3 text-center bg-slate-50/50">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      {doc.origin === 'IDS' ? 'IDS Principal' : 'Department Chairperson'}
-                    </span>
-                    <span className="inline-flex items-center justify-center gap-1 mt-1 text-xs font-bold text-brand-800">
-                      {doc.routeIndex >= 1 ? (
-                        <>
-                          <CheckCircle2 className="size-3.5" />
-                          <span>ENDORSED</span>
-                        </>
-                      ) : (
-                        <span>PENDING ACTION</span>
-                      )}
-                    </span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Academic Evaluation</p>
-                  </div>
-
-                  {/* Dean / Final Approver */}
-                  <div className="border-2 border-dashed border-slate-300 rounded p-3 text-center bg-slate-50/50">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                      College Dean / Executive
-                    </span>
-                    <span
-                      className={cn(
-                        'inline-flex items-center justify-center gap-1 mt-1 text-xs font-bold',
-                        doc.status === 'released' || doc.status === 'ready'
-                          ? 'text-brand-800'
-                          : doc.status === 'rejected'
-                          ? 'text-danger-700'
-                          : 'text-slate-600',
-                      )}
-                    >
-                      {doc.status === 'released' || doc.status === 'ready' ? (
-                        <>
-                          <CheckCircle2 className="size-3.5" />
-                          <span>APPROVED</span>
-                        </>
-                      ) : doc.status === 'rejected' ? (
-                        <>
-                          <AlertCircle className="size-3.5 text-danger-600" />
-                          <span>DISAPPROVED</span>
-                        </>
-                      ) : (
-                        <span>ROUTING IN PROGRESS</span>
-                      )}
-                    </span>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Final College Action</p>
-                  </div>
-                </div>
-              </div>
+              <section className="mt-8 font-sans">
+                <h3 className="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider">Routing History</h3>
+                {doc.history.length ? (
+                  <ul className="mt-2 divide-y divide-slate-200 text-xs">
+                    {doc.history.map((entry) => (
+                      <li key={entry.id} className="py-2">
+                        <span className="font-semibold capitalize">{entry.action.replaceAll("_", " ")}</span>
+                        {" · "}{entry.actorName} · {formatDateTime(entry.at)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="mt-2 text-xs text-slate-600">No routing activity recorded.</p>}
+              </section>
 
               {signatures.length > 0 && (
                 <section className="relative mt-8 space-y-3 font-sans" aria-label="Signatures for this revision">
@@ -654,7 +555,7 @@ export function DocumentPreviewModal({
               {/* Institutional Footer */}
               <div className="mt-12 pt-4 border-t border-slate-200 text-center font-sans text-[10px] text-slate-500">
                 <p>
-                  This official electronic document sheet is securely tracked by <strong>CESS DocuFlow</strong>.
+                  This routing summary is generated by <strong>CESS DocuFlow</strong>.
                 </p>
                 <p className="mt-0.5">
                   Mindanao State University at Naawan · Official Document System · Republic of the Philippines

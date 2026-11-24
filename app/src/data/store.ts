@@ -1,18 +1,13 @@
 /**
- * Mock backend for the prototype.
- *
- * Mirrors the shape of the future Express + Supabase API: every action is
- * async, runs the shared workflow engine, and either resolves or throws a
- * FriendlyError. Data is persisted in localStorage so the demo survives
- * page reloads. To connect a real backend, replace the bodies of `api.*`
- * with fetch calls — the pages only depend on this module's exports.
+ * Browser store for locally created records and cached server data.
  */
 import { useSyncExternalStore } from 'react'
 import { FriendlyError, MESSAGES } from '../content/language'
+import { apiFetch, postJson, requestJson, storeAuthToken } from '../lib/authApi'
 import { respondToConsultation, submitConsultation } from './consultations'
 import { createCustomDocumentTypes, isCustomDocumentType } from './customDocumentTypes'
 import * as engine from './engine'
-import { DB_VERSION, DEMO_PASSWORD, createSeed } from './seed'
+import { DB_VERSION, createDatabase, removeLegacyDemoData } from './database'
 import { submitServiceFeedback } from './serviceFeedback'
 import type {
   Database,
@@ -27,7 +22,6 @@ import type {
   NoticeStatus,
   NotificationPreference,
   Origin,
-  PendingRegistration,
   Role,
   SyllabusRecord,
   SyllabusTemplate,
@@ -46,8 +40,8 @@ function load(): Database {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Database
-      if (parsed.version === DB_VERSION || parsed.version === 14 || parsed.version === 13 || parsed.version === 12 || parsed.version === 11) {
-        parsed.version = DB_VERSION
+      if ([11, 12, 13, 14, 15, 16, DB_VERSION].includes(parsed.version)) {
+        if (parsed.version !== DB_VERSION) removeLegacyDemoData(parsed)
         for (const u of parsed.users) {
           if (u.role === 'ids_principal' && !u.origin) {
             u.origin = 'IDS'
@@ -56,11 +50,6 @@ function load(): Database {
             u.notificationPreference = 'both'
           }
         }
-        if (!parsed.users.some((u) => u.role === 'vcaf')) {
-          const fresh = createSeed()
-          const vcafUser = fresh.users.find((u) => u.role === 'vcaf')
-          if (vcafUser) parsed.users.push(vcafUser)
-        }
         for (const type of createCustomDocumentTypes()) {
           if (!parsed.documentTypes.some((item) => item.id === type.id)) parsed.documentTypes.push(type)
         }
@@ -68,9 +57,9 @@ function load(): Database {
       }
     }
   } catch {
-    /* fall through to a fresh seed */
+    /* Unreadable browser data cannot be loaded. */
   }
-  return createSeed()
+  return createDatabase()
 }
 
 let db: Database = load()
@@ -105,11 +94,8 @@ export function useDb(): Database {
   return useSyncExternalStore(subscribe, getDb)
 }
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
 /** Runs an engine action on a copy of the data, then saves it. */
 async function mutate<T>(fn: (draft: Database, at: string) => T, requirePersistence = false): Promise<T> {
-  await wait(350 + Math.random() * 350)
   const draft = structuredClone(db)
   try {
     const result = fn(draft, new Date().toISOString())
@@ -120,6 +106,50 @@ async function mutate<T>(fn: (draft: Database, at: string) => T, requirePersiste
     console.error(err)
     throw new FriendlyError(MESSAGES.saveFailed)
   }
+}
+
+interface CatalogType {
+  id: string | number
+  name: string
+  audience: DocumentType['audience']
+  summary: string
+  standard_processing_days: number
+  template_url?: string
+  requirements?: { id: string | number; label: string; required: boolean; source?: string }[]
+}
+
+async function syncDocumentCatalog() {
+  const { documentTypes } = await requestJson<{ documentTypes: CatalogType[] }>('/api/document-types')
+  await mutate((draft) => {
+    for (const type of documentTypes) {
+      const id = String(type.id)
+      const index = draft.documentTypes.findIndex((item) => item.id === id)
+      const existing = draft.documentTypes[index]
+      const mapped: DocumentType = {
+        ...existing, id, name: type.name, audience: type.audience, summary: type.summary,
+        templateUrl: type.template_url || existing?.templateUrl,
+        processingDays: [type.standard_processing_days, type.standard_processing_days],
+        higherApproval: existing?.higherApproval ?? [],
+        requirements: (type.requirements ?? []).map((item) => ({ ...item, id: String(item.id) })),
+      }
+      if (existing) draft.documentTypes[index] = mapped
+      else draft.documentTypes.push(mapped)
+    }
+  })
+}
+
+async function syncDirectory() {
+  const { users } = await requestJson<{ users: User[] }>('/api/auth/directory')
+  await mutate((draft) => {
+    for (const user of users) {
+      const index = draft.users.findIndex((entry) => entry.id === user.id)
+      if (index === -1) draft.users.push(user)
+      else draft.users[index] = { ...draft.users[index], ...user }
+      if (user.role === 'faculty' && !draft.faculty.some((entry) => entry.userId === user.id || entry.name === user.name)) {
+        draft.faculty.push({ id: user.id, userId: user.id, name: user.name, department: user.department, subjects: [] })
+      }
+    }
+  })
 }
 
 // Send any reminders that came due while the app was closed (REQ-NOT-3).
@@ -134,205 +164,33 @@ export const api = {
   submitServiceFeedback: (user: User, input: Parameters<typeof submitServiceFeedback>[2]) =>
     mutate((d, at) => submitServiceFeedback(d, user, input, at), true),
 
-  async signIn(email: string, password: string): Promise<User> {
-    const cleanEmail = email.trim().toLowerCase()
-    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
-      throw new FriendlyError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
-    }
-
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (data?.user) {
-          const liveUser: User = {
-            id: data.user.id || data.user.user_id,
-            name: data.user.name,
-            email: data.user.email,
-            role: data.user.role,
-            origin: data.user.origin,
-            department: data.user.department,
-            position: data.user.position,
-            active: data.user.active ?? true,
-          }
-          const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail)
-          if (existingIdx >= 0) {
-            db.users[existingIdx] = { ...db.users[existingIdx], ...liveUser }
-          } else {
-            db.users.push(liveUser)
-          }
-          // PB-10 & PB-11: Sync live document types and requirement checklists from backend
-          try {
-            const dtRes = await fetch('/api/document-types', {
-              headers: { 'x-user-email': liveUser.email },
-            })
-            if (dtRes.ok) {
-              const dtData = await dtRes.json()
-              if (Array.isArray(dtData.documentTypes) && dtData.documentTypes.length > 0) {
-                for (const lt of dtData.documentTypes) {
-                  const existingIdx = db.documentTypes.findIndex(
-                    (t) => !isCustomDocumentType(t.id) && (t.name.toLowerCase() === lt.name.toLowerCase() || t.id === String(lt.id))
-                  )
-                  const mappedReqs = (lt.requirements || []).map((r: any) => ({
-                    id: String(r.id || r.form_id),
-                    label: r.label || r.form_name,
-                    required: r.required !== undefined ? r.required : r.is_required,
-                    source: r.source || r.source_office,
-                    why: `Where to get it: ${r.source || r.source_office}`,
-                    templateUrl: r.template_url || r.templateUrl,
-                  }))
-                  const mappedType: DocumentType = {
-                    id: String(lt.id),
-                    name: lt.name,
-                    audience: lt.audience,
-                    summary: lt.summary,
-                    processingDays: [lt.standard_processing_days || 3, (lt.standard_processing_days || 3) + 2],
-                    cessRoute: ['chairperson', 'dean'],
-                    idsRoute: ['chairperson', 'ids_principal', 'dean'],
-                    higherApproval: lt.audience === 'faculty' ? ['ovcaa', 'chancellor'] : [],
-                    requirements: mappedReqs,
-                  }
-                  if (existingIdx >= 0) {
-                    db.documentTypes[existingIdx] = { ...db.documentTypes[existingIdx], ...mappedType }
-                  } else {
-                    db.documentTypes.push(mappedType)
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('Backend sync for document types skipped:', e)
-          }
-
-          commit({ ...db })
-          return liveUser
-        }
-      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
-        const errJson = await res.json().catch(() => null)
-        if (errJson?.error) {
-          throw new FriendlyError(errJson.error)
-        }
-      }
-    } catch (err) {
-      if (err instanceof FriendlyError) throw err
-      // Fallback to prototype mock if backend is offline
-    }
-
-    await wait(300)
-    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
-    if (!user || password !== DEMO_PASSWORD) {
-      throw new FriendlyError(MESSAGES.signInFailed)
-    }
-    if (!user.active) throw new FriendlyError(MESSAGES.accountInactive)
+  async signIn(email: string, password: string, rememberMe: boolean): Promise<User> {
+    const result = await postJson<{ token?: string; user?: User }>('/api/auth/login', { email, password, rememberMe })
+    if (!result.token || !result.user?.id || !result.user.active) throw new FriendlyError(MESSAGES.signInFailed)
+    const user = result.user
+    storeAuthToken(result.token, rememberMe)
+    await mutate((draft) => {
+      const index = draft.users.findIndex((entry) => entry.id === user.id || entry.email === user.email)
+      if (index === -1) draft.users.push(user)
+      else draft.users[index] = { ...draft.users[index], ...user }
+    })
+    await Promise.allSettled([syncDocumentCatalog(), syncDirectory()])
     return user
   },
 
-  async signInWithUniversityGoogle(email: string): Promise<User> {
-    const cleanEmail = email.trim().toLowerCase()
-    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
-      throw new FriendlyError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
-    }
-
-    try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (data?.user) {
-          const liveUser: User = {
-            id: data.user.id || data.user.user_id,
-            name: data.user.name,
-            email: data.user.email,
-            role: data.user.role,
-            origin: data.user.origin,
-            department: data.user.department,
-            position: data.user.position,
-            active: data.user.active ?? true,
-          }
-          const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail)
-          if (existingIdx >= 0) {
-            db.users[existingIdx] = { ...db.users[existingIdx], ...liveUser }
-          } else {
-            db.users.push(liveUser)
-          }
-          // PB-10 & PB-11: Sync live document types and requirement checklists from backend
-          try {
-            const dtRes = await fetch('/api/document-types', {
-              headers: { 'x-user-email': liveUser.email },
-            })
-            if (dtRes.ok) {
-              const dtData = await dtRes.json()
-              if (Array.isArray(dtData.documentTypes) && dtData.documentTypes.length > 0) {
-                for (const lt of dtData.documentTypes) {
-                  const existingIdx = db.documentTypes.findIndex(
-                    (t) => t.name.toLowerCase() === lt.name.toLowerCase() || t.id === String(lt.id)
-                  )
-                  const mappedReqs = (lt.requirements || []).map((r: any) => ({
-                    id: String(r.id || r.form_id),
-                    label: r.label || r.form_name,
-                    required: r.required !== undefined ? r.required : r.is_required,
-                    source: r.source || r.source_office,
-                    why: `Where to get it: ${r.source || r.source_office}`,
-                    templateUrl: r.template_url || r.templateUrl,
-                  }))
-                  const mappedType: DocumentType = {
-                    id: String(lt.id),
-                    name: lt.name,
-                    audience: lt.audience,
-                    summary: lt.summary,
-                    processingDays: [lt.standard_processing_days || 3, (lt.standard_processing_days || 3) + 2],
-                    cessRoute: ['chairperson', 'dean'],
-                    idsRoute: ['chairperson', 'ids_principal', 'dean'],
-                    higherApproval: lt.audience === 'faculty' ? ['ovcaa', 'chancellor'] : [],
-                    requirements: mappedReqs,
-                  }
-                  if (existingIdx >= 0) {
-                    db.documentTypes[existingIdx] = { ...db.documentTypes[existingIdx], ...mappedType }
-                  } else {
-                    db.documentTypes.push(mappedType)
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('Backend sync for document types skipped:', e)
-          }
-
-          commit({ ...db })
-          return liveUser
-        }
-      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
-        const errJson = await res.json().catch(() => null)
-        if (errJson?.error) {
-          throw new FriendlyError(errJson.error)
-        }
-      }
-    } catch (err) {
-      if (err instanceof FriendlyError) throw err
-      // Fallback to prototype mock if backend is offline
-    }
-
-    await wait(300)
-    const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail)
-    if (!user) {
-      throw new FriendlyError('No active university account was found for this Gmail address. Please register or contact the College Secretary.')
-    }
-    if (!user.active) throw new FriendlyError(MESSAGES.accountInactive)
-    return user
+  async signOut() {
+    const request = apiFetch('/api/auth/logout', { method: 'POST' })
+    storeAuthToken(null)
+    await request.catch(() => undefined)
   },
 
-  async requestPasswordReset(email: string): Promise<void> {
-    await wait(600)
-    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(email.trim()))
-      throw new FriendlyError('Please enter your official university Gmail address (ending with @msunaawan.edu.ph).')
-  },
+  requestPasswordReset: (email: string) => postJson<{ success: boolean }>('/api/auth/forgot-password', { email }),
+
+  confirmPasswordReset: (email: string, code: string, newPassword: string, confirmPassword: string) =>
+    postJson<{ success: boolean }>('/api/auth/reset-password', { email, code, newPassword, confirmPassword }),
+
+  changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) =>
+    postJson<{ success: boolean }>('/api/auth/change-password', { currentPassword, newPassword, confirmPassword }),
 
   submitConsultation: (user: User, input: Parameters<typeof submitConsultation>[2]) =>
     mutate((d, at) => submitConsultation(d, user, input, at), true),
@@ -367,11 +225,10 @@ export const api = {
   resubmit: async (user: User, docId: string, input: Parameters<typeof engine.resubmit>[3]) => {
     // PB-18 / PB-19: Sync live backend if connected
     try {
-      await fetch(`/api/documents/${docId}/resubmit`, {
+      await apiFetch(`/api/documents/${docId}/resubmit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-email': user.email,
         },
         body: JSON.stringify({
           title: input.title,
@@ -481,337 +338,112 @@ export const api = {
     }),
 
   /** REQ-AUTH-3: Create or edit user account and assign role. */
-  saveUserAccount: (
-    actor: User,
-    input: {
-      id?: string
-      name: string
-      email: string
-      role: Role
-      origin?: Origin
-      department: string
-      position: string
-      notificationPreference?: NotificationPreference
-    },
-  ) =>
-    mutate((d) => {
-      if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary (System Admin) can manage accounts.')
-      const cleanName = input.name.trim()
-      const cleanEmail = input.email.trim().toLowerCase()
-      if (!cleanName) throw new FriendlyError('Please enter the user’s full name.')
-      if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail))
-        throw new FriendlyError('Please enter a valid MSU at Naawan university email address (@msunaawan.edu.ph).')
-      const dup = d.users.find((u) => u.email.toLowerCase() === cleanEmail && u.id !== input.id)
-      if (dup) throw new FriendlyError('Another account is already using that university email address.')
-
-      const isReq = input.role === 'student' || input.role === 'faculty'
-      const origin: Origin | undefined = isReq ? (input.origin ?? 'CESS') : undefined
-
-      if (input.id) {
-        const existing = d.users.find((u) => u.id === input.id)
-        if (!existing) throw new FriendlyError('Account not found.')
-        existing.name = cleanName
-        existing.email = cleanEmail
-        existing.role = input.role
-        existing.origin = origin
-        existing.department = input.department.trim() || existing.department
-        existing.position = input.position.trim() || existing.position
-        if (input.notificationPreference) {
-          existing.notificationPreference = input.notificationPreference
+  async refreshAccountManagement() {
+    const [directory, whitelist, pending] = await Promise.all([
+      requestJson<{ users: User[] }>('/api/auth/users'),
+      requestJson<{ whitelist: (User & { created_at?: string })[] }>('/api/auth/whitelist'),
+      requestJson<{ pendingRegistrations: (User & { created_at?: string })[] }>('/api/auth/pending'),
+    ])
+    await mutate((draft) => {
+      const cachedUsers = draft.users.filter((user) => /^u-\d+$/.test(user.id) && !directory.users.some((item) => item.email === user.email))
+      draft.users = [...cachedUsers, ...directory.users.map((user) => ({ ...draft.users.find((item) => item.id === user.id), ...user }))]
+      const cachedWhitelist = draft.whitelist.filter((entry) => /^wl-\d+$/.test(entry.id) && !whitelist.whitelist.some((item) => item.email === entry.email))
+      draft.whitelist = [...cachedWhitelist, ...whitelist.whitelist.map((user): WhitelistEntry => {
+        const cached = draft.whitelist.find((item) => item.email === user.email)
+        return {
+          id: user.id, idNumber: cached?.idNumber ?? '', name: user.name, email: user.email,
+          role: user.role as WhitelistEntry['role'], department: user.department, origin: user.origin,
+          term: cached?.term ?? '', status: user.active ? 'activated' : 'pre_registered',
+          importedAt: cached?.importedAt || user.created_at || '', importedBy: cached?.importedBy ?? '',
         }
-        return existing
-      } else {
-        const created: User = {
-          id: engine.nextId(d, 'u-'),
-          name: cleanName,
-          email: cleanEmail,
-          role: input.role,
-          origin,
-          department: input.department.trim() || 'College of Education and Social Sciences',
-          position: input.position.trim() || (input.role === 'student' ? 'Student' : 'Faculty'),
-          active: true,
-          notificationPreference: input.notificationPreference ?? 'both',
-        }
-        d.users.push(created)
-        return created
-      }
-    }),
+      })]
+      const cachedPending = draft.pendingRegistrations.filter((entry) => /^pr-\d+$/.test(entry.id) && !directory.users.some((item) => item.email === entry.email))
+      draft.pendingRegistrations = [...cachedPending, ...pending.pendingRegistrations.map((user) => ({
+        id: user.id, name: user.name, email: user.email, requestedRole: user.role, department: user.department,
+        origin: user.origin, submittedAt: user.created_at ?? '', status: 'pending' as const,
+      }))]
+    })
+  },
 
-  setUserActive: (actor: User, userId: string, active: boolean) =>
-    mutate((d) => {
-      if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can manage accounts.')
-      if (actor.id === userId) throw new FriendlyError('You can’t deactivate your own account.')
-      const u = d.users.find((x) => x.id === userId)
-      if (u) u.active = active
-    }),
+  async saveUserAccount(_actor: User, input: {
+    id?: string
+    name: string
+    email: string
+    role: Role
+    origin?: Origin
+    department: string
+    position: string
+    notificationPreference?: NotificationPreference
+  }) {
+    const existing = db.users.find((user) => user.id === input.id)
+    if (existing && existing.email !== input.email) throw new FriendlyError('An existing university email cannot be changed here.')
+    const result = await postJson<{ user: User }>('/api/auth/users', { ...input, active: existing?.active ?? true })
+    await mutate((draft) => {
+      const index = draft.users.findIndex((user) => user.id === result.user.id)
+      const user = { ...result.user, position: input.position, notificationPreference: input.notificationPreference }
+      if (index < 0) draft.users.push(user)
+      else draft.users[index] = user
+    })
+    return result.user
+  },
 
-  /** Masterlist / Whitelist Import (REQ-AUTH-3, Pre-loaded Semester Masterlist) */
-  importWhitelist: (
-    actor: User,
-    entries: Omit<WhitelistEntry, 'id' | 'status' | 'term' | 'importedAt' | 'importedBy'>[],
-    term: string,
-  ) =>
-    mutate((d, at) => {
-      if (actor.role !== 'secretary') {
-        throw new FriendlyError('Only the College Secretary can import masterlists.')
-      }
-      if (!term.trim()) {
-        throw new FriendlyError('Please specify the academic term for this masterlist.')
-      }
-      if (!entries.length) {
-        throw new FriendlyError('No valid rows found in the imported file.')
-      }
+  async setUserActive(actor: User, userId: string, active: boolean) {
+    if (actor.id === userId) throw new FriendlyError('You can’t deactivate your own account.')
+    const user = db.users.find((item) => item.id === userId)
+    if (!user) throw new FriendlyError('Account not found.')
+    const saved = await postJson<{ user: User }>('/api/auth/users', { ...user, active })
+    await mutate((draft) => { draft.users = draft.users.map((item) => item.id === userId ? { ...item, ...saved.user } : item) })
+  },
 
+  async importWhitelist(actor: User, entries: Omit<WhitelistEntry, 'id' | 'status' | 'term' | 'importedAt' | 'importedBy'>[], term: string) {
+    if (!term.trim()) throw new FriendlyError('Specify the academic term for this masterlist.')
+    const result = await postJson<{ entries: User[] }>('/api/auth/whitelist/import', { entries, term })
+    return mutate((draft, at) => {
       let added = 0
       let updated = 0
-
-      for (const entry of entries) {
-        const cleanEmail = entry.email.trim().toLowerCase()
-        if (!cleanEmail || !cleanEmail.endsWith('@msunaawan.edu.ph')) continue
-
-        const existingUser = d.users.find((u) => u.email.toLowerCase() === cleanEmail)
-        const isAlreadyActive = !!existingUser
-
-        const existingWl = d.whitelist.find((w) => w.email.toLowerCase() === cleanEmail)
-        if (existingWl) {
-          existingWl.idNumber = entry.idNumber || existingWl.idNumber
-          existingWl.name = entry.name || existingWl.name
-          existingWl.role = entry.role || existingWl.role
-          existingWl.department = entry.department || existingWl.department
-          existingWl.origin = entry.origin ?? existingWl.origin
-          existingWl.term = term.trim()
-          existingWl.status = isAlreadyActive ? 'activated' : existingWl.status
-          existingWl.importedAt = at
-          existingWl.importedBy = actor.name
-          updated++
-        } else {
-          d.whitelist.push({
-            id: engine.nextId(d, 'wl-'),
-            idNumber: entry.idNumber.trim(),
-            name: entry.name.trim(),
-            email: cleanEmail,
-            role: entry.role,
-            department: entry.department.trim(),
-            origin: entry.origin ?? 'CESS',
-            term: term.trim(),
-            status: isAlreadyActive ? 'activated' : 'pre_registered',
-            importedAt: at,
-            importedBy: actor.name,
-          })
-          added++
+      for (const user of result.entries) {
+        const input = entries.find((item) => item.email.toLowerCase() === user.email.toLowerCase())
+        const index = draft.whitelist.findIndex((item) => item.email.toLowerCase() === user.email.toLowerCase())
+        const entry: WhitelistEntry = {
+          id: user.id, idNumber: input?.idNumber ?? '', name: user.name, email: user.email, role: user.role as WhitelistEntry['role'],
+          department: user.department, origin: user.origin, term, status: user.active ? 'activated' : 'pre_registered',
+          importedAt: at, importedBy: actor.name,
         }
+        if (index === -1) { draft.whitelist.push(entry); added++ }
+        else { draft.whitelist[index] = entry; updated++ }
       }
+      return { added, updated, total: result.entries.length }
+    })
+  },
 
-      return { added, updated, total: entries.length }
-    }),
+  async deleteWhitelistEntry(_actor: User, entryId: string) {
+    await requestJson('/api/auth/whitelist/' + encodeURIComponent(entryId), { method: 'DELETE' })
+    await mutate((draft) => { draft.whitelist = draft.whitelist.filter((item) => item.id !== entryId) })
+  },
 
-  deleteWhitelistEntry: (actor: User, entryId: string) =>
-    mutate((d) => {
-      if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can manage the whitelist.')
-      const idx = d.whitelist.findIndex((w) => w.id === entryId)
-      if (idx !== -1) {
-        d.whitelist.splice(idx, 1)
-      }
-    }),
+  async approvePendingRegistration(_actor: User, id: string, overrides?: { role?: Role; department?: string; origin?: Origin }) {
+    const result = await postJson<{ user: User }>('/api/auth/pending/' + encodeURIComponent(id) + '/approve', overrides ?? {})
+    await mutate((draft) => {
+      draft.pendingRegistrations = draft.pendingRegistrations.filter((item) => item.id !== id)
+      draft.users = [...draft.users.filter((user) => user.id !== result.user.id), result.user]
+    })
+    return result.user
+  },
 
-  approvePendingRegistration: (
-    actor: User,
-    registrationId: string,
-    overrides?: { role?: Role; department?: string; origin?: Origin },
-  ) =>
-    mutate((d, at) => {
-      if (actor.role !== 'secretary') {
-        throw new FriendlyError('Only the College Secretary can approve pending registrations.')
-      }
-      const reg = d.pendingRegistrations.find((r) => r.id === registrationId)
-      if (!reg) throw new FriendlyError('Pending registration record not found.')
-      if (reg.status !== 'pending') throw new FriendlyError('This registration request has already been processed.')
-
-      const role = overrides?.role ?? reg.requestedRole
-      const department = overrides?.department ?? reg.department
-      const origin = overrides?.origin ?? reg.origin ?? 'CESS'
-
-      // Check if user account already exists
-      let existing = d.users.find((u) => u.email.toLowerCase() === reg.email.toLowerCase())
-      if (existing) {
-        existing.active = true
-        existing.role = role
-        existing.department = department
-        existing.origin = role === 'student' || role === 'faculty' ? origin : undefined
-      } else {
-        const newUser: User = {
-          id: engine.nextId(d, 'u-'),
-          name: reg.name,
-          email: reg.email.toLowerCase(),
-          role,
-          department,
-          origin: role === 'student' || role === 'faculty' ? origin : undefined,
-          position: role === 'student' ? 'Student' : 'Faculty',
-          active: true,
-          notificationPreference: 'both',
-        }
-        d.users.push(newUser)
-        existing = newUser
-      }
-
-      reg.status = 'approved'
-
-      // Mark or insert whitelist record
-      const wl = d.whitelist.find((w) => w.email.toLowerCase() === reg.email.toLowerCase())
-      if (wl) {
-        wl.status = 'activated'
-        wl.role = role as any
-        wl.department = department
-        wl.origin = origin
-      } else {
-        d.whitelist.push({
-          id: engine.nextId(d, 'wl-'),
-          idNumber: reg.idNumber ?? 'UNLISTED-APP',
-          name: reg.name,
-          email: reg.email.toLowerCase(),
-          role: role as any,
-          department,
-          origin,
-          term: 'Current Semester',
-          status: 'activated',
-          importedAt: at,
-          importedBy: actor.name,
-        })
-      }
-
-      // Add notification log
-      const pref = existing.notificationPreference ?? 'both'
-      const channels: ('email' | 'in_system')[] =
-        pref === 'email_only' ? ['email'] : pref === 'in_system_only' ? ['in_system'] : ['email', 'in_system']
-
-      d.notifications.unshift({
-        id: engine.nextId(d, 'n'),
-        kind: 'update',
-        recipientId: existing.id,
-        recipientLabel: existing.name,
-        recipientEmail: existing.email,
-        subject: 'CESS DocuFlow Account Verified & Approved',
-        body: `Welcome to CESS DocuFlow! Your university registration has been officially verified and approved by the College Secretary (${actor.name}). You can now sign in with your institutional email.`,
-        at,
-        result: 'sent',
-        readBy: [],
-        channels,
-      })
-
-      return existing
-    }),
-
-  rejectPendingRegistration: (actor: User, registrationId: string, reason: string) =>
-    mutate((d, at) => {
-      if (actor.role !== 'secretary') {
-        throw new FriendlyError('Only the College Secretary can reject registrations.')
-      }
-      const reg = d.pendingRegistrations.find((r) => r.id === registrationId)
-      if (!reg) throw new FriendlyError('Pending registration record not found.')
-      reg.status = 'rejected'
-      reg.rejectionReason = reason.trim() || 'Institutional verification could not be completed.'
-
-      d.notifications.unshift({
-        id: engine.nextId(d, 'n'),
-        kind: 'update',
-        recipientId: reg.id,
-        recipientLabel: reg.name,
-        recipientEmail: reg.email,
-        subject: 'CESS DocuFlow Registration Status',
-        body: `Your registration request for CESS DocuFlow was not approved. Reason: ${reg.rejectionReason}. Please contact the College Secretary for assistance.`,
-        at,
-        result: 'sent',
-        readBy: [],
-        channels: ['email'],
-      })
-    }),
+  async rejectPendingRegistration(_actor: User, id: string, reason: string) {
+    await postJson('/api/auth/pending/' + encodeURIComponent(id) + '/reject', { reason })
+    await mutate((draft) => { draft.pendingRegistrations = draft.pendingRegistrations.filter((item) => item.id !== id) })
+  },
 
   registerUser: (input: {
     name: string
     email: string
+    password: string
     idNumber?: string
     requestedRole: Role
     department: string
     origin?: Origin
-  }) =>
-    mutate((d, at) => {
-      const cleanName = input.name.trim()
-      const cleanEmail = input.email.trim().toLowerCase()
-      if (!cleanName) throw new FriendlyError('Please enter your full name.')
-      if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
-        throw new FriendlyError('Please enter your valid MSU at Naawan email address (@msunaawan.edu.ph).')
-      }
-
-      const existingUser = d.users.find((u) => u.email.toLowerCase() === cleanEmail)
-      if (existingUser) {
-        throw new FriendlyError('An account with this institutional email already exists. Please proceed to Sign In.')
-      }
-
-      // Check Whitelist match
-      const wlMatch = d.whitelist.find((w) => w.email.toLowerCase() === cleanEmail)
-
-      if (wlMatch) {
-        // Instant Activation via Masterlist Whitelist
-        const role = wlMatch.role
-        const department = wlMatch.department || input.department
-        const origin = wlMatch.origin ?? input.origin ?? 'CESS'
-        const newUser: User = {
-          id: engine.nextId(d, 'u-'),
-          name: wlMatch.name || cleanName,
-          email: cleanEmail,
-          role,
-          department,
-          origin: role === 'student' || role === 'faculty' ? origin : undefined,
-          position: role === 'student' ? 'Student' : 'Faculty',
-          active: true,
-          notificationPreference: 'both',
-        }
-        d.users.push(newUser)
-        wlMatch.status = 'activated'
-
-        d.notifications.unshift({
-          id: engine.nextId(d, 'n'),
-          kind: 'update',
-          recipientId: newUser.id,
-          recipientLabel: newUser.name,
-          recipientEmail: newUser.email,
-          subject: 'Welcome to CESS DocuFlow (Masterlist Verified)',
-          body: `Your student/faculty record was verified against the official semester masterlist. Your account is active. Welcome!`,
-          at,
-          result: 'sent',
-          readBy: [],
-          channels: ['email', 'in_system'],
-        })
-
-        return { status: 'activated' as const, user: newUser }
-      }
-
-      // Unlisted User: Queue for College Secretary approval
-      const existingPending = d.pendingRegistrations.find(
-        (p) => p.email.toLowerCase() === cleanEmail && p.status === 'pending',
-      )
-      if (existingPending) {
-        throw new FriendlyError(
-          'Your registration is already pending verification with the College Secretary. Please await approval.',
-        )
-      }
-
-      const pending: PendingRegistration = {
-        id: engine.nextId(d, 'pr-'),
-        name: cleanName,
-        email: cleanEmail,
-        idNumber: input.idNumber?.trim(),
-        requestedRole: input.requestedRole,
-        department: input.department.trim(),
-        origin: input.origin ?? 'CESS',
-        submittedAt: at,
-        status: 'pending',
-      }
-      d.pendingRegistrations.push(pending)
-
-      return { status: 'pending' as const, pending }
-    }),
-
+  }) => postJson<{ status: 'pending'; message: string }>('/api/auth/register', input),
 
   updateProcessingDays: (actor: User, typeId: string, days: [number, number]) =>
     mutate((d) => {
@@ -920,14 +552,15 @@ export const api = {
         throw new FriendlyError('Please provide a valid template file name.')
       d.syllabusTemplate = {
         fileName: template.fileName.trim(),
+        fileUrl: template.fileUrl,
         updatedAt: new Date().toISOString(),
         uploadedBy: actor.name,
-        fileSize: template.fileSize || 'Official Template',
+        fileSize: template.fileSize,
       }
     }),
 
   /** Faculty self-service: Upload or update syllabus for own subject. */
-  uploadFacultySyllabus: (actor: User, facultyId: string, subjectCode: string, fileName: string) =>
+  uploadFacultySyllabus: (actor: User, facultyId: string, subjectCode: string, fileName: string, fileUrl: string, fileSizeKb: number) =>
     mutate((d) => {
       const fac = d.faculty.find((f) => f.id === facultyId)
       if (!fac) throw new FriendlyError('Faculty record not found.')
@@ -949,6 +582,8 @@ export const api = {
       )
       if (existingSyl) {
         existingSyl.fileName = fileName.trim()
+        existingSyl.fileUrl = fileUrl
+        existingSyl.fileSizeKb = fileSizeKb
         existingSyl.uploadedAt = new Date().toISOString()
         existingSyl.status = 'active'
       } else {
@@ -963,7 +598,8 @@ export const api = {
           academicYear: '2026-2027',
           semester: '1st Semester',
           fileName: fileName.trim(),
-          fileSizeKb: 450,
+          fileUrl,
+          fileSizeKb,
           uploadedAt: new Date().toISOString(),
           status: 'active',
         })
@@ -1007,6 +643,7 @@ export const api = {
       academicYear?: string
       semester?: string
       fileName: string
+      fileUrl: string
       fileSizeKb?: number
       description?: string
       department?: string
@@ -1088,7 +725,8 @@ export const api = {
         history.push({
           version: prevVersion,
           fileName: existing.fileName,
-          fileSizeKb: existing.fileSizeKb || 450,
+          fileUrl: existing.fileUrl,
+          fileSizeKb: existing.fileSizeKb,
           uploadedAt: existing.uploadedAt,
           uploadedBy: existing.facultyName,
           changeNote: existing.changeNote || 'Initial syllabus release',
@@ -1098,7 +736,8 @@ export const api = {
           ...existing,
           subjectTitle: title,
           fileName,
-          fileSizeKb: payload.fileSizeKb || existing.fileSizeKb || 450,
+          fileUrl: payload.fileUrl,
+          fileSizeKb: payload.fileSizeKb,
           description: payload.description || existing.description,
           uploadedAt: new Date().toISOString(),
           status: 'active',
@@ -1119,7 +758,8 @@ export const api = {
           academicYear: ay,
           semester: sem,
           fileName,
-          fileSizeKb: payload.fileSizeKb || 450,
+          fileUrl: payload.fileUrl,
+          fileSizeKb: payload.fileSizeKb,
           description: payload.description || 'Outcome-Based Education (OBE) course syllabus.',
           uploadedAt: new Date().toISOString(),
           status: 'active',
@@ -1182,7 +822,7 @@ export const api = {
   /**
    * PB-57: Dedicated Table of Specifications (TOS) Management - Update template.
    */
-  updateTosTemplate: (actor: User, fileName: string, fileSize?: string) =>
+  updateTosTemplate: (actor: User, fileName: string, fileUrl: string, fileSize?: string) =>
     mutate((d) => {
       if (actor.role !== 'secretary') {
         throw new FriendlyError('Only the College Secretary is authorized to update the institutional TOS template.')
@@ -1191,7 +831,8 @@ export const api = {
         fileName,
         updatedAt: new Date().toISOString(),
         uploadedBy: `${actor.name} (College Secretary)`,
-        fileSize: fileSize || '94 KB',
+        fileUrl,
+        fileSize,
       }
     }),
 
@@ -1210,6 +851,7 @@ export const api = {
       totalItems?: number
       cognitiveDistribution?: TosCognitiveLevels
       fileName: string
+      fileUrl: string
       fileSizeKb?: number
       description?: string
       department?: string
@@ -1227,7 +869,8 @@ export const api = {
       const sem = payload.semester || '1st Semester'
       const term = payload.term || 'Midterm'
       const examType = payload.examType || `${term} Examination`
-      const totalItems = payload.totalItems || 50
+      const totalItems = payload.totalItems ?? 0
+      if (!Number.isInteger(totalItems) || totalItems < 1) throw new FriendlyError('Enter the total number of examination items.')
 
       if (!code) throw new FriendlyError('Course code is required (e.g. EDUC 101).')
       if (!title) throw new FriendlyError('Course title is required.')
@@ -1282,7 +925,8 @@ export const api = {
           totalItems,
           cognitiveDistribution: payload.cognitiveDistribution || existing.cognitiveDistribution,
           fileName,
-          fileSizeKb: payload.fileSizeKb || existing.fileSizeKb || 115,
+          fileUrl: payload.fileUrl,
+          fileSizeKb: payload.fileSizeKb,
           description: payload.description || existing.description,
           uploadedAt: new Date().toISOString(),
           status: 'active',
@@ -1301,16 +945,10 @@ export const api = {
           term,
           examType,
           totalItems,
-          cognitiveDistribution: payload.cognitiveDistribution || {
-            remembering: 15,
-            understanding: 15,
-            applying: 10,
-            analyzing: 5,
-            evaluating: 3,
-            creating: 2,
-          },
+          cognitiveDistribution: payload.cognitiveDistribution,
           fileName,
-          fileSizeKb: payload.fileSizeKb || 115,
+          fileUrl: payload.fileUrl,
+          fileSizeKb: payload.fileSizeKb,
           description: payload.description || `${term} assessment examination blueprint.`,
           uploadedAt: new Date().toISOString(),
           status: 'active',
@@ -1524,7 +1162,4 @@ export const api = {
     return officeName
   },
 
-  resetDemo() {
-    commit(createSeed())
-  },
 }

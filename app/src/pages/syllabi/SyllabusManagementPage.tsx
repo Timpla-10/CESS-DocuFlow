@@ -38,18 +38,11 @@ import {
   Tooltip,
   cn,
 } from '../../components/ui'
-import { downloadGeneratedPdf } from '../../content/language'
+import { downloadStoredFile, saveUploadedFile } from '../../lib/storedFiles'
 import { api, useDb } from '../../data/store'
-import type { FacultyEntry, Subject, SyllabusTemplate, SyllabusVersion } from '../../data/types'
+import type { FacultyEntry, Subject, SyllabusVersion } from '../../data/types'
 import { fetchSupabaseSyllabi } from '../../lib/supabase'
 import { formatDate } from '../../lib/time'
-
-const DEFAULT_SYLLABUS_TEMPLATE: SyllabusTemplate = {
-  fileName: 'CESS_Official_Course_Syllabus_Template_2026.docx',
-  updatedAt: '2026-03-01T08:00:00Z',
-  uploadedBy: 'Ms. Carmela Ortiz (College Secretary)',
-  fileSize: '142 KB',
-}
 
 const ACADEMIC_YEARS = ['2026-2027', '2025-2026']
 const SEMESTERS = ['1st Semester', '2nd Semester', 'Summer Term']
@@ -93,6 +86,7 @@ export function SyllabusManagementPage() {
   const [previewItem, setPreviewItem] = useState<{
     faculty: FacultyEntry
     subject: Subject
+    fileUrl?: string
   } | null>(null)
   const [isPreviewTemplateOpen, setIsPreviewTemplateOpen] = useState(false)
 
@@ -107,8 +101,9 @@ export function SyllabusManagementPage() {
   const [uploadSem, setUploadSem] = useState('1st Semester')
   const [uploadDept, setUploadDept] = useState(user.department || DEPARTMENTS[1])
   const [uploadDescription, setUploadDescription] = useState('')
-  const [uploadFileName, setUploadFileName] = useState('')
-  const [uploadFileSizeKb, setUploadFileSizeKb] = useState(450)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const uploadFileName = uploadFile?.name ?? ''
+  const uploadFileSizeKb = uploadFile ? Math.round(uploadFile.size / 1024) : undefined
   const [uploadChangeNote, setUploadChangeNote] = useState('')
   const [uploadTemplateCertified, setUploadTemplateCertified] = useState(true)
   const [uploadBusy, setUploadBusy] = useState(false)
@@ -127,6 +122,7 @@ export function SyllabusManagementPage() {
     instructor: string
     currentVersion: number
     currentFileName?: string
+    syllabusId?: string
     currentUploadedAt?: string
     currentChangeNote?: string
     history: SyllabusVersion[]
@@ -134,10 +130,11 @@ export function SyllabusManagementPage() {
 
   // Template upload state
   const [isTemplateUploadOpen, setIsTemplateUploadOpen] = useState(false)
-  const [newTemplateFileName, setNewTemplateFileName] = useState('')
+  const [newTemplateFile, setNewTemplateFile] = useState<File | null>(null)
+  const newTemplateFileName = newTemplateFile?.name ?? ''
   const [templateBusy, setTemplateBusy] = useState(false)
 
-  const syllabusTemplate: SyllabusTemplate = db.syllabusTemplate || DEFAULT_SYLLABUS_TEMPLATE
+  const syllabusTemplate = db.syllabusTemplate
 
   // Compile full course catalog and syllabus status
   // Syllabi records come from db.syllabi or are derived from db.faculty.subjects
@@ -272,7 +269,7 @@ export function SyllabusManagementPage() {
     setUploadAy(selectedAy)
     setUploadSem(selectedSem)
     setUploadDescription('')
-    setUploadFileName('')
+    setUploadFile(null)
     setUploadChangeNote('')
     setUploadTemplateCertified(true)
     setUploadErrors({})
@@ -282,8 +279,7 @@ export function SyllabusManagementPage() {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setUploadFileName(file.name)
-    setUploadFileSizeKb(Math.round(file.size / 1024) || 450)
+    setUploadFile(file)
     setUploadErrors((prev) => ({ ...prev, file: undefined }))
   }
 
@@ -302,7 +298,7 @@ export function SyllabusManagementPage() {
       errs.note = 'Required: Please provide a revision summary explaining the updates in this replacement version.'
     }
 
-    if (Object.keys(errs).length > 0) {
+    if (!uploadFile || Object.keys(errs).length > 0) {
       setUploadErrors(errs)
       return
     }
@@ -316,6 +312,7 @@ export function SyllabusManagementPage() {
         academicYear: uploadAy,
         semester: uploadSem,
         fileName: uploadFileName,
+        fileUrl: await saveUploadedFile(uploadFile),
         fileSizeKb: uploadFileSizeKb,
         description: uploadDescription,
         department: uploadDept,
@@ -363,59 +360,27 @@ export function SyllabusManagementPage() {
     }
   }
 
-  const handleDownload = (item: { subjectCode: string; subjectTitle: string; syllabusFile?: string; facultyName: string }) => {
-    const fileName = item.syllabusFile || `${item.subjectCode.replace(/\s+/g, '_')}_Syllabus.pdf`
-    downloadGeneratedPdf(
-      fileName,
-      `OFFICIAL COURSE SYLLABUS: ${item.subjectCode} — ${item.subjectTitle}`,
-      [
-        'MINDANAO STATE UNIVERSITY AT NAAWAN',
-        'COLLEGE OF EDUCATION AND SOCIAL SCIENCES',
-        'OFFICIAL COURSE SYLLABUS & TABLE OF SPECIFICATIONS (TOS)',
-        '',
-        `Course Code: ${item.subjectCode}`,
-        `Course Title: ${item.subjectTitle}`,
-        `Instructor: ${item.facultyName}`,
-        `Term: ${selectedAy} — ${selectedSem}`,
-        `File Name: ${fileName}`,
-        '',
-        'COURSE OVERVIEW & LEARNING PLAN:',
-        '1. Course Outcomes (COs) aligned with Institutional Graduate Attributes (IGAs).',
-        '2. Weekly syllabus matrix of topics, teaching-learning activities (TLAs), and assessment tasks (ATs).',
-        '3. Official Table of Specifications (TOS) indicating Bloom levels and cognitive domains.',
-        '4. Course policies on attendance, academic integrity, and grade computation.',
-        '',
-        'This electronic course syllabus is maintained and certified under CESS DocuFlow.',
-      ],
+  const handleDownload = (item: { syllabusId?: string; syllabusFile?: string }) => {
+    const record = db.syllabi?.find((entry) => entry.id === item.syllabusId)
+    downloadStoredFile(record?.fileUrl, item.syllabusFile).catch(() =>
+      toast.error('Download unavailable', 'The original syllabus file is unavailable.'),
     )
-    toast.info('Downloading Syllabus', `Retrieved ${fileName}.`)
   }
 
   const handleDownloadTemplate = () => {
-    downloadGeneratedPdf(syllabusTemplate.fileName, 'OFFICIAL CESS COURSE SYLLABUS TEMPLATE', [
-      'MINDANAO STATE UNIVERSITY AT NAAWAN',
-      'COLLEGE OF EDUCATION AND SOCIAL SCIENCES',
-      'OFFICIAL COURSE SYLLABUS & TABLE OF SPECIFICATIONS (TOS) TEMPLATE',
-      '',
-      `Template File: ${syllabusTemplate.fileName}`,
-      `Managed by: ${syllabusTemplate.uploadedBy}`,
-      `Last Revision: ${new Date(syllabusTemplate.updatedAt).toLocaleDateString()}`,
-      '',
-      'INSTRUCTIONS FOR FACULTY MEMBERS:',
-      '1. Prepare your course syllabus using this approved standard template in alignment with CHED CMO and MSU Naawan OBE standards.',
-      '2. Specify Course Learning Outcomes (CLOs) and Table of Specifications (TOS) percentages.',
-      '3. Submit or upload your completed syllabus in the Course Syllabi repository.',
-    ])
-    toast.info('Template Downloaded', `Downloaded ${syllabusTemplate.fileName}.`)
+    downloadStoredFile(syllabusTemplate?.fileUrl, syllabusTemplate?.fileName).catch(() =>
+      toast.error('Download unavailable', 'The original syllabus template is unavailable.'),
+    )
   }
 
   const handleTemplateUploadSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!newTemplateFileName.trim()) return
+    if (!newTemplateFile) return
     setTemplateBusy(true)
     try {
       await api.updateSyllabusTemplate(user, {
-        fileName: newTemplateFileName.trim(),
+        fileName: newTemplateFileName,
+        fileUrl: await saveUploadedFile(newTemplateFile),
         updatedAt: new Date().toISOString(),
         uploadedBy: `${user.name} (College Secretary)`,
       })
@@ -449,7 +414,7 @@ export function SyllabusManagementPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Tooltip content="Download CESS Official Course Syllabus Template (.docx / .pdf)">
-              <Button variant="secondary" icon={Download} onClick={handleDownloadTemplate}>
+              <Button variant="secondary" icon={Download} onClick={handleDownloadTemplate} disabled={!syllabusTemplate?.fileUrl}>
                 Download Official Template
               </Button>
             </Tooltip>
@@ -459,7 +424,7 @@ export function SyllabusManagementPage() {
                   variant="secondary"
                   icon={Upload}
                   onClick={() => {
-                    setNewTemplateFileName('')
+                    setNewTemplateFile(null)
                     setIsTemplateUploadOpen(true)
                   }}
                 >
@@ -796,6 +761,7 @@ export function SyllabusManagementPage() {
                                         instructor: item.facultyName,
                                         currentVersion: item.version || 1,
                                         currentFileName: item.syllabusFile,
+                                        syllabusId: item.syllabusId,
                                         currentUploadedAt: item.uploadedAt,
                                         currentChangeNote: item.changeNote,
                                         history: item.versionHistory,
@@ -827,6 +793,7 @@ export function SyllabusManagementPage() {
                                     type="button"
                                     onClick={() =>
                                       setPreviewItem({
+                                        fileUrl: db.syllabi?.find((entry) => entry.id === item.syllabusId)?.fileUrl,
                                         faculty: {
                                           id: item.facultyId,
                                           userId: item.facultyUserId,
@@ -935,11 +902,10 @@ export function SyllabusManagementPage() {
                       </span>
                     </Tooltip>
                     <h3 className="text-lg font-bold text-ink-950">
-                      {syllabusTemplate.fileName}
+                      {syllabusTemplate?.fileName ?? 'No template has been uploaded.'}
                     </h3>
                     <p className="mt-1 text-xs text-ink-600">
-                      Maintained by {syllabusTemplate.uploadedBy} · Last updated{' '}
-                      {formatDate(syllabusTemplate.updatedAt)}
+                      {syllabusTemplate && <>Maintained by {syllabusTemplate.uploadedBy} · Last updated {formatDate(syllabusTemplate.updatedAt)}</>}
                     </p>
                   </div>
                 </div>
@@ -949,13 +915,13 @@ export function SyllabusManagementPage() {
                     <Button
                       variant="secondary"
                       icon={Eye}
-                      onClick={() => setIsPreviewTemplateOpen(true)}
+                      onClick={() => setIsPreviewTemplateOpen(true)} disabled={!syllabusTemplate?.fileUrl}
                     >
                       Preview Template
                     </Button>
                   </Tooltip>
                   <Tooltip content="Download CESS Official Course Syllabus Template (.docx / .pdf)">
-                    <Button icon={Download} onClick={handleDownloadTemplate}>
+                    <Button icon={Download} onClick={handleDownloadTemplate} disabled={!syllabusTemplate?.fileUrl}>
                       Download Template
                     </Button>
                   </Tooltip>
@@ -1220,7 +1186,7 @@ export function SyllabusManagementPage() {
               </span>
               <button
                 type="button"
-                onClick={handleDownloadTemplate}
+                onClick={handleDownloadTemplate} disabled={!syllabusTemplate?.fileUrl}
                 className="inline-flex items-center gap-1 text-2xs font-bold text-brand-700 hover:underline"
               >
                 <Download className="size-3" /> Get Official Template
@@ -1338,10 +1304,8 @@ export function SyllabusManagementPage() {
                     type="button"
                     onClick={() =>
                       handleDownload({
-                        subjectCode: versionHistoryItem.courseCode,
-                        subjectTitle: versionHistoryItem.courseTitle,
+                        syllabusId: versionHistoryItem.syllabusId,
                         syllabusFile: versionHistoryItem.currentFileName,
-                        facultyName: versionHistoryItem.instructor,
                       })
                     }
                     className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-800 hover:underline"
@@ -1396,26 +1360,10 @@ export function SyllabusManagementPage() {
                           </div>
                           <button
                             type="button"
-                            onClick={() =>
-                              downloadGeneratedPdf(
-                                vh.fileName,
-                                `ARCHIVED SYLLABUS v${vh.version}.0: ${versionHistoryItem.courseCode}`,
-                                [
-                                  'MINDANAO STATE UNIVERSITY AT NAAWAN',
-                                  'COLLEGE OF EDUCATION AND SOCIAL SCIENCES',
-                                  `ARCHIVED HISTORICAL COURSE SYLLABUS — VERSION ${vh.version}.0`,
-                                  '',
-                                  `Course Code: ${versionHistoryItem.courseCode}`,
-                                  `Course Title: ${versionHistoryItem.courseTitle}`,
-                                  `Instructor: ${vh.uploadedBy}`,
-                                  `Archived Upload Date: ${formatDate(vh.uploadedAt)}`,
-                                  `Revision Note: ${vh.changeNote || 'Standard replacement'}`,
-                                  '',
-                                  'ACCREDITATION ARCHIVE NOTICE:',
-                                  'This electronic file represents an archived syllabus version preserved under CESS DocuFlow.',
-                                ],
-                              )
-                            }
+                            onClick={() => downloadStoredFile(vh.fileUrl, vh.fileName).catch(() =>
+                              toast.error('Download unavailable', 'The archived file is unavailable.'),
+                            )}
+                            disabled={!vh.fileUrl}
                             className="inline-flex items-center gap-1 text-2xs font-semibold text-brand-700 hover:underline"
                           >
                             <Download className="size-3" /> Archive Copy
@@ -1455,6 +1403,7 @@ export function SyllabusManagementPage() {
               </Button>
               <Button
                 onClick={handleTemplateUploadSubmit}
+                disabled={!newTemplateFile}
                 loading={templateBusy}
                 icon={UploadCloud}
               >
@@ -1464,28 +1413,14 @@ export function SyllabusManagementPage() {
           }
         >
           <form onSubmit={handleTemplateUploadSubmit} className="space-y-4">
-            <Field
-              label="New Template File Name"
-              required
-              hint="e.g. CESS_Official_Course_Syllabus_Template_2026_Rev2.docx"
-            >
-              <Input
-                type="text"
-                value={newTemplateFileName}
-                onChange={(e) => setNewTemplateFileName(e.target.value)}
-                placeholder="Enter file name or choose file below"
-                required
-              />
-            </Field>
-
-            <Field label="Choose Template File">
+            <Field label="Choose Template File" required>
               <input
                 type="file"
                 accept=".docx,.pdf,.doc"
                 className="text-xs text-ink-600"
                 onChange={(e) => {
                   const f = e.target.files?.[0]
-                  if (f) setNewTemplateFileName(f.name)
+                  setNewTemplateFile(f ?? null)
                 }}
               />
             </Field>
@@ -1500,6 +1435,7 @@ export function SyllabusManagementPage() {
           onClose={() => setPreviewItem(null)}
           faculty={previewItem.faculty}
           subject={previewItem.subject}
+          fileUrl={previewItem.fileUrl}
         />
       )}
 

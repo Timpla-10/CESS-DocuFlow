@@ -10,7 +10,6 @@ import {
   Lock,
   Mail,
   ShieldCheck,
-  X,
 } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
@@ -18,33 +17,9 @@ import { homeFor } from '../../app/nav'
 import { useSession } from '../../app/session'
 import { Logo } from '../../components/Logo'
 import { ButtonLink, Callout, cn } from '../../components/ui'
-import { MESSAGES, ROLE_LABEL, friendlyError } from '../../content/language'
-import { DEMO_PASSWORD } from '../../data/seed'
-import { api, useDb } from '../../data/store'
+import { MESSAGES, friendlyError } from '../../content/language'
+import { api } from '../../data/store'
 import type { Origin, Role } from '../../data/types'
-
-function GoogleIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-      />
-    </svg>
-  )
-}
 
 /**
  * Right-panel visual: Smooth purple organic wave (#7C3AED -> #581C87) curving
@@ -524,7 +499,6 @@ function AuthLayout({ children }: { children: ReactNode }) {
 
 export function SignInPage() {
   const { user, signIn, signOut } = useSession()
-  const db = useDb()
   const navigate = useNavigate()
   const location = useLocation()
   const state = (location.state ?? {}) as { from?: string | { pathname?: string }; signedOut?: boolean }
@@ -540,21 +514,17 @@ export function SignInPage() {
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
   const [busy, setBusy] = useState(false)
 
-  // University Google Workspace Sign-In State
-  const [showGoogleModal, setShowGoogleModal] = useState(false)
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('')
-  const [googleError, setGoogleError] = useState<string | null>(null)
-  const [googleBusy, setGoogleBusy] = useState(false)
-
   // Registration Mode State
   const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin')
   const [regName, setRegName] = useState('')
   const [regEmail, setRegEmail] = useState('')
+  const [regPassword, setRegPassword] = useState('')
+  const regPasswordId = useId()
   const [regIdNumber, setRegIdNumber] = useState('')
   const [regRole, setRegRole] = useState<Role>('student')
   const [regOrigin, setRegOrigin] = useState<'CESS' | 'IDS'>('CESS')
   const [regDept, setRegDept] = useState('BSEd English')
-  const [regErrors, setRegErrors] = useState<{ name?: string; email?: string; dept?: string }>({})
+  const [regErrors, setRegErrors] = useState<{ name?: string; email?: string; dept?: string; password?: string }>({})
   const [roleFocused, setRoleFocused] = useState(false)
   const [originFocused, setOriginFocused] = useState(false)
   const [deptFocused, setDeptFocused] = useState(false)
@@ -569,30 +539,6 @@ export function SignInPage() {
 
   // Only auto-redirect if explicitly routed here from an attempted protected route
   if (user && state.from) return <Navigate to={fromPath!} replace />
-
-  const handleGoogleSignIn = async (targetEmail: string) => {
-    setGoogleError(null)
-    const clean = targetEmail.trim().toLowerCase()
-    if (!clean) {
-      setGoogleError('Please enter your university Gmail address.')
-      return
-    }
-    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(clean)) {
-      setGoogleError('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.')
-      return
-    }
-    setGoogleBusy(true)
-    try {
-      const u = await api.signInWithUniversityGoogle(clean)
-      signIn(u)
-      setShowGoogleModal(false)
-      navigate(homeFor(u.role), { replace: true })
-    } catch (err) {
-      setGoogleError(friendlyError(err))
-    } finally {
-      setGoogleBusy(false)
-    }
-  }
 
   const handleEmailChange = (nextEmail: string) => {
     setEmail(nextEmail)
@@ -615,7 +561,7 @@ export function SignInPage() {
     if (Object.keys(next).length) return
     setBusy(true)
     try {
-      const u = await api.signIn(cleanEmail, password)
+      const u = await api.signIn(cleanEmail, password, rememberMe)
       signIn(u)
       navigate(homeFor(u.role), { replace: true })
     } catch (err) {
@@ -628,12 +574,13 @@ export function SignInPage() {
   const submitRegister = async (e: FormEvent) => {
     e.preventDefault()
     setRegFeedback(null)
-    const errs: { name?: string; email?: string; dept?: string } = {}
+    const errs: { name?: string; email?: string; dept?: string; password?: string } = {}
     if (!regName.trim()) errs.name = 'Please enter your full name.'
     if (!regEmail.trim()) errs.email = 'Please enter your institutional email.'
     else if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(regEmail.trim())) {
       errs.email = 'Email must be an official @msunaawan.edu.ph address.'
     }
+    if (regPassword.length < 8) errs.password = 'Choose a password of at least 8 characters.'
     if (!regDept.trim()) errs.dept = 'Please specify your department or degree program.'
     setRegErrors(errs)
     if (Object.keys(errs).length) {
@@ -642,31 +589,21 @@ export function SignInPage() {
 
     setRegBusy(true)
     try {
-      const res = await api.registerUser({
+      const result = await api.registerUser({
         name: regName,
         email: regEmail,
+        password: regPassword,
         idNumber: regIdNumber,
         requestedRole: regRole,
         department: regDept,
         origin: regOrigin,
       })
 
-      if (res.status === 'activated') {
-        setRegFeedback({
-          type: 'success',
-          title: '🎉 Masterlist Match Confirmed!',
-          message: `Your record was verified on the official semester masterlist. Your account has been activated automatically as ${ROLE_LABEL[res.user.role]} (${res.user.department}). You can now sign in!`,
-        })
-        setEmail(regEmail)
-        setPassword(DEMO_PASSWORD)
-        setAuthMode('signin')
-      } else {
-        setRegFeedback({
-          type: 'pending',
-          title: '⏳ Submitted to College Secretary',
-          message: `Your email address is not currently on the pre-loaded semester masterlist. Your registration has been submitted to the College Secretary (Ms. Carmela Ortiz) for manual verification. You will be able to access the system once approved.`,
-        })
-      }
+      setRegFeedback({
+        type: 'pending',
+        title: 'Submitted to College Secretary',
+        message: result.message,
+      })
     } catch (err) {
       setRegFeedback({
         type: 'error',
@@ -730,34 +667,6 @@ export function SignInPage() {
                 {errors.form.replace(/^We couldn’t sign you in\. /, '')}
               </Callout>
             )}
-
-            {/* University Google Workspace Sign-In Button */}
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setGoogleError(null)
-                  setShowGoogleModal(true)
-                }}
-                className={cn(
-                  'flex h-11 w-full items-center justify-center gap-3 rounded-full border border-purple-200/90 bg-white px-5 text-sm font-semibold text-[#1E1035] shadow-xs transition-all duration-150',
-                  'hover:border-purple-300 hover:bg-purple-50/50 hover:shadow-sm active:translate-y-0 cursor-pointer',
-                )}
-              >
-                <GoogleIcon className="size-4 shrink-0" />
-                <span>Sign in with University Google Account</span>
-              </button>
-            </div>
-
-            {/* Visual Divider */}
-            <div className="relative my-5 flex items-center justify-center">
-              <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                <div className="w-full border-t border-purple-200/70" />
-              </div>
-              <div className="relative bg-[#FAFAFE] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">
-                Or enter credentials
-              </div>
-            </div>
 
             <form onSubmit={submit} noValidate className="space-y-4">
           {/* Field 1: University Gmail Account */}
@@ -916,6 +825,15 @@ export function SignInPage() {
             )}
 
             <form onSubmit={submitRegister} noValidate className="mt-6 space-y-3.5">
+              <div>
+                <label htmlFor={regPasswordId} className="mb-1.5 block text-xs font-semibold text-ink-900">Create password</label>
+                <input id={regPasswordId} type="password" autoComplete="new-password" required minLength={8} value={regPassword}
+                  onChange={(event) => { setRegPassword(event.target.value); setRegErrors((previous) => ({ ...previous, password: undefined })) }}
+                  aria-invalid={!!regErrors.password} aria-describedby={regErrors.password ? `${regPasswordId}-error` : undefined}
+                  className="h-11 w-full rounded-full bg-purple-50 px-4 text-sm ring-1 ring-inset ring-purple-300 focus:ring-2 focus:ring-purple-700" />
+                {regErrors.password && <p id={`${regPasswordId}-error`} role="alert" className="mt-1 text-xs text-danger-700">{regErrors.password}</p>}
+              </div>
+
               <div>
                 <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Full Name</label>
                 <input
@@ -1169,124 +1087,6 @@ export function SignInPage() {
           </>
         )}
 
-        {/* Google Workspace University Account Picker Modal */}
-        {showGoogleModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="google-modal-title"
-          >
-            <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-black/10 sm:p-7 animate-scale-in">
-              {/* Modal Header */}
-              <div className="flex items-start justify-between border-b border-purple-100 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="grid size-10 place-items-center rounded-xl bg-purple-50 ring-1 ring-purple-200">
-                    <GoogleIcon className="size-5" />
-                  </div>
-                  <div>
-                    <h2 id="google-modal-title" className="text-base font-bold text-[#1E1035]">
-                      Sign in with Google Workspace
-                    </h2>
-                    <p className="text-xs text-[#6B7280]">
-                      Mindanao State University at Naawan
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowGoogleModal(false)}
-                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer"
-                  aria-label="Close"
-                >
-                  <X className="size-5" />
-                </button>
-              </div>
-
-              {/* Policy Banner */}
-              <div className="mt-4 flex items-center gap-2 rounded-xl bg-purple-50/80 px-3.5 py-2.5 text-xs text-purple-900 ring-1 ring-purple-200/80">
-                <ShieldCheck className="size-4 shrink-0 text-purple-700" />
-                <span>
-                  Only official <strong>@msunaawan.edu.ph</strong> university Gmail accounts are authorized.
-                </span>
-              </div>
-
-              {googleError && (
-                <div className="mt-3.5">
-                  <Callout tone="danger" title="Unable to sign in">
-                    {googleError}
-                  </Callout>
-                </div>
-              )}
-
-              {/* Account List */}
-              <div className="mt-4">
-                <p className="text-2xs font-bold uppercase tracking-wider text-[#6B7280]">
-                  Choose University Account
-                </p>
-                <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto pr-1">
-                  {db.users
-                    .filter((u) => u.active)
-                    .map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        disabled={googleBusy}
-                        onClick={() => handleGoogleSignIn(u.email)}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-2xl border border-transparent p-2.5 text-left transition-all cursor-pointer',
-                          'hover:border-purple-200 hover:bg-purple-50/70 active:scale-[0.99]',
-                          googleBusy && 'opacity-60 cursor-not-allowed',
-                        )}
-                      >
-                        <div className="grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-purple-700 to-indigo-900 text-xs font-bold text-white shadow-xs">
-                          {u.name.slice(0, 1)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate text-xs font-bold text-[#1E1035]">{u.name}</span>
-                            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-800">
-                              {ROLE_LABEL[u.role]}
-                            </span>
-                          </div>
-                          <p className="truncate text-[11px] text-[#6B7280]">{u.email}</p>
-                        </div>
-                      </button>
-                    ))}
-                </div>
-              </div>
-
-              {/* Custom University Email Input */}
-              <div className="mt-5 border-t border-purple-100 pt-4">
-                <p className="text-2xs font-bold uppercase tracking-wider text-[#6B7280]">
-                  Or enter another university account
-                </p>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    handleGoogleSignIn(customGoogleEmail)
-                  }}
-                  className="mt-2 flex gap-2"
-                >
-                  <input
-                    type="email"
-                    value={customGoogleEmail}
-                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                    placeholder="name@msunaawan.edu.ph"
-                    className="h-10 flex-1 rounded-full bg-[#F1ECF9] px-4 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
-                  />
-                  <button
-                    type="submit"
-                    disabled={googleBusy}
-                    className="h-10 rounded-full bg-purple-800 px-5 text-xs font-bold text-white transition-all hover:bg-purple-900 disabled:opacity-60 cursor-pointer"
-                  >
-                    {googleBusy ? 'Signing in…' : 'Continue'}
-                  </button>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </AuthLayout>
   )
@@ -1305,14 +1105,15 @@ export function ForgotPasswordPage() {
   const newPassId = useId()
   const confirmPassId = useId()
 
-  const [step, setStep] = useState<'email' | 'code' | 'new_password' | 'success'>('email')
-  const [email, setEmail] = useState('')
+  const [recovery] = useState(() => new URLSearchParams(window.location.search))
+  const recoveryToken = recovery.get('token')
+  const [step, setStep] = useState<'email' | 'code' | 'new_password' | 'success'>(recoveryToken ? 'new_password' : 'email')
+  const [email, setEmail] = useState(recovery.get('email') ?? '')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   // 6-digit verification code states
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', ''])
-  const [isCodeIncorrect, setIsCodeIncorrect] = useState(false)
   const [countdown, setCountdown] = useState(59)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
@@ -1352,7 +1153,6 @@ export function ForgotPasswordPage() {
     try {
       await api.requestPasswordReset(cleanEmail)
       setDigits(['', '', '', '', '', ''])
-      setIsCodeIncorrect(false)
       setCountdown(59)
       setStep('code')
     } catch (err) {
@@ -1367,7 +1167,6 @@ export function ForgotPasswordPage() {
     const nextDigits = [...digits]
     nextDigits[index] = char
     setDigits(nextDigits)
-    setIsCodeIncorrect(false)
 
     if (char && index < 5) {
       inputRefs.current[index + 1]?.focus()
@@ -1382,7 +1181,6 @@ export function ForgotPasswordPage() {
         const nextDigits = [...digits]
         nextDigits[index] = ''
         setDigits(nextDigits)
-        setIsCodeIncorrect(false)
       }
     } else if (e.key === 'ArrowLeft' && index > 0) {
       inputRefs.current[index - 1]?.focus()
@@ -1401,51 +1199,49 @@ export function ForgotPasswordPage() {
       nextDigits[i] = paste[i] || ''
     }
     setDigits(nextDigits)
-    setIsCodeIncorrect(false)
     const nextFocusIdx = Math.min(paste.length, 5)
     inputRefs.current[nextFocusIdx]?.focus()
   }
 
-  const handleResend = () => {
-    if (countdown > 0) return
-    setCountdown(59)
-    setIsCodeIncorrect(false)
-    setDigits(['', '', '', '', '', ''])
-    inputRefs.current[0]?.focus()
-  }
-
-  const handleVerifyCode = (e: FormEvent) => {
-    e.preventDefault()
-    const enteredCode = digits.join('')
-    if (enteredCode.length < 6) return
-
+  const handleResend = async () => {
+    if (countdown > 0 || busy) return
     setBusy(true)
-    setTimeout(() => {
+    setError(null)
+    try {
+      await api.requestPasswordReset(email.trim())
+      setCountdown(59)
+      setDigits(['', '', '', '', '', ''])
+      inputRefs.current[0]?.focus()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
       setBusy(false)
-      // Demo code: '658485' is the official demo code shown in Figma diagram
-      // Any other code triggers the red incorrect code error state
-      if (enteredCode === '658485') {
-        setIsCodeIncorrect(false)
-        setStep('new_password')
-      } else {
-        setIsCodeIncorrect(true)
-      }
-    }, 400)
+    }
   }
 
-  const handlePasswordSubmit = (e: FormEvent) => {
+  const handleContinueWithCode = (e: FormEvent) => {
+    e.preventDefault()
+    if (digits.join('').length === 6) {
+      setError(null)
+      setStep('new_password')
+    }
+  }
+
+  const handlePasswordSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setPasswordError(null)
-
-    if (!newPassword) return setPasswordError('Please enter a new password.')
-    if (newPassword.length < 6) return setPasswordError('Password must be at least 6 characters.')
+    if (newPassword.length < 8) return setPasswordError('Password must be at least 8 characters.')
     if (newPassword !== confirmPassword) return setPasswordError('Passwords do not match.')
 
     setBusy(true)
-    setTimeout(() => {
-      setBusy(false)
+    try {
+      await api.confirmPasswordReset(email.trim(), recoveryToken || digits.join(''), newPassword, confirmPassword)
       setStep('success')
-    }, 600)
+    } catch (err) {
+      setPasswordError(friendlyError(err))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -1524,7 +1320,6 @@ export function ForgotPasswordPage() {
               type="button"
               onClick={() => {
                 setStep('email')
-                setIsCodeIncorrect(false)
                 setError(null)
               }}
               className="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 hover:underline"
@@ -1540,7 +1335,7 @@ export function ForgotPasswordPage() {
               We sent a 6-digit verification code to <strong className="text-[#1E1035]">{maskEmail(email)}</strong>
             </p>
 
-            <form onSubmit={handleVerifyCode} noValidate className="mt-6">
+            <form onSubmit={handleContinueWithCode} noValidate className="mt-6">
               <div>
                 <label className="mb-2 block text-xs font-semibold text-[#1E1035]">
                   6-Digit Code
@@ -1563,20 +1358,11 @@ export function ForgotPasswordPage() {
                       aria-label={`Digit ${idx + 1}`}
                       className={cn(
                         'size-11 sm:size-12 rounded-xl text-center text-lg sm:text-xl font-bold transition-all duration-150',
-                        isCodeIncorrect
-                          ? 'border-2 border-danger-500 bg-danger-50/20 text-danger-900 ring-1 ring-danger-500 focus:outline-none focus:ring-2 focus:ring-danger-500'
-                          : 'border border-purple-200/90 bg-[#F5F3FA] text-[#1E1035] hover:border-purple-300 focus:border-purple-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600/30',
+                        'border border-purple-200/90 bg-[#F5F3FA] text-[#1E1035] hover:border-purple-300 focus:border-purple-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600/30',
                       )}
                     />
                   ))}
                 </div>
-
-                {isCodeIncorrect && (
-                  <p role="alert" className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-danger-700 animate-fade-in">
-                    <AlertCircle className="size-4 shrink-0 text-danger-600" aria-hidden="true" />
-                    The code you entered is incorrect.
-                  </p>
-                )}
 
                 <div className="mt-4 flex items-center justify-between text-xs text-[#6B7280]">
                   <span>Didn't get the code?</span>
@@ -1595,9 +1381,7 @@ export function ForgotPasswordPage() {
                   )}
                 </div>
 
-                <div className="mt-3 rounded-lg bg-purple-50/80 p-2 text-center text-2xs text-purple-700">
-                  Demo verification code: <strong className="font-mono text-purple-900">658485</strong> (enter any other code to test the error state)
-                </div>
+                {error && <p role="alert" className="mt-3 text-sm text-danger-700">{error}</p>}
               </div>
 
               <button
@@ -1611,7 +1395,7 @@ export function ForgotPasswordPage() {
                   'disabled:cursor-not-allowed disabled:opacity-50',
                 )}
               >
-                {busy ? 'Verifying…' : 'Verify Code'}
+                Continue
               </button>
             </form>
           </>

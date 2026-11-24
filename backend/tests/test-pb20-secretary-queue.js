@@ -5,7 +5,8 @@
  * Dependencies: PB-15 (Completeness scan), PB-17 (Control Number)
  */
 const app = require('../server');
-const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
+const { provisionVerifiedUser } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
 
 const TEST_USERS = [
   {

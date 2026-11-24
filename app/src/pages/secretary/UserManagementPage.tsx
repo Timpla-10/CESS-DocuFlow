@@ -13,7 +13,7 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import { Field, Input, Select } from '../../components/form'
@@ -43,6 +43,15 @@ export function UserManagementPage() {
   const toast = useToast()
 
   // Active Tab: 'users' | 'masterlist' | 'pending'
+  const [accountLoadError, setAccountLoadError] = useState('')
+  useEffect(() => {
+    let mounted = true
+    api.refreshAccountManagement().catch((error) => {
+      if (mounted) setAccountLoadError(error instanceof Error ? error.message : 'Could not load accounts.')
+    })
+    return () => { mounted = false }
+  }, [])
+
   const [activeTab, setActiveTab] = useState<'users' | 'masterlist' | 'pending'>('users')
 
   // ---------------------------------------------------------------------------
@@ -70,7 +79,7 @@ export function UserManagementPage() {
   // TAB 2: Masterlist & Whitelist Import State
   // ---------------------------------------------------------------------------
   const [importTargetRole, setImportTargetRole] = useState<'student' | 'faculty'>('student')
-  const [importTerm, setImportTerm] = useState('1st Sem AY 2026-2027')
+  const [importTerm, setImportTerm] = useState('')
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [fileName, setFileName] = useState('')
   const [importBusy, setImportBusy] = useState(false)
@@ -343,50 +352,11 @@ export function UserManagementPage() {
     }
   }
 
-  const handleDownloadSample = (type: 'cess_student' | 'ids_student' | 'faculty') => {
-    let content = ''
-    let dlName = ''
-
-    if (type === 'cess_student') {
-      content = `ID Number,Full Name,Institutional Email,Department,Unit
-2023101,Clara Mae Mendoza,clara.mendoza@msunaawan.edu.ph,BSEd English,CESS
-2023102,Joshua David Tan,joshua.tan@msunaawan.edu.ph,BEEd General Curriculum,CESS
-2023104,Arvin Ramos,arvin.ramos@msunaawan.edu.ph,BA Social Sciences,CESS
-2024015,Althea Mae Soriano,althea.soriano@msunaawan.edu.ph,BSEd Filipino,CESS
-2024089,Kenneth Bryan Garcia,kenneth.garcia@msunaawan.edu.ph,BEEd General Curriculum,CESS
-2022340,Christian Jay Mercado,christian.mercado@msunaawan.edu.ph,BSEd Social Studies,CESS
-2024112,Princess Diane Gomez,princess.gomez@msunaawan.edu.ph,BSEd English,CESS
-2023205,Mark Anthony Villanueva,mark.villanueva@msunaawan.edu.ph,BA Social Sciences,CESS
-2024156,Bea Nicole Castro,bea.castro@msunaawan.edu.ph,BSEd Mathematics,CESS
-2023308,Lance Patrick Navarro,lance.navarro@msunaawan.edu.ph,BSEd Science,CESS`
-      dlName = 'MSUN_CESS_Student_Masterlist_Sample.csv'
-    } else if (type === 'ids_student') {
-      content = `ID Number,Full Name,Institutional Email,Department,Unit
-2024501,Samantha Cruz,samantha.cruz@msunaawan.edu.ph,IDS Grade 12 - STEM,IDS
-2024502,Danica Nicole Perez,danica.perez@msunaawan.edu.ph,IDS Grade 12 - HUMSS,IDS
-2024503,Miguel Luis Reyes,miguel.reyes@msunaawan.edu.ph,IDS Grade 11 - STEM,IDS
-2024504,Kristine Joy Torres,kristine.torres@msunaawan.edu.ph,IDS Grade 11 - HUMSS,IDS
-2024505,Angelo Gabriel Aquino,angelo.aquino@msunaawan.edu.ph,IDS Grade 10 - JHS,IDS
-2024506,Hannah Mae Delos Reyes,hannah.delosreyes@msunaawan.edu.ph,IDS Grade 10 - JHS,IDS
-2024507,Justin Carlo Bautista,justin.bautista@msunaawan.edu.ph,IDS Grade 9 - JHS,IDS
-2024508,Sofia Isabelle Lim,sofia.lim@msunaawan.edu.ph,IDS Grade 8 - JHS,IDS
-2024509,Ethan James Salvador,ethan.salvador@msunaawan.edu.ph,IDS Grade 7 - JHS,IDS
-2024510,Chloe Denise Vergara,chloe.vergara@msunaawan.edu.ph,IDS Grade 7 - JHS,IDS`
-      dlName = 'MSUN_IDS_Student_Masterlist_Sample.csv'
-    } else {
-      content = `Employee ID,Full Name,Institutional Email,Department,Unit,Position
-1018042,Dr. Elena Bautista,elena.bautista@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Associate Professor
-1020119,Mr. Gabriel Santos,gabriel.santos@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher II
-1015083,Dr. Corazon Morales,corazon.morales@msunaawan.edu.ph,Department of Social Sciences and Humanities,CESS,Professor
-1024003,Prof. Rhea Mendez,rhea.mendez@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Assistant Professor
-1025018,Engr. Daniel Ocampo,daniel.ocampo@msunaawan.edu.ph,Integrated Developmental School,IDS,Instructor
-1026002,Ms. Fatima Joy Alvarez,fatima.alvarez@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher I
-1019011,Prof. Ana Lim,ana.lim@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Assistant Professor
-1021045,Prof. Ben Aquino,ben.aquino@msunaawan.edu.ph,Department of Social Sciences and Humanities,CESS,Instructor
-1018092,Mr. Jose Dela Cruz,jose.delacruz@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher III`
-      dlName = 'MSUN_Faculty_Roster_Sample.csv'
-    }
-
+  const handleDownloadTemplate = (type: 'cess_student' | 'ids_student' | 'faculty') => {
+    const content = type === 'faculty'
+      ? 'Employee ID,Full Name,Institutional Email,Department,Unit,Position\n'
+      : 'ID Number,Full Name,Institutional Email,Department,Unit\n'
+    const dlName = type === 'faculty' ? 'Faculty_Roster.csv' : type === 'cess_student' ? 'CESS_Student_Masterlist.csv' : 'IDS_Student_Masterlist.csv'
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -396,7 +366,7 @@ export function UserManagementPage() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    toast.info('Sample Downloaded', `Downloaded template: ${dlName}`)
+    toast.info('Template Downloaded', `Downloaded template: ${dlName}`)
   }
 
   const handleDeleteWhitelist = async (entry: WhitelistEntry) => {
@@ -471,6 +441,7 @@ export function UserManagementPage() {
 
   return (
     <div className="space-y-8">
+      {accountLoadError && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-sm text-danger-800">{accountLoadError}</p>}
       <PageHeader
         eyebrow="System Administration (College Secretary)"
         title="User Management & Whitelist Masterlists"
@@ -715,7 +686,7 @@ export function UserManagementPage() {
             <CardHeader
               icon={UploadCloud}
               title="Import Official Semester Masterlist (CSV / Excel)"
-              description="Upload enrolled students or faculty rosters. Whitelisted individuals are pre-authorized and activate instantly when signing in."
+              description="Upload enrolled students or faculty rosters. Whitelisted individuals can activate their accounts using Forgot Password and their university email."
             />
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -743,7 +714,7 @@ export function UserManagementPage() {
                 </div>
 
                 <div className="flex flex-col justify-end">
-                  <label className="mb-1 block text-xs font-semibold text-ink-700">Sample Templates (7-Digit IDs)</label>
+                  <label className="mb-1 block text-xs font-semibold text-ink-700">Blank CSV Templates (7-Digit IDs)</label>
                   <div className="flex gap-2">
                     {importTargetRole === 'student' ? (
                       <>
@@ -751,9 +722,9 @@ export function UserManagementPage() {
                           size="sm"
                           variant="secondary"
                           icon={Download}
-                          onClick={() => handleDownloadSample('cess_student')}
+                          onClick={() => handleDownloadTemplate('cess_student')}
                           className="flex-1 text-xs"
-                          title="Download sample CESS College Students CSV"
+                          title="Download blank CESS College Students CSV"
                         >
                           CESS Students
                         </Button>
@@ -761,9 +732,9 @@ export function UserManagementPage() {
                           size="sm"
                           variant="secondary"
                           icon={Download}
-                          onClick={() => handleDownloadSample('ids_student')}
+                          onClick={() => handleDownloadTemplate('ids_student')}
                           className="flex-1 text-xs"
-                          title="Download sample IDS High School Students CSV"
+                          title="Download blank IDS High School Students CSV"
                         >
                           IDS Students
                         </Button>
@@ -773,9 +744,9 @@ export function UserManagementPage() {
                         size="sm"
                         variant="secondary"
                         icon={Download}
-                        onClick={() => handleDownloadSample('faculty')}
+                        onClick={() => handleDownloadTemplate('faculty')}
                         className="w-full text-xs"
-                        title="Download sample Faculty & Staff CSV"
+                        title="Download blank Faculty & Staff CSV"
                       >
                         Faculty Roster CSV
                       </Button>
@@ -807,7 +778,7 @@ export function UserManagementPage() {
                       type="button"
                       onClick={(e) => {
                         e.preventDefault()
-                        handleDownloadSample('cess_student')
+                        handleDownloadTemplate('cess_student')
                       }}
                       className="underline hover:text-brand-900 font-medium"
                     >
@@ -818,7 +789,7 @@ export function UserManagementPage() {
                       type="button"
                       onClick={(e) => {
                         e.preventDefault()
-                        handleDownloadSample('ids_student')
+                        handleDownloadTemplate('ids_student')
                       }}
                       className="underline hover:text-brand-900 font-medium"
                     >
@@ -829,7 +800,7 @@ export function UserManagementPage() {
                       type="button"
                       onClick={(e) => {
                         e.preventDefault()
-                        handleDownloadSample('faculty')
+                        handleDownloadTemplate('faculty')
                       }}
                       className="underline hover:text-brand-900 font-medium"
                     >
@@ -1045,7 +1016,7 @@ export function UserManagementPage() {
                       </td>
                       <td className="px-5 py-4 font-mono text-xs text-ink-600">{p.email}</td>
                       <td className="px-5 py-4 text-xs text-ink-500 whitespace-nowrap">
-                        {formatDate(p.submittedAt)}
+                        {p.submittedAt ? formatDate(p.submittedAt) : 'Date unavailable'}
                       </td>
                       <td className="px-5 py-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
@@ -1170,18 +1141,9 @@ export function UserManagementPage() {
           </Field>
 
           {!editingUserId && (
-            <div className="rounded-lg bg-brand-50 p-3 text-xs text-brand-900 border border-brand-200">
-              <p className="font-bold flex items-center gap-1.5">
-                <span>Default Password for New Accounts</span>
-              </p>
-              <p className="mt-1 text-brand-700 leading-relaxed">
-                New accounts are assigned the system default password:{' '}
-                <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-brand-300 text-brand-950">
-                  cess2026
-                </strong>
-                . The user can sign in using their official Gmail (<span className="font-mono">@msunaawan.edu.ph</span>) and this password.
-              </p>
-            </div>
+            <p className="rounded-lg bg-brand-50 p-3 text-sm text-brand-900">
+              The account holder can set their password using the reset link on the sign-in page.
+            </p>
           )}
         </form>
       </Dialog>

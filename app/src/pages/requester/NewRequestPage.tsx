@@ -1,3 +1,4 @@
+import { downloadStoredFile, saveUploadedFile } from '../../lib/storedFiles'
 import {
   AlertCircle,
   ArrowLeft,
@@ -23,11 +24,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import { DocumentNumberField } from '../../components/DocumentNumberField'
-import { sessionFiles } from '../../components/documents'
 import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
 import { Badge, Button, ButtonLink, Card, CardHeader, PageHeader } from '../../components/ui'
-import { controlNumber, downloadGeneratedPdf, formatRoleTitle } from '../../content/language'
+import { controlNumber, formatRoleTitle } from '../../content/language'
 import { formatDateTime } from '../../lib/time'
 import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
 import { documentNumberError } from '../../data/documentNumbers'
@@ -125,23 +125,9 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
 
   // REQ-REQT-9: Download blank official form template for the chosen document type
   const handleDownloadTemplate = (type: DocumentType) => {
-    const fileName = type.templateName || `${type.name.replace(/\s+/g, '_')}_Template.pdf`
-    downloadGeneratedPdf(fileName, `OFFICIAL FORM TEMPLATE: ${type.name}`, [
-      `Document Service: ${type.name}`,
-      `Eligible Audience: ${type.audience === 'student' ? 'Students' : 'CESS & IDS Faculty'}`,
-      `Standard Processing Time: ${type.processingDays[0]} to ${type.processingDays[1]} working days`,
-      '',
-      'REQUIRED CHECKLIST ITEMS:',
-      ...type.requirements.map(
-        (r, i) => `${i + 1}. [${r.required ? 'REQUIRED' : 'OPTIONAL'}] ${r.label}${r.source ? ` (${r.source})` : ''}`,
-      ),
-      '',
-      'INSTRUCTIONS FOR REQUESTER:',
-      '1. Fill in all required fields on this official college form accurately.',
-      '2. Obtain any preliminary departmental or instructor signatures if applicable.',
-      '3. Save or scan the completed form as PDF, JPG, or PNG (max 20 MB) and upload it in CESS DocuFlow.',
-    ])
-    toast.info('Template Downloaded', `Downloaded ${fileName}. Fill it in and attach it below.`)
+    downloadStoredFile(type.templateUrl, type.templateName).catch(() =>
+      toast.error('Download unavailable', 'No original template file is available for this request type.'),
+    )
   }
 
   // REQ-SUB-3, REQ-SUB-4: File selection with multiple upload support, 20 MB size limit, inline error messages
@@ -357,11 +343,12 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
     setSubmissionError('')
     setIsSubmitting(true)
     try {
-      const payloadFiles: NewFile[] = attachedFiles.map((f) => ({
+      const payloadFiles: NewFile[] = await Promise.all(attachedFiles.map(async (f) => ({
         requirementId: f.requirementId,
         name: f.name,
         sizeKb: f.sizeKb,
-      }))
+        fileUrl: f.fileObj ? await saveUploadedFile(f.fileObj) : undefined,
+      })))
 
       const doc = await api.submitRequest(user, {
         typeId: selectedType.id,
@@ -370,13 +357,6 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
         customTypeName: isCustom ? customTypeName : undefined,
         documentNumber,
         files: payloadFiles,
-      })
-
-      // Store local object URLs for preview in session
-      attachedFiles.forEach((f, idx) => {
-        if (f.fileObj && doc.attachments[idx]) {
-          sessionFiles.set(doc.attachments[idx].id, URL.createObjectURL(f.fileObj))
-        }
       })
 
       setSubmittedDoc(doc)
@@ -521,7 +501,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
 
             {selectedType && numberField}
 
-            {selectedType && (!isCustom || selectedType.templateName) && (
+            {selectedType?.templateUrl && (
               <div className="rounded-xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-100">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">

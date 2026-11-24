@@ -14,7 +14,8 @@ const assert = require('assert');
 const app = require('../server');
 const SessionModel = require('../models/sessionModel');
 const AuthService = require('../services/authService');
-const { getPasswordsForRole, provisionVerifiedUser } = require('../services/authService');
+const { provisionVerifiedUser } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
 
 const TEST_USERS = {
   faculty: {

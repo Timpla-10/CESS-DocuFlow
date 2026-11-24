@@ -37,9 +37,9 @@ import {
   StatusBadge,
   WaitingTime,
   formatSize,
-  sessionFiles,
 } from '../../components/documents'
 import { Checkbox, Field, InfoTooltip, Input, Select, Textarea } from '../../components/form'
+import { saveUploadedFile } from '../../lib/storedFiles'
 import { useToast } from '../../components/Toast'
 import {
   Badge,
@@ -54,7 +54,6 @@ import {
   OFFICE_LABEL,
   ROLE_OFFICE,
   controlNumber,
-  downloadGeneratedPdf,
   externalOfficeLabel,
   isRequester,
   locationLabel,
@@ -71,7 +70,7 @@ import { feedbackForDocument } from '../../data/serviceFeedback'
 import { api, useDb } from '../../data/store'
 import { EXTERNAL_RETURN_OUTCOMES, type ExternalOfficeId, type ExternalReturnOutcome } from '../../data/types'
 import { formatDate, formatDateTime, plural } from '../../lib/time'
-import { checkDocumentAccess, generateNonPublicSecureLink } from '../../lib/documentSecurity'
+import { checkDocumentAccess, downloadPermittedDocument, generateNonPublicSecureLink } from '../../lib/documentSecurity'
 
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -366,24 +365,18 @@ export function DocumentDetailPage() {
     }
     setResubmitBusy(true)
     try {
-      const payloadFiles: NewFile[] = resubmitFiles.map((f) => ({
+      const payloadFiles: NewFile[] = await Promise.all(resubmitFiles.map(async (f) => ({
         name: f.name,
         sizeKb: f.sizeKb,
-      }))
-      const updated = await api.resubmit(user, doc.id, {
+        fileUrl: f.fileObj ? await saveUploadedFile(f.fileObj) : undefined,
+      })))
+      await api.resubmit(user, doc.id, {
         title: resubmitTitle.trim(),
         description: resubmitDesc.trim(),
         customTypeName: isCustom ? resubmitCustomType : undefined,
         documentNumber: resubmitDocumentNumber,
         note: resubmitNote.trim(),
         files: payloadFiles,
-      })
-      // Save object URLs
-      resubmitFiles.forEach((f, idx) => {
-        const attach = updated.attachments[updated.attachments.length - resubmitFiles.length + idx]
-        if (f.fileObj && attach) {
-          sessionFiles.set(attach.id, URL.createObjectURL(f.fileObj))
-        }
       })
       toast.success(
         'Document Resubmitted',
@@ -550,18 +543,12 @@ export function DocumentDetailPage() {
     }
     setReleaseBusy(true)
     try {
-      const updated = await api.recordRelease(user, doc.id, {
+      await api.recordRelease(user, doc.id, {
         receivedBy: releaseReceivedBy,
-        signedFile: releaseSignedFile
-          ? { name: releaseSignedFile.name, sizeKb: releaseSignedFile.sizeKb }
+        signedFile: releaseSignedFile?.fileObj
+          ? { name: releaseSignedFile.name, sizeKb: releaseSignedFile.sizeKb, fileUrl: await saveUploadedFile(releaseSignedFile.fileObj) }
           : undefined,
       })
-      if (releaseSignedFile?.fileObj) {
-        const lastAtt = updated.attachments[updated.attachments.length - 1]
-        if (lastAtt) {
-          sessionFiles.set(lastAtt.id, URL.createObjectURL(releaseSignedFile.fileObj))
-        }
-      }
       toast.success('Document Released & Archived', 'Document release recorded and moved to the read-only archive.')
       setIsReleaseOpen(false)
     } catch (err: unknown) {
@@ -1685,18 +1672,9 @@ export function DocumentDetailPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          const req = docType?.requirements.find((r) => r.id === a.requirementId)
-                          downloadGeneratedPdf(a.name, `Secretary Content Inspection: ${a.name}`, [
-                            `Control Number: ${controlNumber(doc)}`,
-                            `Document Title: ${doc.title}`,
-                            `Attachment Category: ${req?.label ?? 'Supporting Attachment'}`,
-                            `Uploaded By: ${a.uploadedBy}`,
-                            `Size: ${formatSize(a.sizeKb)}`,
-                            ``,
-                            `This file is being reviewed for content accuracy by the College Secretary.`,
-                            `(Prototype: actual file content would appear here in production.)`,
-                          ])
+                        onClick={async () => {
+                          const result = await downloadPermittedDocument(user, doc, a, docType?.name)
+                          if (!result.success) toast.error('Download unavailable', result.error)
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-ink-50 px-3 py-1.5 text-xs font-semibold text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 transition-colors"
                         title="Download file for offline inspection"

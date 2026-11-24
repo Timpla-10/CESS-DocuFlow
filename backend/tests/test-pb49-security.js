@@ -21,7 +21,8 @@ const app = require('../server');
 const supabase = require('../config/database');
 const DocumentModel = require('../models/documentModel');
 const UserModel = require('../models/userModel');
-const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
+const { provisionVerifiedUser } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
 
 const TEST_USERS = [
   {

@@ -1019,8 +1019,6 @@ export function ProcessingHistory({ doc }: { doc: DocRecord }) {
 /* Attachments (REQ-REC-6, REQ-REL-4)                                        */
 /* ------------------------------------------------------------------------ */
 
-/** Object URLs for files attached in this browser session. */
-export const sessionFiles = new Map<string, string>()
 
 export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
   const user = useUser()
@@ -1033,8 +1031,8 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
   const revs = [...byRev.keys()].sort((a, b) => b - a)
   if (doc.attachments.length === 0) return <p className="text-sm text-ink-500">No files are attached to this request.</p>
 
-  const handleSampleDownload = (a: Attachment) => {
-    const res = downloadPermittedDocument(user, doc, a, type?.name)
+  const handleAttachmentDownload = async (a: Attachment) => {
+    const res = await downloadPermittedDocument(user, doc, a, type?.name)
     if (!res.success) {
       toast.error('Download Blocked', res.error || 'You do not have permission to download this document.')
     } else {
@@ -1120,7 +1118,7 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
                     <Tooltip content="Download permitted copy (Permission Verified)">
                       <button
                         type="button"
-                        onClick={() => handleSampleDownload(a)}
+                        onClick={() => handleAttachmentDownload(a)}
                         className="inline-flex items-center gap-1 rounded-lg bg-ink-50 p-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-colors"
                         aria-label={`Download ${a.name}`}
                       >

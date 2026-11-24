@@ -6,7 +6,8 @@
 const assert = require('assert');
 const app = require('../server');
 const supabase = require('../config/database');
-const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
+const { provisionVerifiedUser } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
 const DocumentModel = require('../models/documentModel');
 const DocumentTypeModel = require('../models/documentTypeModel');
 

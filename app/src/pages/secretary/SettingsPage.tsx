@@ -1,3 +1,4 @@
+import { saveUploadedFile } from '../../lib/storedFiles'
 import {
   Bell,
   Building2,
@@ -6,10 +7,8 @@ import {
   Edit3,
   FileText,
   Plus,
-  RotateCcw,
   Save,
   Settings2,
-  ShieldAlert,
   Trash2,
   UploadCloud,
   Users,
@@ -107,11 +106,20 @@ export function SettingsPage() {
     setIsDocTypeModalOpen(true)
   }
 
-  const handleTemplateUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleTemplateUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget
+    const file = input.files?.[0]
     if (!file || !dtDraft) return
-    setDtDraft({ ...dtDraft, templateName: file.name })
-    e.target.value = ''
+    setDtBusy(true)
+    try {
+      const templateUrl = await saveUploadedFile(file)
+      setDtDraft((draft) => draft ? { ...draft, templateName: file.name, templateUrl } : draft)
+    } catch {
+      toast.error('Upload failed', 'The template could not be saved.')
+    } finally {
+      setDtBusy(false)
+      input.value = ''
+    }
   }
 
   const handleSaveDocType = async (e: FormEvent) => {
@@ -189,13 +197,6 @@ export function SettingsPage() {
   }
 
 
-  const handleResetDemo = () => {
-    if (window.confirm('Reset all demo data back to default sample state? Any changes made during this session will be replaced.')) {
-      api.resetDemo()
-      toast.info('Demo Reset', 'All sample documents, accounts, and notices have been restored to initial state.')
-    }
-  }
-
   return (
     <div className="space-y-8">
       <PageHeader
@@ -238,7 +239,7 @@ export function SettingsPage() {
                       <p className="font-semibold text-ink-900">{t.name}</p>
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-500">
                         <FileText className="size-3.5 text-brand-600" />
-                        {t.templateName || 'Default template'}
+                        {t.templateName || 'No template uploaded'}
                       </p>
                     </td>
                     <td className="px-5 py-4 capitalize text-ink-600 font-medium">{t.audience}</td>
@@ -460,25 +461,6 @@ export function SettingsPage() {
             </div>
             <Button variant="secondary" onClick={() => navigate('/app/users')}>
               Go to User Management &rarr;
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* 5. Prototype Demo Reset */}
-      <Card className="border-danger-200 bg-danger-50/20">
-        <CardHeader
-          icon={ShieldAlert}
-          title="Prototype Reset"
-          description="Reset database back to the initial sample seed."
-        />
-        <div className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <p className="max-w-md text-xs text-ink-600">
-              This will reload all fictional users, documents, notification logs, and test workflows.
-            </p>
-            <Button variant="danger-soft" onClick={handleResetDemo} icon={RotateCcw}>
-              Reset Sample Data
             </Button>
           </div>
         </div>

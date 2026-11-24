@@ -3,7 +3,6 @@ import {
   BellRing,
   BookOpen,
   ClipboardCheck,
-  Download,
   FileCheck2,
   Landmark,
   MapPin,
@@ -21,7 +20,6 @@ import { useSession } from '../../app/session'
 import { homeFor } from '../../app/nav'
 import { Logo } from '../../components/Logo'
 import { ButtonLink, cn } from '../../components/ui'
-import { downloadGeneratedPdf } from '../../content/language'
 import { useDb } from '../../data/store'
 
 interface NavItem {
@@ -187,7 +185,7 @@ export function HomePage() {
 
       {/* Hero & Top Navigation */}
       <section className="surface-brand-gradient relative overflow-hidden pb-14 pt-20 sm:pb-20 sm:pt-24 lg:pt-28 text-white">
-        {/* Subtle dot matrix grid matching mockup */}
+        {/* Subtle dot matrix grid */}
         <div className="pointer-events-none absolute inset-0 opacity-[0.12] [background-image:radial-gradient(rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:22px_22px]" aria-hidden />
 
         {/* Ambient atmospheric glow in institutional midnight blue (#191970) */}
@@ -221,7 +219,7 @@ export function HomePage() {
             />
           </div>
 
-          {/* Subtle separator matching mockup */}
+          {/* Subtle separator */}
           <div className="mx-auto max-w-6xl border-b border-white/10 mb-8 sm:mb-12" />
 
           {/* 2-Column Hero Content */}
@@ -390,10 +388,11 @@ export function HomePage() {
             CESS &amp; IDS Faculty, Subjects, and Course Syllabi
           </h2>
           <p className="mt-3 text-ink-600">
-            Browse faculty members across CESS and MSUN-IDS, view their assigned subjects, and download official course syllabi directly.
+            Browse faculty members across CESS and MSUN-IDS, view their assigned subjects, and sign in to access available course syllabi.
           </p>
         </div>
         <div className="mt-10 grid gap-6 md:grid-cols-2">
+          {db.faculty.length === 0 && <p className="text-sm text-ink-600">No faculty listings are available.</p>}
           {db.faculty.map((fac) => (
             <div key={fac.id} className="rounded-2xl bg-white p-6 shadow-card ring-1 ring-ink-100">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -410,22 +409,6 @@ export function HomePage() {
                       <span className="font-mono text-xs font-bold text-brand-800">{sub.code}</span>
                       <span className="text-ink-800">{sub.title}</span>
                     </div>
-                    {sub.syllabusFile && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          downloadGeneratedPdf(sub.syllabusFile!, `Course Syllabus — ${sub.code} ${sub.title}`, [
-                            `Course Code: ${sub.code}`,
-                            `Course Title: ${sub.title}`,
-                            `Instructor: ${fac.name}`,
-                            `Department: ${fac.department}`,
-                          ])
-                        }
-                        className="inline-flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-100 hover:bg-brand-100"
-                      >
-                        <Download className="size-3" /> Syllabus PDF
-                      </button>
-                    )}
                   </li>
                 ))}
               </ul>

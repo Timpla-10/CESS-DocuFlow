@@ -14,17 +14,6 @@ const AuthController = {
     }
   },
 
-  /** POST /api/auth/google — Sign In with University Google Workspace */
-  async loginGoogle(req, res, next) {
-    try {
-      const { email, rememberMe } = req.body;
-      const result = await AuthService.loginWithGoogle(email, rememberMe);
-      res.json(result);
-    } catch (err) {
-      next(err);
-    }
-  },
-
   /** POST /api/auth/register — Register via Whitelist Auto-Verify or Admin Approval Queue */
   async register(req, res, next) {
     try {
@@ -53,6 +42,17 @@ const AuthController = {
       verified: true,
       user: req.user,
     });
+  },
+
+  async getDirectory(req, res, next) {
+    try {
+      const people = await UserModel.findAll();
+      const users = people.filter((person) => person.active && (req.user.role === 'secretary' || person.role !== 'student'))
+        .map(({ id, name, email, role, origin, department, position, active }) => ({ id, name, email, role, origin, department, position, active }));
+      res.json({ users });
+    } catch (err) {
+      next(err);
+    }
   },
 
   /** GET /api/auth/whitelist — List pre-registered / activated whitelist (Secretary only) */
@@ -151,8 +151,8 @@ const AuthController = {
   /** POST /api/auth/forgot-password — Request password reset via registered university email (PB-03) */
   async requestPasswordReset(req, res, next) {
     try {
-      const { email, redirectTo } = req.body || {};
-      const result = await AuthService.requestPasswordReset(email, { redirectTo });
+      const { email } = req.body || {};
+      const result = await AuthService.requestPasswordReset(email);
       res.json(result);
     } catch (err) {
       next(err);

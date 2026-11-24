@@ -1,3 +1,4 @@
+import { downloadStoredFile, saveUploadedFile } from '../../lib/storedFiles'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -28,7 +29,6 @@ import {
   StatusBadge,
   WaitingTime,
   exportDocumentsCsv,
-  sessionFiles,
   useDocumentFilters,
   type Filters,
 } from '../../components/documents'
@@ -38,7 +38,6 @@ import { Badge, Button, Card, EmptyState, PageHeader, Segmented, Tooltip, cn } f
 import {
   OFFICE_LABEL,
   controlNumber,
-  downloadGeneratedPdf,
   revisionLabel,
 } from '../../content/language'
 import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
@@ -351,11 +350,12 @@ export function AllDocumentsPage() {
     setWalkInErrors({})
     setWalkInBusy(true)
     try {
-      const payloadFiles: NewFile[] = attachedFiles.map((f) => ({
+      const payloadFiles: NewFile[] = await Promise.all(attachedFiles.map(async (f) => ({
         requirementId: f.requirementId,
         name: f.name,
         sizeKb: f.sizeKb,
-      }))
+        fileUrl: f.fileObj ? await saveUploadedFile(f.fileObj) : undefined,
+      })))
 
       const doc = await api.encodeWalkInRequest(user, {
         requesterId: selectedRequester.id,
@@ -365,12 +365,6 @@ export function AllDocumentsPage() {
         title: title.trim(),
         description: description.trim() || 'Walk-in physical document packet encoded by the College Secretary.',
         files: payloadFiles,
-      })
-
-      attachedFiles.forEach((f, idx) => {
-        if (f.fileObj && doc.attachments[idx]) {
-          sessionFiles.set(doc.attachments[idx].id, URL.createObjectURL(f.fileObj))
-        }
       })
       toast.success(
         'Walk-In Document Encoded',
@@ -389,25 +383,9 @@ export function AllDocumentsPage() {
   const templateInputRef = useRef<HTMLInputElement>(null)
 
   const handleDownloadTemplate = (type: DocumentType) => {
-    const fileName = type.templateName || `${type.name.replace(/\s+/g, '_')}_Template.pdf`
-    downloadGeneratedPdf(fileName, `OFFICIAL FORM TEMPLATE: ${type.name}`, [
-      `Document Service: ${type.name}`,
-      `Eligible Audience: ${type.audience === 'student' ? 'Students' : 'CESS & IDS Faculty'}`,
-      `Standard Processing Time: ${type.processingDays[0]} to ${type.processingDays[1]} working days`,
-      '',
-      'REQUIRED CHECKLIST ITEMS:',
-      ...type.requirements.map(
-        (r, i) =>
-          `${i + 1}. [${r.required ? 'REQUIRED' : 'OPTIONAL'}] ${r.label}${
-            r.source ? ` (${r.source})` : ''
-          }`,
-      ),
-      '',
-      'INSTRUCTIONS FOR SECRETARY & APPLICANTS:',
-      '1. Complete all required fields accurately before submission.',
-      '2. Physical and digital attachments must adhere to official college standards.',
-    ])
-    toast.info('Template Downloaded', `Downloaded ${fileName}.`)
+    downloadStoredFile(type.templateUrl, type.templateName).catch(() =>
+      toast.error('Download unavailable', 'No original template file is available for this request type.'),
+    )
   }
 
   const handleUploadTemplate = async (
@@ -425,6 +403,7 @@ export function AllDocumentsPage() {
       await api.saveDocumentType(user, {
         ...docType,
         templateName: file.name,
+        templateUrl: await saveUploadedFile(file),
       })
       toast.success(
         'Template Updated',
@@ -828,7 +807,7 @@ export function AllDocumentsPage() {
                       <Files className="size-3.5 text-brand-600" />
                       Official Template:{' '}
                       <strong className="font-semibold text-ink-900">
-                        {selectedFolderType.templateName || 'Default PDF Template'}
+                        {selectedFolderType.templateName || 'No template uploaded'}
                       </strong>
                     </span>
                   </div>
@@ -839,6 +818,7 @@ export function AllDocumentsPage() {
                     variant="secondary"
                     icon={Download}
                     onClick={() => handleDownloadTemplate(selectedFolderType)}
+                    disabled={!selectedFolderType.templateUrl}
                   >
                     Download Template
                   </Button>

@@ -31,18 +31,11 @@ import {
   Tooltip,
   cn,
 } from '../../components/ui'
-import { downloadGeneratedPdf } from '../../content/language'
+import { downloadStoredFile, saveUploadedFile } from '../../lib/storedFiles'
 import { api, useDb } from '../../data/store'
-import type { TosCognitiveLevels, TosRecord, TosTemplate } from '../../data/types'
+import type { TosCognitiveLevels, TosRecord } from '../../data/types'
 import { fetchSupabaseTos } from '../../lib/supabase'
 import { formatDate } from '../../lib/time'
-
-const DEFAULT_TOS_TEMPLATE: TosTemplate = {
-  fileName: 'CESS_Standard_Table_of_Specifications_Template_2026.xlsx',
-  updatedAt: '2026-03-01T08:00:00Z',
-  uploadedBy: 'Ms. Carmela Ortiz (College Secretary)',
-  fileSize: '94 KB',
-}
 
 const ACADEMIC_YEARS = ['2026-2027', '2025-2026']
 const SEMESTERS = ['1st Semester', '2nd Semester', 'Summer Term']
@@ -102,15 +95,8 @@ export function TosManagementPage() {
   const [uploadAy, setUploadAy] = useState('2026-2027')
   const [uploadSem, setUploadSem] = useState('1st Semester')
   const [uploadTerm, setUploadTerm] = useState<'Midterm' | 'Final'>('Midterm')
-  const [uploadTotalItems, setUploadTotalItems] = useState(50)
-  const [uploadCognitive, setUploadCognitive] = useState<TosCognitiveLevels>({
-    remembering: 15,
-    understanding: 15,
-    applying: 10,
-    analyzing: 5,
-    evaluating: 3,
-    creating: 2,
-  })
+  const [uploadTotalItems, setUploadTotalItems] = useState<number | "">("")
+  const [uploadCognitive, setUploadCognitive] = useState<TosCognitiveLevels>({})
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadFileName, setUploadFileName] = useState('')
   const [uploadDescription, setUploadDescription] = useState('')
@@ -127,7 +113,7 @@ export function TosManagementPage() {
   const [isUpdatingTemplate, setIsUpdatingTemplate] = useState(false)
 
   // Institutional template
-  const tosTemplate = db.tosTemplate || DEFAULT_TOS_TEMPLATE
+  const tosTemplate = db.tosTemplate
 
   // Find logged-in faculty record
   const currentFaculty = useMemo(() => {
@@ -262,54 +248,16 @@ export function TosManagementPage() {
   const totalExpected = totalCourses * 2 // Midterm + Final
   const complianceRate = totalExpected > 0 ? Math.round(((totalMidtermFiled + totalFinalFiled) / totalExpected) * 100) : 0
 
-  // Handle Download template
   const handleDownloadTemplate = () => {
-    downloadGeneratedPdf(
-      tosTemplate.fileName,
-      'CESS Table of Specifications (TOS) Official Template',
-      [
-        'Mindanao State University at Naawan',
-        'College of Education and Social Sciences',
-        '',
-        'Examination Blueprint Guidelines:',
-        '1. Remembering (Knowledge) - 20-30%',
-        '2. Understanding (Comprehension) - 20-30%',
-        '3. Applying (Application) - 20-25%',
-        '4. Analyzing (Analysis) - 10-15%',
-        '5. Evaluating (Evaluation) - 5-10%',
-        '6. Creating (Synthesis) - 5-10%',
-        '',
-        'Aligned with CHED Outcome-Based Education (OBE) Standards.',
-      ],
+    downloadStoredFile(tosTemplate?.fileUrl, tosTemplate?.fileName).catch(() =>
+      toast.error('Download unavailable', 'The original TOS template is unavailable.'),
     )
-    toast.success('Template Downloaded', `Downloaded ${tosTemplate.fileName}`)
   }
 
-  // Handle Download single TOS
   const handleDownloadTos = (record: TosRecord) => {
-    const cog = record.cognitiveDistribution || {}
-    downloadGeneratedPdf(
-      record.fileName,
-      `TABLE OF SPECIFICATIONS (TOS) — ${record.examType.toUpperCase()}`,
-      [
-        `Course: ${record.subjectCode} - ${record.subjectTitle}`,
-        `Instructor: ${record.facultyName}`,
-        `Department: ${record.department}`,
-        `Academic Year: ${record.academicYear} | Semester: ${record.semester}`,
-        `Total Test Items: ${record.totalItems}`,
-        '',
-        'Cognitive Levels Distribution:',
-        `- Remembering: ${cog.remembering || 0} items`,
-        `- Understanding: ${cog.understanding || 0} items`,
-        `- Applying: ${cog.applying || 0} items`,
-        `- Analyzing: ${cog.analyzing || 0} items`,
-        `- Evaluating: ${cog.evaluating || 0} items`,
-        `- Creating: ${cog.creating || 0} items`,
-        '',
-        'Official Accreditation & Assessment Document',
-      ],
+    downloadStoredFile(record.fileUrl, record.fileName).catch(() =>
+      toast.error('Download unavailable', 'The original TOS file is unavailable.'),
     )
-    toast.success('TOS Downloaded', `Downloaded ${record.fileName}`)
   }
 
   // Handle Open Upload Dialog
@@ -319,17 +267,10 @@ export function TosManagementPage() {
     setUploadAy(selectedAy)
     setUploadSem(selectedSem)
     setUploadTerm(term)
-    setUploadTotalItems(50)
-    setUploadCognitive({
-      remembering: 15,
-      understanding: 15,
-      applying: 10,
-      analyzing: 5,
-      evaluating: 3,
-      creating: 2,
-    })
+    setUploadTotalItems("")
+    setUploadCognitive({})
     setUploadFile(null)
-    setUploadFileName(code ? `${code.replace(/\s+/g, '')}_${term}_TOS_${selectedAy}.xlsx` : '')
+    setUploadFileName('')
     setUploadDescription('')
     setIsUploadDialogOpen(true)
   }
@@ -345,8 +286,13 @@ export function TosManagementPage() {
       toast.error('Missing Title', 'Please enter a course title.')
       return
     }
-    if (!uploadFileName.trim()) {
-      toast.error('Missing File', 'Please attach or name a TOS file.')
+    if (!uploadFile) {
+      toast.error('Missing File', 'Please attach a TOS file.')
+      return
+    }
+
+    if (uploadTotalItems === '' || !Number.isInteger(uploadTotalItems) || uploadTotalItems < 1) {
+      toast.error('Missing item count', 'Enter the total number of examination items.')
       return
     }
 
@@ -359,10 +305,11 @@ export function TosManagementPage() {
         semester: uploadSem,
         term: uploadTerm,
         examType: `${uploadTerm} Examination`,
-        totalItems: Number(uploadTotalItems) || 50,
+        totalItems: uploadTotalItems,
         cognitiveDistribution: uploadCognitive,
         fileName: uploadFileName,
-        fileSizeKb: uploadFile ? Math.round(uploadFile.size / 1024) : 115,
+        fileUrl: await saveUploadedFile(uploadFile),
+        fileSizeKb: Math.round(uploadFile.size / 1024),
         description: uploadDescription.trim() || `${uploadTerm} Table of Specifications test blueprint.`,
         department: selectedDept !== 'All Departments' ? selectedDept : undefined,
       })
@@ -397,16 +344,14 @@ export function TosManagementPage() {
   // Handle Secretary Template Update
   const handleTemplateUploadSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!newTemplateFileName.trim()) {
-      toast.error('Missing Template', 'Please upload or specify a template file.')
+    if (!newTemplateFile || !newTemplateFileName.trim()) {
+      toast.error('Missing Template', 'Please choose a template file.')
       return
     }
     setIsUpdatingTemplate(true)
     try {
-      const sizeStr = newTemplateFile
-        ? `${Math.round(newTemplateFile.size / 1024)} KB`
-        : '98 KB'
-      await api.updateTosTemplate(user, newTemplateFileName, sizeStr)
+      const sizeStr = Math.round(newTemplateFile.size / 1024) + ' KB'
+      await api.updateTosTemplate(user, newTemplateFileName, await saveUploadedFile(newTemplateFile), sizeStr)
       toast.success('Template Updated', `Published standard TOS template: ${newTemplateFileName}`)
       setIsTemplateUploadOpen(false)
     } catch (err: unknown) {
@@ -444,7 +389,7 @@ export function TosManagementPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Tooltip content="Download CESS Standard TOS Template (.xlsx / .docx)">
-              <Button variant="secondary" icon={Download} onClick={handleDownloadTemplate}>
+              <Button variant="secondary" icon={Download} onClick={handleDownloadTemplate} disabled={!tosTemplate?.fileUrl}>
                 Download TOS Template
               </Button>
             </Tooltip>
@@ -923,11 +868,10 @@ export function TosManagementPage() {
                       Standard Institutional Examination Blueprint
                     </span>
                     <h3 className="text-lg font-bold text-ink-950">
-                      {tosTemplate.fileName}
+                      {tosTemplate?.fileName ?? 'No template has been uploaded.'}
                     </h3>
                     <p className="mt-1 text-xs text-ink-600">
-                      Maintained by {tosTemplate.uploadedBy} · Last updated{' '}
-                      {formatDate(tosTemplate.updatedAt)} · Size {tosTemplate.fileSize}
+                      {tosTemplate && <>Maintained by {tosTemplate.uploadedBy} · Last updated {formatDate(tosTemplate.updatedAt)}{tosTemplate.fileSize && ' · ' + tosTemplate.fileSize}</>}
                     </p>
                   </div>
                 </div>
@@ -937,13 +881,13 @@ export function TosManagementPage() {
                     <Button
                       variant="secondary"
                       icon={Eye}
-                      onClick={() => setIsPreviewTemplateOpen(true)}
+                      onClick={() => setIsPreviewTemplateOpen(true)} disabled={!tosTemplate?.fileUrl}
                     >
                       Preview Template
                     </Button>
                   </Tooltip>
                   <Tooltip content="Download CESS Official TOS Template (.xlsx / .docx)">
-                    <Button icon={Download} onClick={handleDownloadTemplate}>
+                    <Button icon={Download} onClick={handleDownloadTemplate} disabled={!tosTemplate?.fileUrl}>
                       Download Template
                     </Button>
                   </Tooltip>
@@ -1069,10 +1013,9 @@ export function TosManagementPage() {
           <Field label="Total Examination Items" required hint="Standard CESS exam total (typically 50 or 100 items)">
             <Input
               type="number"
-              min={10}
-              max={200}
+              min={1}
               value={uploadTotalItems}
-              onChange={(e) => setUploadTotalItems(Number(e.target.value))}
+              onChange={(e) => setUploadTotalItems(e.target.value ? Number(e.target.value) : "")}
               required
             />
           </Field>
@@ -1309,34 +1252,17 @@ export function TosManagementPage() {
       <Dialog
         open={isPreviewTemplateOpen}
         onClose={() => setIsPreviewTemplateOpen(false)}
-        title="Official CESS Table of Specifications Template Preview"
+        title="Table of Specifications Template"
         size="lg"
         footer={
           <div className="flex justify-end">
-            <Button icon={Download} onClick={handleDownloadTemplate}>
+            <Button icon={Download} onClick={handleDownloadTemplate} disabled={!tosTemplate?.fileUrl}>
               Download Official Template
             </Button>
           </div>
         }
       >
-        <div className="space-y-4 text-xs text-ink-700 leading-relaxed">
-          <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4 text-center">
-            <p className="font-bold text-sm text-brand-950">MINDANAO STATE UNIVERSITY AT NAAWAN</p>
-            <p className="font-semibold text-xs text-brand-800">COLLEGE OF EDUCATION AND SOCIAL SCIENCES</p>
-            <p className="mt-1 text-2xs uppercase tracking-wider text-brand-700">
-              TABLE OF SPECIFICATIONS (TOS) & ASSESSMENT MATRIX
-            </p>
-          </div>
-          <p>
-            The standard CESS TOS template maps every examination item to:
-          </p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>Course Learning Outcomes (CLOs) and Competencies</li>
-            <li>Class hours devoted per instructional topic</li>
-            <li>Cognitive domain weighting: Remembering, Understanding, Applying, Analyzing, Evaluating, Creating</li>
-            <li>Item placement numbers and point values</li>
-          </ul>
-        </div>
+        <p className="text-sm text-ink-700">{tosTemplate?.fileName}. Download the original template to view it.</p>
       </Dialog>
 
       {/* Secretary Template Update Modal */}

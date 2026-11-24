@@ -16,10 +16,11 @@ const supabase = require('../config/database');
 const UserModel = require('../models/userModel');
 const {
   provisionVerifiedUser,
-  getPasswordsForRole,
   sanitizeForLog,
   getSecurityLogs,
 } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
+const EmailService = require('../services/emailService');
 
 const TEST_USERS = {
   student: {
@@ -155,21 +156,29 @@ async function runTests() {
     console.log(`   ✅ Unverified/pending account reset denied (403): "${pendingResetRes.body.error}"`);
 
     // 1E: Registered & active university email succeeds with clear confirmation message
+    let recoveryEmail;
+    const sendPasswordResetEmail = EmailService.sendPasswordResetEmail;
+    EmailService.sendPasswordResetEmail = async (message) => {
+      recoveryEmail = message;
+      return { success: true };
+    };
     const validResetReq = await request('/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ email: TEST_USERS.student.email }),
     });
+    EmailService.sendPasswordResetEmail = sendPasswordResetEmail;
     assert.strictEqual(validResetReq.status, 200);
     assert.strictEqual(validResetReq.body.success, true);
     assert.strictEqual(validResetReq.body.email, TEST_USERS.student.email);
-    assert.ok(validResetReq.body.resetToken, 'Expected one-time resetToken for verification');
+    assert.ok(!validResetReq.body.resetToken && !validResetReq.body.code, 'Reset credentials must only be delivered by email');
+    assert.ok(recoveryEmail?.resetToken, 'Expected a recovery token in the delivered email');
     assert.ok(
       validResetReq.body.message && validResetReq.body.message.includes(TEST_USERS.student.email),
       `Expected clear success message, got: ${JSON.stringify(validResetReq.body)}`
     );
     console.log(`   ✅ Registered university email accepted (200): "${validResetReq.body.message}"\n`);
 
-    const recoveryToken = validResetReq.body.resetToken;
+    const recoveryToken = recoveryEmail.resetToken;
 
     // -------------------------------------------------------------------------
     // 2. AC 1 & AC 3: Password Reset Confirmation & Clear Validation Feedback

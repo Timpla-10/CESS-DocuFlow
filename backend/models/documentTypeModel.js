@@ -19,39 +19,6 @@ const TYPE_DESCRIPTIONS = {
 const TYPE_AUDIENCES = {};
 const TYPE_TEMPLATES = {};
 
-/**
- * Standard checklist requirements for document types (REQ-REQT-1,2,7)
- */
-const DEFAULT_REQUIREMENTS = {
-  1: [
-    { form_name: 'Official INC Completion Form', is_required: true, source_office: "Registrar's Office", template_url: '/templates/INC_Form_Template.pdf' },
-    { form_name: 'Affidavit / Grade Slip Copy', is_required: true, source_office: "Registrar's Office", template_url: null },
-    { form_name: 'Official Assessment Receipt', is_required: false, source_office: 'Cashier / Accounting', template_url: null },
-  ],
-  2: [
-    { form_name: 'Adding/Dropping/Changing Form', is_required: true, source_office: "Registrar's Office", template_url: '/templates/Add_Drop_Form_Template.pdf' },
-    { form_name: 'Instructor Endorsement Slip', is_required: true, source_office: 'Department Chairperson', template_url: null },
-  ],
-  3: [
-    { form_name: 'Application for Graduation Form', is_required: true, source_office: 'College Secretary', template_url: '/templates/Graduation_Application_Template.pdf' },
-    { form_name: 'Transcript of Records / Evaluation Copy', is_required: true, source_office: "Registrar's Office", template_url: null },
-    { form_name: 'Birth Certificate (PSA copy)', is_required: true, source_office: 'Philippine Statistics Authority', template_url: null },
-  ],
-  4: [
-    { form_name: 'Civil Service Form No. 6 (Application for Leave)', is_required: true, source_office: 'HRMO', template_url: '/templates/CSC_Form_6_Leave.pdf' },
-    { form_name: 'Medical Certificate / Clearance (if sick leave > 5 days)', is_required: false, source_office: 'University Clinic', template_url: null },
-  ],
-  5: [
-    { form_name: 'Travel Order Request Form', is_required: true, source_office: 'HRMO / College Secretary', template_url: '/templates/Travel_Order_Template.pdf' },
-    { form_name: 'Official Invitation Letter or Training Memo', is_required: true, source_office: 'Organizing Agency / Host', template_url: null },
-    { form_name: 'Detailed Activity Design (DAD)', is_required: false, source_office: 'College Secretary', template_url: null },
-  ],
-  6: [
-    { form_name: 'IDS Student Clearance Form', is_required: true, source_office: 'IDS Principal Office', template_url: '/templates/IDS_Clearance_Template.pdf' },
-    { form_name: 'Library Clearance Slip', is_required: true, source_office: 'Campus Library', template_url: null },
-  ],
-};
-
 const SLUG_MAP = {
   'inc': 1,
   'add-drop': 2,
@@ -101,8 +68,7 @@ function normalizeDocType(raw) {
   const summary = raw.summary || raw.description || TYPE_DESCRIPTIONS[docTypeId] || `${raw.type_name} document processing.`;
 
   const dbForms = Array.isArray(raw.required_form) && raw.required_form.length > 0 ? raw.required_form : [];
-  const rawRequirements = dbForms.length > 0 ? dbForms : DEFAULT_REQUIREMENTS[docTypeId] || [];
-  const requirements = rawRequirements.map((f) => normalizeRequirement(f, docTypeId));
+  const requirements = dbForms.map((f) => normalizeRequirement(f, docTypeId));
 
   const customTemplate = TYPE_TEMPLATES[docTypeId];
   const primaryTemplate = customTemplate || raw.template_url || (requirements.find((r) => r.template_url)?.template_url) || null;
@@ -289,7 +255,7 @@ const DocumentTypeModel = {
 
     if (error) throw error;
 
-    const forms = (data && data.length > 0) ? data : (DEFAULT_REQUIREMENTS[numericId] || []);
+    const forms = data ?? [];
     return forms.map((f) => normalizeRequirement(f, numericId));
   },
 

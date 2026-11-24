@@ -5,7 +5,8 @@
  * Dependencies: PB-22 (Reviewer return with remarks), PB-18 (Editing locks)
  */
 const app = require('../server');
-const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
+const { provisionVerifiedUser } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
 
 const TEST_USERS = [
   {

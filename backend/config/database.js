@@ -16,3 +16,8 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = supabase;
+module.exports.createPasswordAuthClient = () => createClient(
+  supabaseUrl,
+  process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || supabaseKey,
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);

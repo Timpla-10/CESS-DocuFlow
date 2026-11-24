@@ -1,3 +1,5 @@
+process.env.NODE_ENV = 'test';
+
 /**
  * Integration Test Suite for Ticket PB-33:
  * "Ready-for-release and release recording [P0]"

@@ -1,3 +1,4 @@
+import { downloadStoredFile } from '../../lib/storedFiles'
 import {
   AlertCircle,
   ArrowLeft,
@@ -53,7 +54,6 @@ import {
 } from '../../components/ui'
 import {
   controlNumber,
-  downloadGeneratedPdf,
   locationLabel,
   revisionLabel,
 } from '../../content/language'
@@ -145,7 +145,7 @@ export function MyDocumentsPage() {
   const folderParam = searchParams.get('folder')
   const selectedType = allowedTypes.find((t) => t.id === folderParam)
   const isOthersFolder = selectedType !== undefined && isCustomDocumentType(selectedType.id)
-  const hasFolderTemplate = selectedType && (!isOthersFolder || selectedType.templateName)
+  const hasFolderTemplate = selectedType?.templateUrl
 
   // Custom folder drill-down (PB-58)
   const [folderSubTab, setFolderSubTab] = useState<'categories' | 'custom'>('categories')
@@ -271,25 +271,9 @@ export function MyDocumentsPage() {
   }
 
   const handleDownloadTemplate = (type: DocumentType) => {
-    const fileName = type.templateName || `${type.name.replace(/\s+/g, '_')}_Template.pdf`
-    downloadGeneratedPdf(fileName, `OFFICIAL FORM TEMPLATE: ${type.name}`, [
-      `Document Service: ${type.name}`,
-      `Eligible Audience: ${type.audience === 'student' ? 'Students' : 'CESS & IDS Faculty'}`,
-      `Standard Processing Time: ${type.processingDays[0]} to ${type.processingDays[1]} working days`,
-      '',
-      'REQUIRED CHECKLIST ITEMS:',
-      ...type.requirements.map(
-        (r, i) =>
-          `${i + 1}. [${r.required ? 'REQUIRED' : 'OPTIONAL'}] ${r.label}${
-            r.source ? ` (${r.source})` : ''
-          }`,
-      ),
-      '',
-      'INSTRUCTIONS FOR REQUESTER:',
-      '1. Fill in all required fields on this official college form accurately.',
-      '2. Obtain preliminary departmental or instructor endorsements if applicable.',
-      '3. Save or scan the completed form as PDF, JPG, or PNG (max 20 MB) and upload it in CESS DocuFlow.',
-    ])
+    downloadStoredFile(type.templateUrl, type.templateName).catch(() =>
+      toast.error('Download unavailable', 'No original template file is available for this request type.'),
+    )
   }
 
   return (

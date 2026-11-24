@@ -81,9 +81,9 @@ const EmailService = {
   /**
    * PB-42 & PB-49: Send a raw email and record delivery status in `notification_log`
    */
-  async sendMail({ to, subject, html, text, recipientId, documentId, notificationType = 'Status_Update' }) {
-    let resolvedRecipientId = recipientId;
-    if (!resolvedRecipientId) {
+  async sendMail({ to, subject, html, text, recipientId, documentId, notificationType = 'Status_Update', recordDelivery = true }) {
+    let resolvedRecipientId = recordDelivery ? recipientId : null;
+    if (recordDelivery && !resolvedRecipientId) {
       try {
         const u = await UserModel.findByEmail(to);
         if (u) resolvedRecipientId = u.id;
@@ -158,12 +158,14 @@ const EmailService = {
   /**
    * PB-03: Send Password Reset Verification Code & Recovery Link
    */
-  async sendPasswordResetEmail({ to, name = 'Valued User', code = '658485', resetToken, expiresAt }) {
+  async sendPasswordResetEmail({ to, name = 'Valued User', code, resetToken, expiresAt }) {
+    if (!code) return { success: false, error: 'A verification code is required.' };
     const formattedExpires = expiresAt
       ? new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : '15 minutes';
 
-    const resetUrl = `http://localhost:5173/forgot-password?email=${encodeURIComponent(to)}&token=${encodeURIComponent(resetToken || '')}`;
+    const frontendUrl = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173');
+    const resetUrl = frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/forgot-password?email=${encodeURIComponent(to)}&token=${encodeURIComponent(resetToken)}` : '';
 
     const contentHtml = `
       <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #1E1035;">
@@ -186,14 +188,14 @@ const EmailService = {
         </div>
       </div>
 
-      <div style="text-align: center; margin: 24px 0;">
+      ${resetUrl ? `<div style="text-align: center; margin: 24px 0;">
         <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #7C3AED 0%, #6B21A8 100%); color: #FFFFFF; font-size: 14px; font-weight: 700; text-decoration: none; padding: 12px 28px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);">
           Reset Password in DocuFlow
         </a>
-      </div>
+      </div>` : ''}
 
       <div style="background-color: #FEF2F2; border-left: 4px solid #EF4444; padding: 12px 16px; border-radius: 4px; margin-top: 24px;">
-        <div style="font-size: 12px; font-weight: 700; color: #991B1B;">Security Reminder (PB-03)</div>
+        <div style="font-size: 12px; font-weight: 700; color: #991B1B;">Security Reminder</div>
         <div style="font-size: 12px; color: #7F1D1D; margin-top: 2px; line-height: 1.5;">
           If you did not request this password reset, please ignore this email or contact the College Secretary immediately. Your password has not been changed.
         </div>
@@ -204,16 +206,17 @@ const EmailService = {
       `Hello ${name},\n\n` +
       `We received a request to reset your password for your institutional account (${to}).\n\n` +
       `YOUR 6-DIGIT VERIFICATION CODE: ${code}\n\n` +
-      `This code expires in ${formattedExpires}. Enter this code on the password reset screen or open:\n` +
-      `${resetUrl}\n\n` +
+      `This code expires in ${formattedExpires}. Enter it on the password reset screen.\n` +
+      (resetUrl ? `${resetUrl}\n\n` : '') +
       `If you did not request this, please contact the College Secretary.`;
 
     return this.sendMail({
       to,
-      subject: `[CESS DocuFlow] Password Reset Verification Code: ${code}`,
+      subject: '[CESS DocuFlow] Password Reset Verification Code',
       html: wrapHtmlLayout('Password Reset Request', contentHtml),
       text,
       notificationType: 'Status_Update',
+      recordDelivery: false,
     });
   },
 

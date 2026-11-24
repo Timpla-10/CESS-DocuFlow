@@ -4,7 +4,8 @@
  * Traceability: SRS 3.2 REQ-SUB-7, REQ-SUB-8
  */
 const app = require('../server');
-const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
+const { provisionVerifiedUser } = require('../services/authService');
+const { getPasswordsForRole } = require('./testCredentials');
 
 const TEST_USERS = [
   {

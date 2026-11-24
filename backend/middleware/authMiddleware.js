@@ -8,15 +8,15 @@ const { getRoleLabel, canPerformAction } = require('../utils/roles');
  * Supports:
  * 1. DocuFlow Session token via `Authorization: Bearer <sess_...>` or `x-session-token`
  * 2. Supabase Auth JWT token via `Authorization: Bearer <token>`
- * 3. Institutional user lookup via `x-user-id` or `x-user-email` header
+ * 3. Test-only user lookup via `x-user-id` or `x-user-email` header
  */
 async function verifyUser(req, res, next) {
   try {
     let profile = null;
     const authHeader = req.headers.authorization;
     const sessionTokenHeader = req.headers['x-session-token'];
-    const headerUserId = req.headers['x-user-id'];
-    const headerUserEmail = req.headers['x-user-email'];
+    const headerUserId = process.env.NODE_ENV === 'test' ? req.headers['x-user-id'] : null;
+    const headerUserEmail = process.env.NODE_ENV === 'test' ? req.headers['x-user-email'] : null;
 
     const bearerToken = authHeader && authHeader.startsWith('Bearer ')
       ? authHeader.replace(/^Bearer\s+/i, '').trim()

@@ -125,7 +125,7 @@ const UserModel = {
   // --- Pending Registrations Queries (Backed by "User" with account_status = 'Pending_Verification') ---
   async getAllPendingRegistrations() {
     const all = await this.findAll();
-    return all.filter((u) => u.account_status === 'Pending_Verification');
+    return all.filter((u) => u.account_status === 'Pending_Verification' && !u.is_whitelisted);
   },
 
   async findPendingByEmail(email) {

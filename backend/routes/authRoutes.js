@@ -4,9 +4,8 @@ const AuthController = require('../controllers/authController');
 const { verifyUser, requireRole } = require('../middleware/authMiddleware');
 const { ROLES } = require('../utils/roles');
 
-// Public endpoints: Login, University Google Login, Registration, and Password Reset (PB-03)
+// Public endpoints: Login, Registration, and Password Reset (PB-03)
 router.post('/login', AuthController.login);
-router.post('/google', AuthController.loginGoogle);
 router.post('/register', AuthController.register);
 router.post('/forgot-password', AuthController.requestPasswordReset);
 router.post('/password-reset/request', AuthController.requestPasswordReset);
@@ -16,6 +15,7 @@ router.post('/password-reset/confirm', AuthController.confirmPasswordReset);
 // Authenticated endpoints: Verify current role & profile, and Change Password (PB-03)
 router.post('/logout', verifyUser, AuthController.logout);
 router.get('/me', verifyUser, AuthController.me);
+router.get('/directory', verifyUser, AuthController.getDirectory);
 router.post('/change-password', verifyUser, AuthController.changePassword);
 router.put('/password', verifyUser, AuthController.changePassword);
 
