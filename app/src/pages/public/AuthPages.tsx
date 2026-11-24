@@ -20,7 +20,7 @@ import { Logo } from '../../components/Logo'
 import { ButtonLink, Callout, cn } from '../../components/ui'
 import { MESSAGES, ROLE_LABEL, friendlyError } from '../../content/language'
 import { DEMO_PASSWORD } from '../../data/seed'
-import { api, useDb } from '../../data/store'
+import { api, isDemoFallbackEnabled, useDb } from '../../data/store'
 import type { Origin, Role } from '../../data/types'
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -658,7 +658,9 @@ export function SignInPage() {
           message: `Your record was verified on the official semester masterlist. Your account has been activated automatically as ${ROLE_LABEL[res.user.role]} (${res.user.department}). You can now sign in!`,
         })
         setEmail(regEmail)
-        setPassword(DEMO_PASSWORD)
+        if (isDemoFallbackEnabled()) {
+          setPassword(DEMO_PASSWORD)
+        }
         setAuthMode('signin')
       } else {
         setRegFeedback({

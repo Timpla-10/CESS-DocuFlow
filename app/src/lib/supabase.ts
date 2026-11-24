@@ -12,7 +12,7 @@
  */
 
 import { FriendlyError, controlNumber as getControlNumber } from '../content/language'
-import { AUTH_TOKEN_KEY, apiUrl, getDb } from '../data/store'
+import { apiUrl, getAuthHeaders, getDb } from '../data/store'
 import type { Database, DocRecord, OfficeId, Status, SyllabusRecord, TosRecord, User } from '../data/types'
 
 export interface SupabaseOffice {
@@ -212,15 +212,8 @@ export async function fetchRequesterDocumentRequests(
     if (filters?.dateFrom) params.set('dateFrom', filters.dateFrom)
     if (filters?.dateTo) params.set('dateTo', filters.dateTo)
 
-    const token = localStorage.getItem(AUTH_TOKEN_KEY)
-    const headers: Record<string, string> = {
-      'x-user-email': user.email,
-      'x-user-id': user.id,
-    }
-    if (token) headers.Authorization = `Bearer ${token}`
-
     const res = await fetch(apiUrl(`/api/documents?${params.toString()}`), {
-      headers,
+      headers: getAuthHeaders(),
     })
 
     if (res.ok) {
@@ -341,15 +334,8 @@ export async function fetchSupabaseSyllabi(
     if (filters?.facultyId) params.set('facultyId', filters.facultyId)
     if (filters?.q) params.set('q', filters.q)
 
-    const token = localStorage.getItem(AUTH_TOKEN_KEY)
-    const headers: Record<string, string> = {
-      'x-user-email': user.email,
-      'x-user-id': user.id,
-    }
-    if (token) headers.Authorization = `Bearer ${token}`
-
     const res = await fetch(apiUrl(`/api/syllabi?${params.toString()}`), {
-      headers,
+      headers: getAuthHeaders(),
     })
 
     if (res.ok) {

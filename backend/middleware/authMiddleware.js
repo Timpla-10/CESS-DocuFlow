@@ -4,11 +4,20 @@ const SessionModel = require('../models/sessionModel');
 const { getRoleLabel, canPerformAction } = require('../utils/roles');
 
 /**
+ * Header-based identity (`x-user-id` / `x-user-email`) is strictly disabled in production
+ * and off by default. It may only be enabled in non-production environments with
+ * ALLOW_HEADER_AUTH=true for legacy integration tests or local development.
+ */
+function isHeaderAuthAllowed() {
+  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_HEADER_AUTH === 'true';
+}
+
+/**
  * PB-02 & PB-04 Middleware: Authenticates the request and verifies user role & active status.
  * Supports:
- * 1. DocuFlow Session token via `Authorization: Bearer <sess_...>` or `x-session-token`
+ * 1. DocuFlow persistent session token via `Authorization: Bearer <sess_...>`
  * 2. Supabase Auth JWT token via `Authorization: Bearer <token>`
- * 3. Institutional user lookup via `x-user-id` or `x-user-email` header
+ * 3. (Non-production explicit opt-in ONLY: ALLOW_HEADER_AUTH=true) `x-session-token`, `x-user-id`, or `x-user-email`
  */
 async function verifyUser(req, res, next) {
   try {
@@ -21,7 +30,9 @@ async function verifyUser(req, res, next) {
     const bearerToken = authHeader && authHeader.startsWith('Bearer ')
       ? authHeader.replace(/^Bearer\s+/i, '').trim()
       : null;
-    const directToken = bearerToken || (sessionTokenHeader ? sessionTokenHeader.trim() : null);
+    const directToken =
+      bearerToken ||
+      (isHeaderAuthAllowed() && sessionTokenHeader ? sessionTokenHeader.trim() : null);
 
     if (directToken) {
       // Check if this is a DocuFlow session token (PB-04)
@@ -44,13 +55,13 @@ async function verifyUser(req, res, next) {
         }
         profile = await UserModel.findById(data.user.id);
       }
-    } else if (headerUserId) {
+    } else if (isHeaderAuthAllowed() && headerUserId) {
       profile = await UserModel.findById(headerUserId);
-    } else if (headerUserEmail) {
+    } else if (isHeaderAuthAllowed() && headerUserEmail) {
       profile = await UserModel.findByEmail(headerUserEmail);
     } else {
       return res.status(401).json({
-        error: 'Unauthorized: Missing authentication credentials.',
+        error: 'Unauthorized: Missing or invalid Bearer authentication token.',
       });
     }
 
@@ -120,4 +131,5 @@ module.exports = {
   verifyUser,
   requireRole,
   requireAction,
+  isHeaderAuthAllowed,
 };

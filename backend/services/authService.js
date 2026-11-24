@@ -204,8 +204,16 @@ function recordSecurityEvent({
 }
 
 /**
+ * Demo/development password fallback is strictly disabled in production and off by default.
+ * It can only be enabled in non-production environments with ALLOW_DEMO_AUTH=true.
+ */
+function isDemoAuthEnabled() {
+  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEMO_AUTH === 'true';
+}
+
+/**
  * Returns the primary role-based password (e.g. "secretary123", "student123", "faculty123")
- * and valid variations for roles with dots/underscores.
+ * and valid variations for roles with dots/underscores. Used for test seeding and explicit dev demo mode only.
  */
 function getPasswordsForRole(role, origin, email = '') {
   const emailPrefix = email ? email.split('@')[0].toLowerCase() : '';
@@ -385,29 +393,54 @@ const AuthService = {
       throw err;
     }
 
-    const { validSet } = getPasswordsForRole(profile.role, profile.origin, cleanEmail);
-    const hasCustomPassword = customPasswordHashes.has(cleanEmail);
+    const demoAuthEnabled = isDemoAuthEnabled();
+    let authenticatedViaDemo = false;
 
-    if (hasCustomPassword) {
-      if (sha256(password) !== customPasswordHashes.get(cleanEmail)) {
+    if (demoAuthEnabled) {
+      const { validSet } = getPasswordsForRole(profile.role, profile.origin, cleanEmail);
+      const hasCustomPassword = customPasswordHashes.has(cleanEmail);
+      if (hasCustomPassword) {
+        if (sha256(password) !== customPasswordHashes.get(cleanEmail)) {
+          recordSecurityEvent({
+            event: 'login_failed',
+            email: cleanEmail,
+            userId: profile.id,
+            status: 'failure',
+            message: 'Failed sign-in attempt with invalid password.',
+            secretsToRedact: [password],
+          });
+          const err = new Error('We couldn’t sign you in. Please check your university email and password.');
+          err.status = 401;
+          throw err;
+        }
+        authenticatedViaDemo = true;
+      } else if (validSet.has(password)) {
+        authenticatedViaDemo = true;
+      }
+    }
+
+    if (!authenticatedViaDemo) {
+      let signInRes;
+      try {
+        signInRes = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+      } catch (authErr) {
         recordSecurityEvent({
           event: 'login_failed',
           email: cleanEmail,
           userId: profile.id,
           status: 'failure',
-          message: 'Failed sign-in attempt with invalid password.',
+          message: 'Sign-in failed because Supabase Auth is unavailable.',
           secretsToRedact: [password],
         });
-        const err = new Error('We couldn’t sign you in. Please check your university email and password.');
-        err.status = 401;
+        const err = new Error('Authentication service is temporarily unavailable. Please try again later.');
+        err.status = 503;
         throw err;
       }
-    } else if (!validSet.has(password)) {
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
-      if (signInErr) {
+
+      if (!signInRes || signInRes.error || !signInRes.data?.user) {
         recordSecurityEvent({
           event: 'login_failed',
           email: cleanEmail,
@@ -828,21 +861,36 @@ const AuthService = {
       throw err;
     }
 
-    // Verify current password
+    // Verify current password (always via Supabase Auth in production and by default)
+    const demoAuthEnabled = isDemoAuthEnabled();
     const { validSet } = getPasswordsForRole(actor.role, actor.origin, cleanEmail);
-    const hasCustomPassword = customPasswordHashes.has(cleanEmail);
     let currentValid = false;
 
-    if (hasCustomPassword) {
+    if (demoAuthEnabled && customPasswordHashes.has(cleanEmail)) {
       currentValid = sha256(currentPassword) === customPasswordHashes.get(cleanEmail);
-    } else if (validSet.has(currentPassword)) {
+    } else if (demoAuthEnabled && validSet.has(currentPassword)) {
       currentValid = true;
     } else {
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: currentPassword,
-      });
-      currentValid = !signInErr;
+      let signInRes;
+      try {
+        signInRes = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: currentPassword,
+        });
+      } catch (authErr) {
+        recordSecurityEvent({
+          event: 'password_change_failed',
+          email: cleanEmail,
+          userId: actor.id,
+          status: 'failure',
+          message: 'Password change failed because Supabase Auth is unavailable.',
+          secretsToRedact: secrets,
+        });
+        const err = new Error('Authentication service is temporarily unavailable. Please try again later.');
+        err.status = 503;
+        throw err;
+      }
+      currentValid = Boolean(signInRes && !signInRes.error && signInRes.data?.user);
     }
 
     if (!currentValid) {
@@ -917,22 +965,98 @@ const AuthService = {
 
   /**
    * PB-02: Sign In with University Google Workspace (@msunaawan.edu.ph)
+   *
+   * Security:
+   * - Production NEVER authenticates from a plain request-supplied `email`.
+   * - Requires `GOOGLE_OAUTH_ENABLED=true` and a cryptographically verified Supabase-issued
+   *   Google OAuth `accessToken` (verified via `supabase.auth.getUser(accessToken)`).
+   * - If Google OAuth is not configured in production, returns HTTP 503.
+   * - Legacy email-only demo login is permitted ONLY when `NODE_ENV !== 'production'`
+   *   AND `ALLOW_DEMO_AUTH === 'true'`.
    */
-  async loginWithGoogle(email, rememberMe = true) {
-    const cleanEmail = (email || '').trim().toLowerCase();
+  async loginWithGoogle(input, rememberMe = true) {
+    const payload = typeof input === 'string' ? { email: input } : (input || {});
+    const accessToken = typeof payload.accessToken === 'string' ? payload.accessToken.trim() : '';
+    const idToken = typeof payload.idToken === 'string' ? payload.idToken.trim() : '';
+    const googleOAuthConfigured = process.env.GOOGLE_OAUTH_ENABLED === 'true';
 
-    if (!isInstitutionalEmail(cleanEmail)) {
+    let verifiedEmail = '';
+
+    if (accessToken) {
+      if (process.env.NODE_ENV === 'production' && !googleOAuthConfigured) {
+        const err = new Error('Google authentication is not configured for this environment. Please sign in with your university email and password.');
+        err.status = 503;
+        throw err;
+      }
+
+      let authRes;
+      try {
+        authRes = await supabase.auth.getUser(accessToken);
+      } catch (authErr) {
+        const err = new Error('Authentication service is temporarily unavailable. Please try again later.');
+        err.status = 503;
+        throw err;
+      }
+
+      if (!authRes || authRes.error || !authRes.data?.user) {
+        const err = new Error('Unauthorized: Invalid or expired Google OAuth identity token.');
+        err.status = 401;
+        throw err;
+      }
+
+      const authUser = authRes.data.user;
+      const provider = authUser.app_metadata?.provider;
+      const providers = Array.isArray(authUser.app_metadata?.providers) ? authUser.app_metadata.providers : [];
+      const isGoogleProvider = provider === 'google' || providers.includes('google');
+      const isEmailVerified = Boolean(authUser.email_confirmed_at || authUser.confirmed_at);
+
+      if (!isGoogleProvider || !isEmailVerified || !authUser.email) {
+        const err = new Error('Unauthorized: Google OAuth token must belong to a verified Google account.');
+        err.status = 401;
+        throw err;
+      }
+
+      verifiedEmail = String(authUser.email).trim().toLowerCase();
+    } else if (idToken) {
+      // Raw Google ID tokens require a configured Google OAuth client verifier (not configured here)
+      const err = new Error(
+        googleOAuthConfigured
+          ? 'Unauthorized: Invalid or unsupported Google identity token. Use a verified Supabase OAuth access token.'
+          : 'Google authentication is not configured for this environment. Please sign in with your university email and password.'
+      );
+      err.status = googleOAuthConfigured ? 401 : 503;
+      throw err;
+    } else if (isDemoAuthEnabled()) {
+      // Explicit non-production demo mode only
+      verifiedEmail = String(payload.email || '').trim().toLowerCase();
+    } else {
+      const err = new Error(
+        googleOAuthConfigured
+          ? 'Unauthorized: A verified Google OAuth token is required. Plain email-only sign-in is not permitted.'
+          : 'Google authentication is not configured for this environment. Please sign in with your university email and password.'
+      );
+      err.status = googleOAuthConfigured ? 401 : 503;
+      throw err;
+    }
+
+    if (!isInstitutionalEmail(verifiedEmail)) {
       const err = new Error('Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.');
       err.status = 400;
       throw err;
     }
 
-    const profile = await UserModel.findByEmail(cleanEmail);
+    const profile = await UserModel.findByEmail(verifiedEmail);
     if (!profile) {
       const err = new Error(
         'No active university account was found for this Gmail address. Please register or contact the College Secretary.'
       );
       err.status = 404;
+      throw err;
+    }
+
+    if (profile.account_status === 'Pending_Verification' || !profile.is_whitelisted) {
+      const err = new Error('Your account is inactive or pending College Secretary verification.');
+      err.status = 403;
       throw err;
     }
 
@@ -944,7 +1068,7 @@ const AuthService = {
 
     const session = await SessionModel.createSession({
       userId: profile.id,
-      email: cleanEmail,
+      email: verifiedEmail,
       role: profile.role,
       origin: profile.origin,
       rememberMe: Boolean(rememberMe),
@@ -1718,6 +1842,7 @@ module.exports = {
   ...AuthService,
   provisionVerifiedUser,
   getPasswordsForRole,
+  isDemoAuthEnabled,
   sanitizeForLog,
   recordSecurityEvent,
   recordUserManagementEvent,

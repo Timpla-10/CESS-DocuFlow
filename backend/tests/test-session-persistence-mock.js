@@ -386,6 +386,7 @@ async function runTests() {
   };
 
   const origFindByEmail = UserModel.findByEmail;
+  const origSignInWithPassword = supabase.auth.signInWithPassword;
   const origResetEmail = supabase.auth.resetPasswordForEmail;
   const origUpdateUser = supabase.auth.admin.updateUserById;
   const origSendReset = EmailService.sendPasswordResetEmail;
@@ -393,6 +394,10 @@ async function runTests() {
 
   UserModel.findByEmail = async (email) =>
     String(email).toLowerCase() === mockProfile.email ? mockProfile : null;
+  supabase.auth.signInWithPassword = async ({ email, password }) =>
+    String(email).toLowerCase() === mockProfile.email && password === 'NewSecurePassword#2026'
+      ? { data: { user: { id: testUserId } }, error: null }
+      : { data: { user: null }, error: { message: 'Invalid login credentials' } };
   supabase.auth.resetPasswordForEmail = async () => ({ data: {}, error: null });
   supabase.auth.admin.updateUserById = async () => ({ data: { user: { id: testUserId } }, error: null });
   EmailService.sendPasswordResetEmail = async () => ({ success: true });
@@ -458,6 +463,7 @@ async function runTests() {
     console.log('PASS 14: Password change cascade session revocation verified.');
   } finally {
     UserModel.findByEmail = origFindByEmail;
+    supabase.auth.signInWithPassword = origSignInWithPassword;
     supabase.auth.resetPasswordForEmail = origResetEmail;
     supabase.auth.admin.updateUserById = origUpdateUser;
     EmailService.sendPasswordResetEmail = origSendReset;

@@ -38,6 +38,22 @@ export const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/,
 export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`
 }
+export function getAuthHeaders(tokenOverride?: string | null): Record<string, string> {
+  const token = tokenOverride ?? (() => {
+    try {
+      return localStorage.getItem(AUTH_TOKEN_KEY)
+    } catch {
+      return null
+    }
+  })()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+export function isDemoFallbackEnabled(
+  env: { DEV?: boolean; PROD?: boolean; VITE_ENABLE_DEMO_AUTH?: string } = import.meta.env,
+): boolean {
+  if (env.PROD) return false
+  return Boolean(env.DEV && env.VITE_ENABLE_DEMO_AUTH === 'true')
+}
 const listeners = new Set<() => void>()
 
 function load(): Database {
@@ -166,10 +182,8 @@ export const api = {
           }
           // PB-10 & PB-11: Sync live document types and requirement checklists from backend
           try {
-            const dtHeaders: Record<string, string> = { 'x-user-email': liveUser.email }
-            if (data.token) dtHeaders.Authorization = `Bearer ${data.token}`
             const dtRes = await fetch(apiUrl('/api/document-types'), {
-              headers: dtHeaders,
+              headers: getAuthHeaders(data.token),
             })
             if (dtRes.ok) {
               const dtData = await dtRes.json()
@@ -212,15 +226,29 @@ export const api = {
           commit({ ...db })
           return liveUser
         }
-      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+        throw new FriendlyError(MESSAGES.signInFailed)
+      } else {
         const errJson = await res.json().catch(() => null)
         if (errJson?.error) {
           throw new FriendlyError(errJson.error)
         }
+        if (res.status === 400 || res.status === 401 || res.status === 403) {
+          throw new FriendlyError(MESSAGES.signInFailed)
+        }
+        if (!isDemoFallbackEnabled()) {
+          throw new FriendlyError('Authentication server is currently unavailable. Please try again later.')
+        }
       }
     } catch (err) {
       if (err instanceof FriendlyError) throw err
-      // Fallback to prototype mock if backend is offline
+      if (!isDemoFallbackEnabled()) {
+        throw new FriendlyError('Unable to reach the authentication server. Please check your connection and try again.')
+      }
+      // Explicit dev/demo mode only: fallback to prototype mock if backend is offline
+    }
+
+    if (!isDemoFallbackEnabled()) {
+      throw new FriendlyError(MESSAGES.signInFailed)
     }
 
     await wait(300)
@@ -272,10 +300,8 @@ export const api = {
           }
           // PB-10 & PB-11: Sync live document types and requirement checklists from backend
           try {
-            const dtHeaders: Record<string, string> = { 'x-user-email': liveUser.email }
-            if (data.token) dtHeaders.Authorization = `Bearer ${data.token}`
             const dtRes = await fetch(apiUrl('/api/document-types'), {
-              headers: dtHeaders,
+              headers: getAuthHeaders(data.token),
             })
             if (dtRes.ok) {
               const dtData = await dtRes.json()
@@ -318,15 +344,29 @@ export const api = {
           commit({ ...db })
           return liveUser
         }
-      } else if (res.status === 400 || res.status === 401 || res.status === 403) {
+        throw new FriendlyError(MESSAGES.signInFailed)
+      } else {
         const errJson = await res.json().catch(() => null)
         if (errJson?.error) {
           throw new FriendlyError(errJson.error)
         }
+        if (res.status === 400 || res.status === 401 || res.status === 403) {
+          throw new FriendlyError(MESSAGES.signInFailed)
+        }
+        if (!isDemoFallbackEnabled()) {
+          throw new FriendlyError('Authentication server is currently unavailable. Please try again later.')
+        }
       }
     } catch (err) {
       if (err instanceof FriendlyError) throw err
-      // Fallback to prototype mock if backend is offline
+      if (!isDemoFallbackEnabled()) {
+        throw new FriendlyError('Unable to reach the authentication server. Please check your connection and try again.')
+      }
+      // Explicit dev/demo mode only: fallback to prototype mock if backend is offline
+    }
+
+    if (!isDemoFallbackEnabled()) {
+      throw new FriendlyError('Unable to reach the authentication server. Please try again later.')
     }
 
     await wait(300)
@@ -374,15 +414,12 @@ export const api = {
   resubmit: async (user: User, docId: string, input: { title: string; description: string; files: engine.NewFile[]; note: string }) => {
     // PB-18 / PB-19: Sync live backend if connected
     try {
-      const token = localStorage.getItem(AUTH_TOKEN_KEY)
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'x-user-email': user.email,
-      }
-      if (token) headers.Authorization = `Bearer ${token}`
       await fetch(apiUrl(`/api/documents/${docId}/resubmit`), {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({
           title: input.title,
           description: input.description,
