@@ -202,7 +202,7 @@ export function FacultyDirectoryPage() {
         description="Browse College of Education and Social Sciences faculty members, their assigned teaching subjects, and official course syllabi."
       />
 
-      {/* Official Syllabus Template Card (Hidden from students - PB-56) */}
+      {/* Official Syllabus Template Card (Hidden from students) */}
       {!isStudent && (
         <div className="surface-brand-gradient relative overflow-hidden rounded-2xl p-6 text-white shadow-xl ring-1 ring-white/15">
           <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">

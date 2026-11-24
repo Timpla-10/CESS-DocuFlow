@@ -32,13 +32,39 @@ export interface NavSection {
   items: NavItem[]
 }
 
+export function visibleNoticesCount(db: Database, u: User): number {
+  const now = new Date().toISOString()
+  const isPublisher = u.role === 'secretary' || u.role === 'dean'
+  return db.notices.filter((n) => {
+    if (!isPublisher) {
+      if ((n.status ?? 'published') !== 'published') return false
+      const pubDate = n.publishDate || n.postedAt
+      if (pubDate > now) return false
+      if (n.expiryDate && n.expiryDate < now) return false
+      const aud = n.targetAudience ?? 'all'
+      if (aud !== 'all') {
+        if (aud === 'students' && u.role !== 'student') return false
+        if (aud === 'faculty' && u.role !== 'faculty') return false
+        if (
+          aud === 'reviewers' &&
+          !['chairperson', 'dean', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor'].includes(u.role)
+        )
+          return false
+        if (aud === 'staff' && !['secretary', 'admin', 'faculty'].includes(u.role)) return false
+      }
+    }
+    return !n.readBy.includes(u.id)
+  }).length
+}
+
 const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty Directory', icon: GraduationCap }
 const syllabiNav: NavItem = { to: '/app/syllabi', label: 'Course Syllabi', icon: BookOpen }
 const tosNav: NavItem = { to: '/app/tos', label: 'Table of Specifications', icon: FileSpreadsheet }
 const notices: NavItem = {
   to: '/app/notices',
-  label: 'Notices and Minutes',
+  label: 'Notices & Announcements',
   icon: Megaphone,
+  count: (db, u) => visibleNoticesCount(db, u),
 }
 
 export function navFor(role: Role): NavSection[] {
@@ -65,7 +91,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [directory],
+          items: [notices, directory],
         },
       ]
     case 'faculty':
@@ -106,7 +132,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [directory],
+          items: [notices, directory],
         },
       ]
     case 'secretary':
@@ -168,7 +194,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [syllabiNav, tosNav, directory],
+          items: [notices, syllabiNav, tosNav, directory],
         },
       ]
     case 'dean':
@@ -191,12 +217,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [
-            { ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length },
-            syllabiNav,
-            tosNav,
-            directory,
-          ],
+          items: [notices, syllabiNav, tosNav, directory],
         },
       ]
     case 'chairperson':
@@ -221,6 +242,10 @@ export function navFor(role: Role): NavSection[] {
             syllabiNav,
             tosNav,
           ],
+        },
+        {
+          heading: 'College information',
+          items: [notices, directory],
         },
       ]
   }

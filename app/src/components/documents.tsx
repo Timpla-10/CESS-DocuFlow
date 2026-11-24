@@ -9,6 +9,8 @@ import {
   FileCheck2,
   FileText,
   Hourglass,
+  Link2,
+  Lock,
   Paperclip,
   RotateCcw,
   Search,
@@ -25,7 +27,6 @@ import {
   OFFICE_LABEL,
   STATUS_FILTER_LABEL,
   controlNumber,
-  downloadGeneratedPdf,
   externalOfficeLabel,
   historyTitle,
   historyTone,
@@ -41,6 +42,9 @@ import type { Attachment, Database, DocRecord, HistoryEntry, OfficeId, RouteStep
 import { formatDate, formatDateTime, plural, timeAgo } from '../lib/time'
 import { Input, Select } from './form'
 import { Avatar, Badge, EmptyState, Tooltip, cn } from './ui'
+import { useUser } from '../app/session'
+import { useToast } from './Toast'
+import { downloadPermittedDocument, generateNonPublicSecureLink } from '../lib/documentSecurity'
 
 /* ------------------------------------------------------------------------ */
 /* Status                                                                    */
@@ -304,7 +308,7 @@ export function FilterBar({
         </div>
       )}
 
-      {/* PB-36: Active Filter Chips with Individual Clear Controls across Queues and Repositories */}
+      {/* Active Filter Chips with Individual Clear Controls across Queues and Repositories */}
       {activeCount > 0 && (
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-ink-100 text-xs">
           <div className="flex items-center gap-1.5 font-semibold text-ink-600">
@@ -1018,30 +1022,36 @@ export function ProcessingHistory({ doc }: { doc: DocRecord }) {
 export const sessionFiles = new Map<string, string>()
 
 export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
+  const user = useUser()
+  const toast = useToast()
   const [selectedAttachId, setSelectedAttachId] = useState<string | undefined>()
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const type = typeOf(db, doc)
-  const requester = userById(db, doc.requesterId)
   const byRev = new Map<number, Attachment[]>()
   for (const a of doc.attachments) byRev.set(a.revision, [...(byRev.get(a.revision) ?? []), a])
   const revs = [...byRev.keys()].sort((a, b) => b - a)
   if (doc.attachments.length === 0) return <p className="text-sm text-ink-500">No files are attached to this request.</p>
 
   const handleSampleDownload = (a: Attachment) => {
-    const req = type?.requirements.find((r) => r.id === a.requirementId)
-    downloadGeneratedPdf(a.name, `Audit E-Copy: ${a.name}`, [
-      `Control Number: ${controlNumber(doc)}`,
-      `Document Title: ${doc.title}`,
-      `Document Type: ${type?.name ?? doc.typeId}`,
-      `Origin: ${doc.origin}`,
-      `Requester: ${requester?.name ?? 'Unknown'} (${requester?.department ?? ''})`,
-      `Attachment Category: ${a.isSignedCopy ? 'Final Signed Release Copy' : (req?.label ?? 'Supporting Attachment')}`,
-      `Uploaded By: ${a.uploadedBy}`,
-      `Uploaded At: ${formatDateTime(a.uploadedAt)}`,
-      `Revision: ${revisionLabel(a.revision)}`,
-      '',
-      'This official electronic copy was exported from CESS DocuFlow for review and institutional audit.',
-    ])
+    const res = downloadPermittedDocument(user, doc, a, type?.name)
+    if (!res.success) {
+      toast.error('Download Blocked', res.error || 'You do not have permission to download this document.')
+    } else {
+      toast.info('Document Downloaded', `Retrieved ${a.name} under verified permissions.`)
+    }
+  }
+
+  const handleCopyLink = (a: Attachment) => {
+    try {
+      const linkInfo = generateNonPublicSecureLink(doc, user, a.id)
+      navigator.clipboard.writeText(linkInfo.url)
+      toast.success(
+        'Non-Public Secure Link Copied',
+        `Authenticated token link copied (valid for ${linkInfo.expiresInMinutes} mins). Recipient must have permission to open this record.`,
+      )
+    } catch (err: unknown) {
+      toast.error('Unable to Copy Link', err instanceof Error ? err.message : 'Permission check failed.')
+    }
   }
 
   return (
@@ -1074,12 +1084,25 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
                           Final Signed Copy
                         </Badge>
                       )}
+                      <span className="inline-flex items-center gap-1 rounded bg-ink-50 px-2 py-0.5 text-[10px] font-semibold text-ink-600 ring-1 ring-inset ring-ink-200">
+                        <Lock className="size-2.5 text-ink-500" /> Non-Public Protected
+                      </span>
                     </div>
                     <p className="truncate text-xs text-ink-500">
                       {a.isSignedCopy ? 'Scanned signed document attached upon release' : (req ? req.label : 'Additional file')} · {formatSize(a.sizeKb)} · added {timeAgo(a.uploadedAt)} by {a.uploadedBy}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    <Tooltip content="Copy authenticated non-public link (15-min token)">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLink(a)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-ink-50 p-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-colors"
+                        aria-label={`Copy secure non-public link for ${a.name}`}
+                      >
+                        <Link2 className="size-3.5 text-brand-600" aria-hidden />
+                      </button>
+                    </Tooltip>
                     <Tooltip content="Preview this document on screen">
                       <button
                         type="button"
@@ -1093,7 +1116,7 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
                         <Eye className="size-3.5 text-brand-600" aria-hidden /> Preview
                       </button>
                     </Tooltip>
-                    <Tooltip content="Download PDF copy">
+                    <Tooltip content="Download permitted copy (Permission Verified)">
                       <button
                         type="button"
                         onClick={() => handleSampleDownload(a)}

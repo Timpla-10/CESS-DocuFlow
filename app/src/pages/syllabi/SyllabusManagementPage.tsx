@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Check,
   CheckCircle2,
   Clock,
   Download,
@@ -8,9 +9,11 @@ import {
   FilePlus2,
   FileText,
   GraduationCap,
+  History,
   Info,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
   Upload,
   UploadCloud,
@@ -37,7 +40,7 @@ import {
 } from '../../components/ui'
 import { downloadGeneratedPdf } from '../../content/language'
 import { api, useDb } from '../../data/store'
-import type { FacultyEntry, Subject, SyllabusTemplate } from '../../data/types'
+import type { FacultyEntry, Subject, SyllabusTemplate, SyllabusVersion } from '../../data/types'
 import { fetchSupabaseSyllabi } from '../../lib/supabase'
 import { formatDate } from '../../lib/time'
 
@@ -97,14 +100,37 @@ export function SyllabusManagementPage() {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [uploadSubjectCode, setUploadSubjectCode] = useState('')
   const [uploadSubjectTitle, setUploadSubjectTitle] = useState('')
+  const [uploadFacultyId, setUploadFacultyId] = useState(
+    user.role === 'faculty' ? (db.faculty.find((f) => f.userId === user.id)?.id || '') : '',
+  )
   const [uploadAy, setUploadAy] = useState('2026-2027')
   const [uploadSem, setUploadSem] = useState('1st Semester')
   const [uploadDept, setUploadDept] = useState(user.department || DEPARTMENTS[1])
   const [uploadDescription, setUploadDescription] = useState('')
   const [uploadFileName, setUploadFileName] = useState('')
   const [uploadFileSizeKb, setUploadFileSizeKb] = useState(450)
+  const [uploadChangeNote, setUploadChangeNote] = useState('')
+  const [uploadTemplateCertified, setUploadTemplateCertified] = useState(true)
   const [uploadBusy, setUploadBusy] = useState(false)
-  const [uploadErrors, setUploadErrors] = useState<{ code?: string; title?: string; file?: string }>({})
+  const [uploadErrors, setUploadErrors] = useState<{
+    code?: string
+    title?: string
+    file?: string
+    note?: string
+    faculty?: string
+  }>({})
+
+  // Version History Modal state
+  const [versionHistoryItem, setVersionHistoryItem] = useState<{
+    courseCode: string
+    courseTitle: string
+    instructor: string
+    currentVersion: number
+    currentFileName?: string
+    currentUploadedAt?: string
+    currentChangeNote?: string
+    history: SyllabusVersion[]
+  } | null>(null)
 
   // Template upload state
   const [isTemplateUploadOpen, setIsTemplateUploadOpen] = useState(false)
@@ -132,6 +158,10 @@ export function SyllabusManagementPage() {
       fileSizeKb?: number
       description?: string
       isMyCourse: boolean
+      version: number
+      versionHistory: SyllabusVersion[]
+      changeNote?: string
+      templateCompliant: boolean
     }> = []
 
     db.faculty.forEach((fac) => {
@@ -162,12 +192,27 @@ export function SyllabusManagementPage() {
           fileSizeKb: matchingSyllabus?.fileSizeKb,
           description: matchingSyllabus?.description,
           isMyCourse: isMine,
+          version: matchingSyllabus?.version || 1,
+          versionHistory: matchingSyllabus?.versionHistory || [],
+          changeNote: matchingSyllabus?.changeNote,
+          templateCompliant: matchingSyllabus?.templateCompliant ?? true,
         })
       })
     })
 
     return list
   }, [db.faculty, db.syllabi, user.id, user.name])
+
+  // Detect existing syllabus for currently selected subject code & term
+  const detectedExisting = useMemo(() => {
+    if (!uploadSubjectCode.trim()) return null
+    return (db.syllabi || []).find(
+      (s) =>
+        s.subjectCode.trim().toUpperCase() === uploadSubjectCode.trim().toUpperCase() &&
+        s.academicYear === uploadAy &&
+        s.semester === uploadSem,
+    )
+  }, [db.syllabi, uploadSubjectCode, uploadAy, uploadSem])
 
   // Filtered catalog
   const filteredCourses = useMemo(() => {
@@ -209,14 +254,27 @@ export function SyllabusManagementPage() {
   const myCoursesList = allCoursesWithSyllabi.filter((c) => c.isMyCourse)
 
   // Handlers
-  const handleOpenUpload = (preset?: { code: string; title: string; dept?: string }) => {
+  const handleOpenUpload = (preset?: {
+    code: string
+    title: string
+    dept?: string
+    facultyId?: string
+  }) => {
     setUploadSubjectCode(preset?.code || '')
     setUploadSubjectTitle(preset?.title || '')
     setUploadDept(preset?.dept || user.department || DEPARTMENTS[1])
+    setUploadFacultyId(
+      preset?.facultyId ||
+        (user.role === 'faculty'
+          ? db.faculty.find((f) => f.userId === user.id)?.id || ''
+          : db.faculty[0]?.id || ''),
+    )
     setUploadAy(selectedAy)
     setUploadSem(selectedSem)
     setUploadDescription('')
     setUploadFileName('')
+    setUploadChangeNote('')
+    setUploadTemplateCertified(true)
     setUploadErrors({})
     setIsUploadDialogOpen(true)
   }
@@ -233,10 +291,16 @@ export function SyllabusManagementPage() {
     e.preventDefault()
     setUploadErrors({})
 
-    const errs: { code?: string; title?: string; file?: string } = {}
+    const errs: { code?: string; title?: string; file?: string; note?: string; faculty?: string } = {}
     if (!uploadSubjectCode.trim()) errs.code = 'Course code is required (e.g. EDUC 101).'
     if (!uploadSubjectTitle.trim()) errs.title = 'Course title is required.'
     if (!uploadFileName.trim()) errs.file = 'Please select a syllabus file (.pdf, .docx).'
+    if (!uploadFacultyId && isSecretary) {
+      errs.faculty = 'Please associate an instructor of record for this syllabus.'
+    }
+    if (detectedExisting && !uploadChangeNote.trim()) {
+      errs.note = 'Required: Please provide a revision summary explaining the updates in this replacement version.'
+    }
 
     if (Object.keys(errs).length > 0) {
       setUploadErrors(errs)
@@ -245,6 +309,7 @@ export function SyllabusManagementPage() {
 
     setUploadBusy(true)
     try {
+      const targetFac = db.faculty.find((f) => f.id === uploadFacultyId)
       await api.uploadSyllabusRecord(user, {
         subjectCode: uploadSubjectCode,
         subjectTitle: uploadSubjectTitle,
@@ -254,11 +319,15 @@ export function SyllabusManagementPage() {
         fileSizeKb: uploadFileSizeKb,
         description: uploadDescription,
         department: uploadDept,
+        facultyId: uploadFacultyId || undefined,
+        facultyName: targetFac?.name || undefined,
+        changeNote: uploadChangeNote.trim() || undefined,
+        templateCompliant: uploadTemplateCertified,
       })
 
       toast.success(
-        'Syllabus Uploaded',
-        `Successfully uploaded syllabus for ${uploadSubjectCode}: ${uploadSubjectTitle}.`,
+        detectedExisting ? 'Syllabus Replaced (Version Upgraded)' : 'Syllabus Uploaded',
+        `Successfully saved ${uploadSubjectCode}: ${uploadSubjectTitle} as Version ${(detectedExisting?.version || 0) + 1}.0.`,
       )
       setIsUploadDialogOpen(false)
     } catch (err: unknown) {
@@ -448,7 +517,7 @@ export function SyllabusManagementPage() {
         />
       </div>
 
-      {/* Information Banner (PB-56 AC requirement) */}
+      {/* Information Banner */}
       <Callout tone="brand" icon={Info} title="Dedicated Course Syllabus Repository">
         Course syllabi are organized in this dedicated curriculum section separately from regular administrative document requests (such as leaves, thesis defenses, or travel orders). Faculty members can maintain their own course syllabi, while department chairs, the college dean, and administrators can view and retrieve official course outlines and Tables of Specifications (
         <TextTooltip description="Table of Specifications: a test blueprint mapping examination items to cognitive domain levels.">
@@ -692,18 +761,52 @@ export function SyllabusManagementPage() {
                             <div className="text-2xs text-ink-400">{item.semester}</div>
                           </td>
 
-                          {/* Status */}
+                          {/* Status & Versioning */}
                           <td className="px-6 py-4 whitespace-nowrap">
                             {hasFile ? (
-                              <div className="space-y-0.5">
-                                <Tooltip content="Verified: Outcome-Based Education (OBE) course syllabus is on file">
-                                  <Badge tone="success" dot={true}>
-                                    Available
-                                  </Badge>
-                                </Tooltip>
-                                <div className="text-2xs text-ink-500">
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <Tooltip content="Verified: Outcome-Based Education (OBE) course syllabus is on file">
+                                    <Badge tone="success" dot={true}>
+                                      Available
+                                    </Badge>
+                                  </Tooltip>
+                                  <span className="inline-flex items-center gap-1 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-bold text-brand-800 ring-1 ring-inset ring-brand-200">
+                                    v{item.version || 1}.0
+                                  </span>
+                                  {item.templateCompliant && (
+                                    <span
+                                      className="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 font-semibold"
+                                      title="Compliant with CESS OBE Syllabus Template"
+                                    >
+                                      <ShieldCheck className="size-3" /> OBE
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-2xs text-ink-500 max-w-[180px] truncate" title={item.syllabusFile}>
                                   {item.syllabusFile}
                                 </div>
+                                {item.versionHistory && item.versionHistory.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setVersionHistoryItem({
+                                        courseCode: item.subjectCode,
+                                        courseTitle: item.subjectTitle,
+                                        instructor: item.facultyName,
+                                        currentVersion: item.version || 1,
+                                        currentFileName: item.syllabusFile,
+                                        currentUploadedAt: item.uploadedAt,
+                                        currentChangeNote: item.changeNote,
+                                        history: item.versionHistory,
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold text-ink-700 hover:bg-ink-200 transition"
+                                  >
+                                    <History className="size-2.5 text-ink-500" />
+                                    <span>{item.versionHistory.length + 1} Versions</span>
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <Tooltip content="Action required: Course syllabus has not been uploaded yet">
@@ -771,7 +874,7 @@ export function SyllabusManagementPage() {
                               {/* Faculty self-service: Upload/Replace/Delete (Strict RBAC) */}
                               {(item.isMyCourse || isSecretary) && (
                                 <>
-                                  <Tooltip content={hasFile ? 'Replace Syllabus File' : 'Upload Syllabus File'}>
+                                  <Tooltip content={hasFile ? 'Replace Syllabus (Version Increment)' : 'Upload Syllabus File'}>
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -779,6 +882,7 @@ export function SyllabusManagementPage() {
                                           code: item.subjectCode,
                                           title: item.subjectTitle,
                                           dept: item.department,
+                                          facultyId: item.facultyId,
                                         })
                                       }
                                       className="inline-flex items-center gap-1 rounded-lg bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-800 hover:bg-ink-200 transition"
@@ -926,12 +1030,16 @@ export function SyllabusManagementPage() {
         )}
       </Card>
 
-      {/* Upload Course Syllabus Modal (Faculty Self-Service & Secretary) */}
+      {/* Upload / Replace Course Syllabus Modal */}
       <Dialog
         open={isUploadDialogOpen}
         onClose={() => setIsUploadDialogOpen(false)}
-        title="Upload Course Syllabus"
-        description="Upload an official Outcome-Based Education (OBE) course syllabus and Table of Specifications (TOS)."
+        title={detectedExisting ? 'Replace Course Syllabus (Version Increment)' : 'Upload Course Syllabus'}
+        description={
+          detectedExisting
+            ? 'Replace the active syllabus. This operation supersedes the current version and preserves past versions in the accreditation audit log.'
+            : 'Upload an official Outcome-Based Education (OBE) course syllabus and associate it with a course and faculty instructor.'
+        }
         busy={uploadBusy}
         footer={
           <>
@@ -943,12 +1051,94 @@ export function SyllabusManagementPage() {
               Cancel
             </Button>
             <Button onClick={handleSaveSyllabus} loading={uploadBusy} icon={UploadCloud}>
-              Save and Publish Syllabus
+              {detectedExisting ? 'Confirm Replacement & Publish' : 'Save and Publish Syllabus'}
             </Button>
           </>
         }
       >
         <form onSubmit={handleSaveSyllabus} className="space-y-4">
+          {/* Replacement Rules Alert if existing syllabus is detected */}
+          {detectedExisting && (
+            <div className="rounded-xl border border-warning-200 bg-warning-50/70 p-3.5 space-y-2">
+              <div className="flex items-center gap-2 text-warning-950 font-bold text-xs">
+                <History className="size-4 text-warning-700" />
+                Existing Syllabus Detected · Version Replacement Mode
+              </div>
+              <p className="text-2xs text-warning-900 leading-relaxed">
+                An active syllabus for <strong>{uploadSubjectCode}</strong> is currently on file for {uploadAy} ({uploadSem}) as{' '}
+                <strong>Version {detectedExisting.version || 1}.0</strong> ({detectedExisting.fileName}).
+              </p>
+              <div className="rounded-lg bg-white/80 p-2.5 text-2xs text-ink-700 space-y-1 ring-1 ring-warning-200/60">
+                <p className="font-semibold text-warning-950">Replacement Rules Enforced:</p>
+                <p>• Uploading this file will supersede Version {detectedExisting.version || 1}.0 and record this upload as <strong>Version {(detectedExisting.version || 1) + 1}.0</strong>.</p>
+                <p>• The superseded version will remain accessible in the course version history archive for accreditation reviews.</p>
+              </div>
+              <Field
+                label="Revision Note / Change Summary"
+                required
+                error={uploadErrors.note}
+                hint="Explain what was updated in this revision (e.g. updated midterm rubrics, new textbook references)"
+              >
+                <Input
+                  type="text"
+                  value={uploadChangeNote}
+                  onChange={(e) => {
+                    setUploadChangeNote(e.target.value)
+                    if (uploadErrors.note) setUploadErrors((p) => ({ ...p, note: undefined }))
+                  }}
+                  placeholder="e.g. Revised mid-term rubrics and updated OBE alignment matrix"
+                  required
+                />
+              </Field>
+            </div>
+          )}
+
+          {/* Faculty / Subject Association */}
+          {(isSecretary || isChairperson) && (
+            <Field label="Assigned Faculty Instructor" required error={uploadErrors.faculty}>
+              <Select
+                value={uploadFacultyId}
+                onChange={(e) => {
+                  setUploadFacultyId(e.target.value)
+                  const fac = db.faculty.find((f) => f.id === e.target.value)
+                  if (fac) setUploadDept(fac.department)
+                  if (uploadErrors.faculty) setUploadErrors((p) => ({ ...p, faculty: undefined }))
+                }}
+                className="w-full"
+              >
+                <option value="">-- Select Faculty Instructor --</option>
+                {db.faculty.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name} ({f.department.replace('Department of ', '')})
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+
+          {/* Quick-select for faculty users */}
+          {isFacultyUser && myCoursesList.length > 0 && (
+            <div className="rounded-lg bg-ink-50 p-2.5 text-2xs text-ink-600 space-y-1.5">
+              <span className="font-semibold text-ink-800 block">Quick-Fill from Your Assigned Courses:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {myCoursesList.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => {
+                      setUploadSubjectCode(c.subjectCode)
+                      setUploadSubjectTitle(c.subjectTitle)
+                      setUploadDept(c.department)
+                    }}
+                    className="rounded bg-white px-2 py-0.5 font-mono text-2xs font-bold text-brand-700 ring-1 ring-ink-200 hover:bg-brand-50 transition"
+                  >
+                    {c.subjectCode}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Course Code" required error={uploadErrors.code}>
               <Input
@@ -1021,6 +1211,49 @@ export function SyllabusManagementPage() {
             </Field>
           </div>
 
+          {/* Template Compliance Checklist */}
+          <div className="rounded-xl border border-brand-100 bg-brand-50/60 p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-brand-950 flex items-center gap-1.5">
+                <FileCheck2 className="size-4 text-brand-700" />
+                Template-Based Uploading Verification
+              </span>
+              <button
+                type="button"
+                onClick={handleDownloadTemplate}
+                className="inline-flex items-center gap-1 text-2xs font-bold text-brand-700 hover:underline"
+              >
+                <Download className="size-3" /> Get Official Template
+              </button>
+            </div>
+            <p className="text-2xs text-brand-800 leading-relaxed">
+              Verify that the syllabus matches the official CESS OBE Syllabus Template standards:
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-2xs text-brand-950">
+              <div className="flex items-center gap-1.5">
+                <Check className="size-3 text-emerald-600 shrink-0" /> Course ILOs & PEOs
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="size-3 text-emerald-600 shrink-0" /> 18-Week Topical Schedule
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="size-3 text-emerald-600 shrink-0" /> Assessment Rubrics
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="size-3 text-emerald-600 shrink-0" /> Updated Reference List
+              </div>
+            </div>
+            <label className="flex items-start gap-2 pt-1 text-2xs text-brand-900 font-semibold cursor-pointer">
+              <input
+                type="checkbox"
+                checked={uploadTemplateCertified}
+                onChange={(e) => setUploadTemplateCertified(e.target.checked)}
+                className="rounded border-brand-300 text-brand-600 focus:ring-brand-500 mt-0.5"
+              />
+              <span>I certify that this file adheres to the official CESS OBE Course Syllabus Template.</span>
+            </label>
+          </div>
+
           <Field label="Course Description & Learning Outcomes" optional>
             <Textarea
               rows={2}
@@ -1060,6 +1293,147 @@ export function SyllabusManagementPage() {
             </div>
           </Field>
         </form>
+      </Dialog>
+
+      {/* Course Syllabus Version History Modal */}
+      <Dialog
+        open={!!versionHistoryItem}
+        onClose={() => setVersionHistoryItem(null)}
+        title="Course Syllabus Version History"
+        description={`${versionHistoryItem?.courseCode}: ${versionHistoryItem?.courseTitle} · ${versionHistoryItem?.instructor}`}
+        footer={
+          <Button variant="secondary" onClick={() => setVersionHistoryItem(null)}>
+            Close
+          </Button>
+        }
+      >
+        {versionHistoryItem && (
+          <div className="space-y-4 text-xs">
+            <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-brand-950 flex items-center gap-1.5">
+                  <History className="size-4 text-brand-700" />
+                  Version Tracking & Replacement Log
+                </span>
+                <Badge tone="success" dot={false}>
+                  Current: v{versionHistoryItem.currentVersion}.0 Active
+                </Badge>
+              </div>
+              <p className="text-2xs text-brand-800 leading-relaxed">
+                Full audit trail of syllabus uploads and replacements. Previous versions are archived to fulfill institutional curriculum compliance and accreditation requirements.
+              </p>
+            </div>
+
+            {/* Active current version */}
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-emerald-600 text-white font-mono font-bold text-xs px-2 py-0.5">
+                    v{versionHistoryItem.currentVersion}.0
+                  </span>
+                  <span className="font-bold text-emerald-950">Active / Current Syllabus</span>
+                </div>
+                {versionHistoryItem.currentFileName && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDownload({
+                        subjectCode: versionHistoryItem.courseCode,
+                        subjectTitle: versionHistoryItem.courseTitle,
+                        syllabusFile: versionHistoryItem.currentFileName,
+                        facultyName: versionHistoryItem.instructor,
+                      })
+                    }
+                    className="inline-flex items-center gap-1 text-2xs font-bold text-emerald-800 hover:underline"
+                  >
+                    <Download className="size-3" /> Download
+                  </button>
+                )}
+              </div>
+              <div className="text-2xs text-emerald-900 space-y-0.5">
+                <p>
+                  File: <strong>{versionHistoryItem.currentFileName || 'Course_Syllabus.pdf'}</strong>
+                </p>
+                {versionHistoryItem.currentUploadedAt && (
+                  <p>Published: {formatDate(versionHistoryItem.currentUploadedAt)}</p>
+                )}
+                {versionHistoryItem.currentChangeNote && (
+                  <p className="italic bg-white/70 p-1.5 rounded ring-1 ring-emerald-200/50 mt-1">
+                    Revision Note: {versionHistoryItem.currentChangeNote}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Historical archived versions */}
+            {versionHistoryItem.history.length === 0 ? (
+              <p className="text-center py-4 text-ink-500 text-2xs">
+                No previous versions on file for this course.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <p className="font-bold text-ink-900 text-2xs uppercase tracking-wider">
+                  Archived Superseded Versions ({versionHistoryItem.history.length})
+                </p>
+                <div className="space-y-2">
+                  {versionHistoryItem.history
+                    .slice()
+                    .reverse()
+                    .map((vh) => (
+                      <div
+                        key={vh.version}
+                        className="rounded-lg border border-ink-200 bg-white p-3 space-y-1 hover:bg-ink-50/50 transition"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="rounded bg-ink-200 text-ink-800 font-mono font-bold text-2xs px-1.5 py-0.5">
+                              v{vh.version}.0
+                            </span>
+                            <span className="font-semibold text-ink-800">{vh.fileName}</span>
+                            <Badge tone="neutral" dot={false}>
+                              Superseded
+                            </Badge>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              downloadGeneratedPdf(
+                                vh.fileName,
+                                `ARCHIVED SYLLABUS v${vh.version}.0: ${versionHistoryItem.courseCode}`,
+                                [
+                                  'MINDANAO STATE UNIVERSITY AT NAAWAN',
+                                  'COLLEGE OF EDUCATION AND SOCIAL SCIENCES',
+                                  `ARCHIVED HISTORICAL COURSE SYLLABUS — VERSION ${vh.version}.0`,
+                                  '',
+                                  `Course Code: ${versionHistoryItem.courseCode}`,
+                                  `Course Title: ${versionHistoryItem.courseTitle}`,
+                                  `Instructor: ${vh.uploadedBy}`,
+                                  `Archived Upload Date: ${formatDate(vh.uploadedAt)}`,
+                                  `Revision Note: ${vh.changeNote || 'Standard replacement'}`,
+                                  '',
+                                  'ACCREDITATION ARCHIVE NOTICE:',
+                                  'This electronic file represents an archived syllabus version preserved under CESS DocuFlow.',
+                                ],
+                              )
+                            }
+                            className="inline-flex items-center gap-1 text-2xs font-semibold text-brand-700 hover:underline"
+                          >
+                            <Download className="size-3" /> Archive Copy
+                          </button>
+                        </div>
+                        <div className="text-2xs text-ink-500 flex flex-wrap gap-x-3">
+                          <span>
+                            Uploaded: {formatDate(vh.uploadedAt)} by {vh.uploadedBy}
+                          </span>
+                          {vh.changeNote && <span className="italic">"{vh.changeNote}"</span>}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Dialog>
 
       {/* College Secretary Template Upload Modal */}

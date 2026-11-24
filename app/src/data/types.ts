@@ -241,6 +241,9 @@ export interface NotificationLog {
   channels?: ('email' | 'in_system')[]
 }
 
+export type NoticeAudience = 'all' | 'students' | 'faculty' | 'reviewers' | 'staff'
+export type NoticeStatus = 'draft' | 'published'
+
 export interface Notice {
   id: string
   kind: 'notice' | 'minutes'
@@ -251,6 +254,11 @@ export interface Notice {
   postedByOffice: string
   postedAt: string
   readBy: string[]
+  status?: NoticeStatus
+  targetAudience?: NoticeAudience
+  publishDate?: string
+  expiryDate?: string
+  content?: string
 }
 
 export interface Subject {
@@ -266,8 +274,17 @@ export interface SyllabusTemplate {
   fileSize?: string
 }
 
+export interface SyllabusVersion {
+  version: number
+  fileName: string
+  fileSizeKb?: number
+  uploadedAt: string
+  uploadedBy: string
+  changeNote?: string
+}
+
 /**
- * PB-56: Dedicated Course Syllabus Record.
+ * Dedicated Course Syllabus Record.
  * Stored separately from regular document requests to facilitate
  * faculty course management, accreditation retrieval, and departmental organization.
  */
@@ -287,6 +304,10 @@ export interface SyllabusRecord {
   uploadedAt: string
   description?: string
   status: 'active' | 'archived'
+  version?: number
+  changeNote?: string
+  versionHistory?: SyllabusVersion[]
+  templateCompliant?: boolean
 }
 
 /**

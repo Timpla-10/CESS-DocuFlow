@@ -18,8 +18,8 @@ export interface ActionNeededBannerProps {
 }
 
 /**
- * PB-09: Action-needed banner for returned requests.
- * Traced to SRS 3.2, 3.3, and 3.7 (dependencies PB-08 and PB-22).
+ * Action-needed banner for returned requests.
+ * Traced to SRS 3.2, 3.3, and 3.7.
  *
  * Prominently highlights returned document requests on the requester's dashboard
  * with accessible return reasons, correction details, flagged requirements,

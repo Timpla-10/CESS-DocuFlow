@@ -505,7 +505,7 @@ export function TosManagementPage() {
         />
       </div>
 
-      {/* Dedicated Information Banner (PB-57 Requirement) */}
+      {/* Dedicated Information Banner */}
       <Callout tone="brand" icon={Info} title="Dedicated Table of Specifications (TOS) Repository">
         Table of Specifications (TOS) documents are organized in this dedicated examination assessment section separately from course syllabi and regular administrative document requests. Faculty members can maintain their own course test blueprints (including cognitive level distributions across Remembering, Understanding, Applying, Analyzing, Evaluating, and Creating), while department chairs, the college dean, and administrators can view and retrieve official blueprints for accreditation and academic audits.
       </Callout>

@@ -20,12 +20,15 @@ import type {
   ExternalReturnOutcome,
   FacultyEntry,
   FolderCategory,
+  NoticeAudience,
+  NoticeStatus,
   NotificationPreference,
   Origin,
   PendingRegistration,
   Role,
   SyllabusRecord,
   SyllabusTemplate,
+  SyllabusVersion,
   TosCognitiveLevels,
   TosRecord,
   User,
@@ -403,14 +406,38 @@ export const api = {
   recordRelease: (user: User, docId: string, input: { receivedBy: string; signedFile?: engine.NewFile }) =>
     mutate((d, at) => engine.recordRelease(d, user, docId, input, at)),
 
-  postNotice: (user: User, input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string }) =>
-    mutate((d, at) => engine.postNotice(d, user, input, at)),
+  postNotice: (
+    user: User,
+    input: {
+      kind: 'notice' | 'minutes'
+      title: string
+      summary: string
+      fileName: string
+      status?: NoticeStatus
+      targetAudience?: NoticeAudience
+      publishDate?: string
+      expiryDate?: string
+      content?: string
+    },
+  ) => mutate((d, at) => engine.postNotice(d, user, input, at)),
 
   updateNotice: (
     user: User,
     id: string,
-    input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string }
+    input: {
+      kind: 'notice' | 'minutes'
+      title: string
+      summary: string
+      fileName: string
+      status?: NoticeStatus
+      targetAudience?: NoticeAudience
+      publishDate?: string
+      expiryDate?: string
+      content?: string
+    },
   ) => mutate((d) => engine.updateNotice(d, user, id, input)),
+
+  publishNotice: (user: User, id: string) => mutate((d, at) => engine.publishDraftNotice(d, user, id, at)),
 
   deleteNotice: (user: User, id: string) => mutate((d) => engine.deleteNotice(d, user, id)),
 
@@ -953,7 +980,7 @@ export const api = {
     }),
 
   /**
-   * PB-56: Separate Syllabus Management - Upload or update a syllabus record.
+   * Dedicated Syllabus Management - Upload or update a syllabus record with versioning and replacement rules.
    */
   uploadSyllabusRecord: (
     actor: User,
@@ -966,6 +993,10 @@ export const api = {
       fileSizeKb?: number
       description?: string
       department?: string
+      facultyId?: string
+      facultyName?: string
+      changeNote?: string
+      templateCompliant?: boolean
     },
   ) =>
     mutate((d) => {
@@ -985,11 +1016,21 @@ export const api = {
 
       if (!d.syllabi) d.syllabi = []
 
-      let fac = d.faculty.find(
-        (f) =>
-          (f.userId && f.userId === actor.id) ||
-          f.name.trim().toLowerCase() === actor.name.trim().toLowerCase(),
-      )
+      // Faculty / Subject association
+      let fac: FacultyEntry | undefined
+      if (payload.facultyId) {
+        fac = d.faculty.find((f) => f.id === payload.facultyId)
+      } else if (payload.facultyName) {
+        fac = d.faculty.find((f) => f.name.trim().toLowerCase() === payload.facultyName?.trim().toLowerCase())
+      }
+
+      if (!fac) {
+        fac = d.faculty.find(
+          (f) =>
+            (f.userId && f.userId === actor.id) ||
+            f.name.trim().toLowerCase() === actor.name.trim().toLowerCase(),
+        )
+      }
 
       if (!fac && actor.role === 'faculty') {
         fac = {
@@ -1002,8 +1043,8 @@ export const api = {
         d.faculty.push(fac)
       }
 
-      const facultyName = fac ? fac.name : actor.name
-      const facultyId = fac ? fac.id : `fac-${actor.id}`
+      const facultyName = fac ? fac.name : (payload.facultyName || actor.name)
+      const facultyId = fac ? fac.id : (payload.facultyId || `fac-${actor.id}`)
       const department =
         fac?.department || actor.department || payload.department || 'College of Education and Social Sciences'
 
@@ -1024,6 +1065,18 @@ export const api = {
           throw new FriendlyError('Only the assigned instructor or College Secretary can update this course syllabus.')
         }
 
+        // Version & Replacement Rules: archive current version into version history
+        const prevVersion = existing.version || 1
+        const history: SyllabusVersion[] = existing.versionHistory ? [...existing.versionHistory] : []
+        history.push({
+          version: prevVersion,
+          fileName: existing.fileName,
+          fileSizeKb: existing.fileSizeKb || 450,
+          uploadedAt: existing.uploadedAt,
+          uploadedBy: existing.facultyName,
+          changeNote: existing.changeNote || 'Initial syllabus release',
+        })
+
         d.syllabi[existingIdx] = {
           ...existing,
           subjectTitle: title,
@@ -1032,6 +1085,10 @@ export const api = {
           description: payload.description || existing.description,
           uploadedAt: new Date().toISOString(),
           status: 'active',
+          version: prevVersion + 1,
+          changeNote: payload.changeNote || 'Updated syllabus content and OBE alignment.',
+          versionHistory: history,
+          templateCompliant: payload.templateCompliant ?? true,
         }
       } else {
         const newRecord: SyllabusRecord = {
@@ -1040,7 +1097,7 @@ export const api = {
           subjectTitle: title,
           facultyId,
           facultyName,
-          facultyUserId: actor.id,
+          facultyUserId: fac?.userId || (actor.role === 'faculty' ? actor.id : undefined),
           department,
           academicYear: ay,
           semester: sem,
@@ -1049,6 +1106,10 @@ export const api = {
           description: payload.description || 'Outcome-Based Education (OBE) course syllabus.',
           uploadedAt: new Date().toISOString(),
           status: 'active',
+          version: 1,
+          changeNote: payload.changeNote || 'Initial syllabus release.',
+          versionHistory: [],
+          templateCompliant: payload.templateCompliant ?? true,
         }
         d.syllabi.push(newRecord)
       }
@@ -1059,13 +1120,17 @@ export const api = {
           sub.title = title
           sub.syllabusFile = fileName
         } else {
-          fac.subjects.push({ code, title, syllabusFile: fileName })
+          fac.subjects.push({
+            code,
+            title,
+            syllabusFile: fileName,
+          })
         }
       }
     }),
 
   /**
-   * PB-56: Separate Syllabus Management - Delete a syllabus record.
+   * Dedicated Syllabus Management - Delete a syllabus record.
    */
   deleteSyllabusRecord: (actor: User, syllabusId: string) =>
     mutate((d) => {

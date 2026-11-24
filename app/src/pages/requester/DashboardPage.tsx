@@ -73,7 +73,7 @@ function RequesterDashboard() {
         }
       />
 
-      {/* PB-09: High-priority Action-Needed Banner for Returned Requests */}
+      {/* High-priority Action-Needed Banner for Returned Requests */}
       <ActionNeededBanner docs={returnedDocs} />
 
       {readyDocs.length > 0 && (

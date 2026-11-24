@@ -65,7 +65,7 @@ import { fetchRequesterDocumentRequests } from '../../lib/supabase'
 import { formatDate, formatDateTime, timeAgo } from '../../lib/time'
 
 /**
- * PB-08: Requester Dashboard — "All My Requests" (SRS §3.7 REQ-MON-1 to REQ-MON-4).
+ * Requester Dashboard — "All My Requests" (SRS §3.7 REQ-MON-1 to REQ-MON-4).
  *
  * Fulfills the user story where a student or faculty requester can view all the documents
  * they have requested along with their latest status on a dedicated "My Documents" dashboard.
@@ -616,7 +616,7 @@ export function MyDocumentsPage() {
             </div>
           </div>
 
-          {/* PB-09: High-priority Action-Needed Banner for Returned Requests */}
+          {/* High-priority Action-Needed Banner for Returned Requests */}
           <ActionNeededBanner docs={returnedDocs} />
 
           {readyDocs.length > 0 && (
@@ -642,7 +642,7 @@ export function MyDocumentsPage() {
             </Callout>
           )}
 
-          {/* Overview Metric Summary Cards (PB-07 & PB-08) */}
+          {/* Overview Metric Summary Cards */}
           <div className="grid grid-cols-1 gap-2.5 min-[380px]:grid-cols-2 min-[380px]:gap-3.5 sm:grid-cols-4">
             <Card className="p-4 sm:p-5">
               <div className="flex items-center justify-between">
@@ -876,7 +876,7 @@ export function MyDocumentsPage() {
           )}
 
           {/* ---------------------------------------------------------------- */}
-          {/* TAB 2: DOCUMENT REPOSITORIES & CUSTOM FOLDERS (PB-58)            */}
+          {/* TAB 2: DOCUMENT REPOSITORIES & CUSTOM FOLDERS            */}
           {/* ---------------------------------------------------------------- */}
           {activeTab === 'folders' && (
             <div className="space-y-4">
@@ -1174,7 +1174,7 @@ export function MyDocumentsPage() {
         </div>
       )}
 
-      {/* PB-58: Create Custom Folder Dialog */}
+      {/* Create Custom Folder Dialog */}
       <Dialog
         open={isCreateFolderOpen}
         onClose={() => setIsCreateFolderOpen(false)}
@@ -1242,7 +1242,7 @@ export function MyDocumentsPage() {
         </form>
       </Dialog>
 
-      {/* PB-58: Edit Folder Dialog */}
+      {/* Edit Folder Dialog */}
       <Dialog
         open={editingFolder !== null}
         onClose={() => setEditingFolder(null)}
@@ -1307,7 +1307,7 @@ export function MyDocumentsPage() {
         </form>
       </Dialog>
 
-      {/* PB-58: Delete Folder Dialog */}
+      {/* Delete Folder Dialog */}
       <Dialog
         open={deletingFolder !== null}
         onClose={() => setDeletingFolder(null)}

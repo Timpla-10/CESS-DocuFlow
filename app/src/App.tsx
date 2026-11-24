@@ -199,7 +199,7 @@ export default function App() {
                 }
               />
 
-              {/* PB-56: Dedicated Course Syllabus Management Section (Students are not authorized) */}
+              {/* Dedicated Course Syllabus Management Section (Students are not authorized) */}
               <Route
                 path="syllabi"
                 element={
@@ -209,7 +209,7 @@ export default function App() {
                 }
               />
 
-              {/* PB-57: Dedicated Table of Specifications (TOS) Management Module (Students are not authorized) */}
+              {/* Dedicated Table of Specifications (TOS) Management Module (Students are not authorized) */}
               <Route
                 path="tos"
                 element={
@@ -231,7 +231,7 @@ export default function App() {
               <Route
                 path="notices"
                 element={
-                  <Protected allowedRoles={['secretary', 'dean']}>
+                  <Protected>
                     <NoticesPage />
                   </Protected>
                 }

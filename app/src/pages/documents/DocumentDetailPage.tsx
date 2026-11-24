@@ -9,15 +9,17 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  Link2,
+  Lock,
   PackageCheck,
   Paperclip,
   RotateCcw,
   Send,
+  ShieldAlert,
   UploadCloud,
   UserCheck,
   X,
   XCircle,
-  Lock,
 } from 'lucide-react'
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -57,10 +59,11 @@ import {
   revisionLabel,
 } from '../../content/language'
 import { ACCEPTED_EXT, MAX_FILE_MB, reviewOptions, type NewFile, type ReviewKind } from '../../data/engine'
-import { canView, daysWaiting, isDelayed, typeOf, userById } from '../../data/selectors'
+import { daysWaiting, isDelayed, typeOf, userById } from '../../data/selectors'
 import { api, useDb } from '../../data/store'
 import { EXTERNAL_RETURN_OUTCOMES, type ExternalOfficeId, type ExternalReturnOutcome } from '../../data/types'
 import { formatDate, formatDateTime, plural } from '../../lib/time'
+import { checkDocumentAccess, generateNonPublicSecureLink } from '../../lib/documentSecurity'
 
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -124,22 +127,57 @@ export function DocumentDetailPage() {
   const [releaseBusy, setReleaseBusy] = useState(false)
   const [releaseErrors, setReleaseErrors] = useState<{ receivedBy?: string }>({})
 
-  // Folder state (PB-58)
+  // Folder state
   const [isMoveFolderOpen, setIsMoveFolderOpen] = useState(false)
   const [targetFolderId, setTargetFolderId] = useState(doc?.folderId ?? '')
   const [moveFolderBusy, setMoveFolderBusy] = useState(false)
 
-  if (!doc || !canView(user, doc)) {
+  // Non-public link dialog state
+  const [isSecureLinkDialogOpen, setIsSecureLinkDialogOpen] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
+
+  if (!doc) {
     return (
       <Card className="mx-auto mt-8 max-w-lg p-8 text-center">
         <AlertCircle className="mx-auto size-10 text-danger-500" />
         <h2 className="mt-4 text-lg font-bold text-ink-900">Document Not Found</h2>
         <p className="mt-2 text-sm text-ink-600">
-          This document could not be found, or you do not have permission to view it.
+          This document could not be found or has been deleted.
         </p>
         <div className="mt-6">
           <ButtonLink to="/app" variant="secondary">
             Return to Dashboard
+          </ButtonLink>
+        </div>
+      </Card>
+    )
+  }
+
+  const access = checkDocumentAccess(user, doc)
+  if (!access.permitted) {
+    return (
+      <Card className="mx-auto mt-8 max-w-lg p-8 text-center ring-1 ring-danger-200">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-danger-50 text-danger-600 ring-1 ring-danger-100">
+          <ShieldAlert className="size-8" />
+        </div>
+        <h2 className="mt-4 text-lg font-bold text-ink-950">Document Access Restricted</h2>
+        <p className="mt-2 text-xs leading-relaxed text-ink-600">
+          {access.reason}
+        </p>
+        <div className="mt-5 rounded-xl bg-ink-50 p-3.5 text-left text-xs text-ink-700 ring-1 ring-inset ring-ink-100">
+          <span className="font-semibold block text-ink-900 mb-1">Permitted Stakeholders:</span>
+          <ul className="list-disc pl-4 space-y-1 text-2xs text-ink-600">
+            <li>Original Document Requester / Owner</li>
+            <li>Designated Reviewing Offices in the active workflow</li>
+            <li>College Secretary & Institutional Records Officers</li>
+          </ul>
+        </div>
+        <div className="mt-6 flex justify-center gap-3">
+          <ButtonLink to="/app/my-documents" variant="secondary">
+            View Permitted Documents
+          </ButtonLink>
+          <ButtonLink to="/app" variant="primary">
+            Dashboard
           </ButtonLink>
         </div>
       </Card>
@@ -154,7 +192,7 @@ export function DocumentDetailPage() {
   const userAudience: 'requester' | 'staff' = isDocRequester ? 'requester' : isReqUser ? 'requester' : 'staff'
   const message = requesterMessage(doc, delayed, db)
 
-  // PB-32: Estimated turnaround target date based on standard SLA days
+  // Estimated turnaround target date based on standard SLA days
   const estimatedCompletionDate =
     docType && doc.submittedAt
       ? new Date(
@@ -511,8 +549,8 @@ export function DocumentDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top back navigation */}
-      <div className="flex items-center justify-between">
+      {/* Top back navigation & security actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -520,7 +558,46 @@ export function DocumentDetailPage() {
         >
           <ArrowLeft className="size-4" aria-hidden /> Back to Documents
         </button>
-        <span className="text-xs text-ink-500 font-mono">Control Ref: {controlNumber(doc)}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={Link2}
+            onClick={() => setIsSecureLinkDialogOpen(true)}
+            title="View & copy non-public authenticated link"
+          >
+            Non-Public Link
+          </Button>
+          <span className="text-xs text-ink-500 font-mono">Control Ref: {controlNumber(doc)}</span>
+        </div>
+      </div>
+
+      {/* Permission Verification & Non-Public Access Indicator Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-xs">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex size-8 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30 shrink-0">
+            <Lock className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-white flex flex-wrap items-center gap-2">
+              Non-Public Institutional Record
+              <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-400/30">
+                Permission Verified
+              </span>
+            </p>
+            <p className="text-[11px] text-slate-300 truncate">
+              Access Scope: <strong>{access.scopeLabel}</strong> · Non-public authenticated links enforced
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsSecureLinkDialogOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20 transition active:scale-95 ring-1 ring-white/15"
+        >
+          <Link2 className="size-3.5 text-emerald-300" />
+          Get Non-Public Link
+        </button>
       </div>
 
       {/* Submission Confirmation Banner (REQ-SUB-5, REQ-SUB-6, REQ-REC-1, REQ-REC-2) */}
@@ -553,7 +630,7 @@ export function DocumentDetailPage() {
         </div>
       )}
 
-      {/* PB-32: Requester Progress Detail View for Own Requests */}
+      {/* Requester Progress Detail View for Own Requests */}
       {isDocRequester && (
         <div className="space-y-4">
           {/* Prominent Return Reasons Card for Returned Requests */}
@@ -2021,7 +2098,7 @@ export function DocumentDetailPage() {
         </form>
       </Dialog>
 
-      {/* PB-58: Move / Assign Document to Folder Dialog */}
+      {/* Move / Assign Document to Folder Dialog */}
       <Dialog
         open={isMoveFolderOpen}
         onClose={() => setIsMoveFolderOpen(false)}
@@ -2062,6 +2139,62 @@ export function DocumentDetailPage() {
             </Select>
           </Field>
         </form>
+      </Dialog>
+
+      {/* Non-Public Secure Link Dialog */}
+      <Dialog
+        open={isSecureLinkDialogOpen}
+        onClose={() => setIsSecureLinkDialogOpen(false)}
+        title="Non-Public Authenticated Link"
+        description="Time-limited session token link for permitted document participants"
+        footer={
+          <Button variant="secondary" onClick={() => setIsSecureLinkDialogOpen(false)}>
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <div className="rounded-xl bg-brand-50 p-3.5 ring-1 ring-brand-100 text-brand-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-brand-900">
+              <Lock className="size-4 text-brand-700" />
+              Non-Public Institutional Document Protection
+            </p>
+            <p className="text-[11px] leading-relaxed text-brand-800">
+              This document is protected by role-based permission verification. Anyone opening this link must sign in with an authorized account (requester, reviewing office, or college records administrator). Public scraping or unauthenticated direct access is blocked.
+            </p>
+          </div>
+
+          <Field label="Authenticated Time-Limited Link (15-Minute Token)">
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={generateNonPublicSecureLink(doc, user).url}
+                className="font-mono text-xs bg-ink-50 select-all"
+              />
+              <Button
+                type="button"
+                variant={copiedLink ? 'primary' : 'secondary'}
+                onClick={() => {
+                  const info = generateNonPublicSecureLink(doc, user)
+                  navigator.clipboard.writeText(info.url)
+                  setCopiedLink(true)
+                  setTimeout(() => setCopiedLink(false), 2500)
+                  toast.success('Non-Public Link Copied', 'Token link copied. Valid for 15 minutes for permitted accounts.')
+                }}
+                className="shrink-0"
+              >
+                {copiedLink ? 'Copied!' : 'Copy Link'}
+              </Button>
+            </div>
+          </Field>
+
+          <div className="rounded-lg bg-ink-50 p-3 text-ink-600 space-y-1">
+            <p className="font-semibold text-ink-800">Security Parameters:</p>
+            <p>• Access Scope: <strong>{access.scopeLabel}</strong></p>
+            <p>• Token Expiration: <strong>15 minutes from generation</strong></p>
+            <p>• Access Policy: <strong>Permission-checked upon each view & download</strong></p>
+          </div>
+        </div>
       </Dialog>
 
       {/* 5. In-App Document & Attachment Previewer Modal (Zero-download inspection) */}

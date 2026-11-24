@@ -1,11 +1,15 @@
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   Download,
   FileCheck2,
   FileText,
+  Link2,
   Printer,
   RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
   X,
   ZoomIn,
   ZoomOut,
@@ -16,7 +20,6 @@ import cessLogo from '../assets/cess-logo.png'
 import msunLogo from '../assets/msun-logo.png'
 import {
   controlNumber,
-  downloadGeneratedPdf,
   locationLabelForStaff,
   revisionLabel,
 } from '../content/language'
@@ -25,7 +28,12 @@ import { formatDateTime } from '../lib/time'
 import { formatSize, sessionFiles } from './documents'
 import { cn } from './ui'
 import { useSession } from '../app/session'
-import { canView } from '../data/selectors'
+import {
+  checkDocumentAccess,
+  downloadPermittedDocument,
+  generateNonPublicSecureLink,
+} from '../lib/documentSecurity'
+import { useToast } from './Toast'
 
 export interface DocumentPreviewModalProps {
   open: boolean
@@ -89,24 +97,35 @@ export function DocumentPreviewModal({
   }, [open, onClose])
 
   const { user } = useSession()
+  const toast = useToast()
+  const [isCopiedLink, setIsCopiedLink] = useState(false)
+
   if (!open) return null
 
-  const isAuthorized = user && canView(user, doc)
-  if (!isAuthorized) {
+  const access = user ? checkDocumentAccess(user, doc) : { permitted: false, scope: 'denied' as const, scopeLabel: 'Restricted', reason: 'You must be signed in to access this document.' }
+  if (!access.permitted) {
     return createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl">
-          <AlertCircle className="mx-auto size-10 text-danger-500" />
-          <h3 className="mt-3 text-lg font-bold text-ink-900">Access Restricted</h3>
-          <p className="mt-2 text-sm text-ink-600">
-            Files attached to this document are access-controlled and restricted to the requester, College Secretary, and authorized reviewing officials.
+          <ShieldAlert className="mx-auto size-12 text-danger-500" />
+          <h3 className="mt-3 text-lg font-bold text-ink-900">Restricted Confidential Document</h3>
+          <p className="mt-2 text-xs leading-relaxed text-ink-600">
+            {access.reason || 'Files attached to this document are access-controlled and restricted to the requester, College Secretary, and authorized reviewing officials.'}
           </p>
+          <div className="mt-4 rounded-xl bg-ink-50 p-3 text-left text-xs text-ink-700">
+            <span className="font-semibold block text-ink-900 mb-1">Institutional Access Rules:</span>
+            <ul className="list-disc pl-4 space-y-0.5 text-2xs text-ink-600">
+              <li>Document submitter / requester</li>
+              <li>College Secretary & Records Administrators</li>
+              <li>Designated reviewing offices in the routing chain</li>
+            </ul>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="mt-5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            className="mt-5 w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 transition"
           >
-            Close
+            Close Preview
           </button>
         </div>
       </div>,
@@ -119,33 +138,28 @@ export function DocumentPreviewModal({
   const blobUrl = activeAttachment ? sessionFiles.get(activeAttachment.id) : undefined
 
   const handleDownload = () => {
-    if (activeAttachment) {
-      const fileName = activeAttachment.name
-      downloadGeneratedPdf(fileName, `Audit Copy: ${fileName}`, [
-        `Control Number: ${controlNumber(doc)}`,
-        `Document Title: ${doc.title}`,
-        `Document Type: ${docType?.name ?? doc.typeId}`,
-        `Origin: ${doc.origin}`,
-        `Requester: ${requester?.name ?? 'Unknown'} (${requester?.department ?? ''})`,
-        `Attachment Category: ${activeAttachment.isSignedCopy ? 'Final Signed Release Copy' : (activeReq?.label ?? 'Supporting Attachment')}`,
-        `Uploaded By: ${activeAttachment.uploadedBy}`,
-        `Uploaded At: ${formatDateTime(activeAttachment.uploadedAt)}`,
-        `Revision: ${revisionLabel(activeAttachment.revision)}`,
-        '',
-        'This official electronic copy was exported from CESS DocuFlow for review and institutional audit.',
-      ])
+    if (!user) return
+    const res = downloadPermittedDocument(user, doc, activeAttachment, docType?.name)
+    if (!res.success) {
+      toast.error('Download Blocked', res.error || 'Access restricted.')
     } else {
-      downloadGeneratedPdf(
-        `${controlNumber(doc)}_Overview.pdf`,
-        `Official Routing Summary: ${doc.title}`,
-        [
-          `Control Number: ${controlNumber(doc)}`,
-          `Document Title: ${doc.title}`,
-          `Status: ${doc.status}`,
-          `Requester: ${requester?.name ?? ''} (${requester?.department ?? ''})`,
-          `Filing Date: ${formatDateTime(doc.submittedAt)}`,
-        ],
+      toast.info('Document Downloaded', `Exported verified institutional copy under ${access.scopeLabel}.`)
+    }
+  }
+
+  const handleCopySecureLink = () => {
+    if (!user) return
+    try {
+      const linkInfo = generateNonPublicSecureLink(doc, user, activeAttachment?.id)
+      navigator.clipboard.writeText(linkInfo.url)
+      setIsCopiedLink(true)
+      setTimeout(() => setIsCopiedLink(false), 2500)
+      toast.success(
+        'Non-Public Secure Link Copied',
+        `Authenticated token link created (valid for ${linkInfo.expiresInMinutes} mins). Only authorized accounts can view this record.`,
       )
+    } catch (err: unknown) {
+      toast.error('Unable to Generate Link', err instanceof Error ? err.message : 'Permission check failed.')
     }
   }
 
@@ -167,9 +181,14 @@ export function DocumentPreviewModal({
             {controlNumber(doc)}
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-bold text-white max-w-[280px] sm:max-w-md">
-              {doc.title}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-sm font-bold text-white max-w-[220px] sm:max-w-xs md:max-w-md">
+                {doc.title}
+              </h2>
+              <span className="hidden items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-200 ring-1 ring-emerald-400/30 md:inline-flex">
+                <ShieldCheck className="size-3 text-emerald-300" /> Non-Public Verified
+              </span>
+            </div>
             <p className="truncate text-[11px] text-white/80">
               {docType?.name ?? doc.typeId} · {revisionLabel(doc.revision)} · {doc.origin}
             </p>
@@ -214,6 +233,25 @@ export function DocumentPreviewModal({
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={handleCopySecureLink}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20 hover:bg-white/25 transition active:scale-95"
+            title="Copy authenticated non-public link (15-min token)"
+          >
+            {isCopiedLink ? (
+              <>
+                <Check className="size-3.5 text-emerald-300" />
+                <span className="text-emerald-200">Link Copied</span>
+              </>
+            ) : (
+              <>
+                <Link2 className="size-3.5 text-brand-200" />
+                <span className="hidden sm:inline">Non-Public Link</span>
+                <span className="sm:hidden">Link</span>
+              </>
+            )}
+          </button>
+          <button
+            type="button"
             onClick={handlePrint}
             className="hidden items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/20 hover:bg-white/25 transition sm:inline-flex"
             title="Print Official Document Sheet"
@@ -224,7 +262,7 @@ export function DocumentPreviewModal({
             type="button"
             onClick={handleDownload}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm ring-1 ring-white/20 hover:bg-brand-500 transition active:scale-95"
-            title="Download PDF Copy"
+            title="Download PDF Copy (Permission Verified)"
           >
             <Download className="size-3.5" /> Download
           </button>

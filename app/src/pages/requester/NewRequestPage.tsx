@@ -370,7 +370,7 @@ export function NewRequestPage() {
         }
       />
 
-      {/* PB-16: 2-Step Stepper */}
+      {/* 2-Step Stepper */}
       <div className="rounded-xl border border-ink-200 bg-white p-4 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
           <button

@@ -23,6 +23,9 @@ import type {
   ExternalOfficeId,
   ExternalReturnOutcome,
   HistoryEntry,
+  Notice,
+  NoticeAudience,
+  NoticeStatus,
   NotificationKind,
   NotificationLog,
   OfficeId,
@@ -892,14 +895,28 @@ export function sendSingleReminder(db: Database, docId: string, now: number): st
 export function postNotice(
   db: Database,
   actor: User,
-  input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string },
+  input: {
+    kind: 'notice' | 'minutes'
+    title: string
+    summary: string
+    fileName: string
+    status?: NoticeStatus
+    targetAudience?: NoticeAudience
+    publishDate?: string
+    expiryDate?: string
+    content?: string
+  },
   at: string,
 ) {
   if (actor.role !== 'secretary' && actor.role !== 'dean')
     throw new FriendlyError('Only the College Secretary and the College Dean can share notices and minutes.')
   if (!input.title.trim()) throw new FriendlyError('Please give the notice a title.')
   const office = OFFICE_LABEL[officeOf(actor)]
-  const notice = {
+  const status: NoticeStatus = input.status || 'published'
+  const targetAudience: NoticeAudience = input.targetAudience || 'all'
+  const publishDate = input.publishDate || at
+
+  const notice: Notice = {
     id: nextId(db, 'nt'),
     kind: input.kind,
     title: input.title.trim(),
@@ -909,20 +926,50 @@ export function postNotice(
     postedByOffice: office,
     postedAt: at,
     readBy: [],
+    status,
+    targetAudience,
+    publishDate,
+    expiryDate: input.expiryDate?.trim() || undefined,
+    content: input.content?.trim() || undefined,
   }
   db.notices.unshift(notice)
-  const label = input.kind === 'notice' ? 'notice' : 'minutes of meeting'
-  for (const f of db.users.filter((u) => u.role === 'faculty' && u.active)) {
-    notify(db, {
-      kind: 'notice',
-      recipientId: f.id,
-      recipientLabel: f.name,
-      recipientEmail: f.email,
-      subject: `New ${label} from the ${office}: ${notice.title}`,
-      body: `Hello ${firstName(f)},\n\nThe ${office} shared a new ${label}: “${notice.title}”.\n\nOpen it here: /app/notices${SIGNOFF}`,
-      at,
+
+  // Only dispatch notifications if published immediately and not scheduled in the future
+  if (status === 'published' && publishDate <= at) {
+    const label = input.kind === 'notice' ? 'notice' : 'minutes of meeting'
+    const recipients = db.users.filter((u) => {
+      if (!u.active) return false
+      if (targetAudience === 'all') return true
+      if (targetAudience === 'faculty' && u.role === 'faculty') return true
+      if (targetAudience === 'students' && u.role === 'student') return true
+      if (
+        targetAudience === 'reviewers' &&
+        (u.role === 'chairperson' ||
+          u.role === 'dean' ||
+          u.role === 'ids_principal' ||
+          u.role === 'ovcaa' ||
+          u.role === 'vcaf' ||
+          u.role === 'chancellor')
+      )
+        return true
+      if (targetAudience === 'staff' && (u.role === 'secretary' || u.role === 'dean' || u.role === 'faculty'))
+        return true
+      return false
     })
+
+    for (const f of recipients) {
+      notify(db, {
+        kind: 'notice',
+        recipientId: f.id,
+        recipientLabel: f.name,
+        recipientEmail: f.email,
+        subject: `New ${label} from the ${office}: ${notice.title}`,
+        body: `Hello ${firstName(f)},\n\nThe ${office} shared a new ${label}: “${notice.title}”.\n\nTarget Audience: ${targetAudience.toUpperCase()}\n\nOpen it here: /app/notices${SIGNOFF}`,
+        at,
+      })
+    }
   }
+
   return notice
 }
 
@@ -930,7 +977,17 @@ export function updateNotice(
   db: Database,
   actor: User,
   id: string,
-  input: { kind: 'notice' | 'minutes'; title: string; summary: string; fileName: string },
+  input: {
+    kind: 'notice' | 'minutes'
+    title: string
+    summary: string
+    fileName: string
+    status?: NoticeStatus
+    targetAudience?: NoticeAudience
+    publishDate?: string
+    expiryDate?: string
+    content?: string
+  },
 ) {
   if (actor.role !== 'secretary' && actor.role !== 'dean')
     throw new FriendlyError('Only the College Secretary and the College Dean can edit notices and minutes.')
@@ -942,6 +999,55 @@ export function updateNotice(
   n.summary = input.summary.trim()
   if (input.fileName.trim()) {
     n.fileName = input.fileName.trim()
+  }
+  if (input.status) n.status = input.status
+  if (input.targetAudience) n.targetAudience = input.targetAudience
+  if (input.publishDate) n.publishDate = input.publishDate
+  n.expiryDate = input.expiryDate?.trim() || undefined
+  if (input.content !== undefined) n.content = input.content?.trim() || undefined
+  return n
+}
+
+export function publishDraftNotice(db: Database, actor: User, id: string, at: string) {
+  if (actor.role !== 'secretary' && actor.role !== 'dean')
+    throw new FriendlyError('Only the College Secretary and the College Dean can publish notices.')
+  const n = db.notices.find((x) => x.id === id)
+  if (!n) throw new FriendlyError('Notice not found.')
+  n.status = 'published'
+  n.publishDate = at
+
+  const office = OFFICE_LABEL[officeOf(actor)]
+  const label = n.kind === 'notice' ? 'notice' : 'minutes of meeting'
+  const aud = n.targetAudience || 'all'
+  const recipients = db.users.filter((u) => {
+    if (!u.active) return false
+    if (aud === 'all') return true
+    if (aud === 'faculty' && u.role === 'faculty') return true
+    if (aud === 'students' && u.role === 'student') return true
+    if (
+      aud === 'reviewers' &&
+      (u.role === 'chairperson' ||
+        u.role === 'dean' ||
+        u.role === 'ids_principal' ||
+        u.role === 'ovcaa' ||
+        u.role === 'vcaf' ||
+        u.role === 'chancellor')
+    )
+      return true
+    if (aud === 'staff' && (u.role === 'secretary' || u.role === 'dean' || u.role === 'faculty')) return true
+    return false
+  })
+
+  for (const f of recipients) {
+    notify(db, {
+      kind: 'notice',
+      recipientId: f.id,
+      recipientLabel: f.name,
+      recipientEmail: f.email,
+      subject: `New ${label} from the ${office}: ${n.title}`,
+      body: `Hello ${firstName(f)},\n\nThe ${office} published a new ${label}: “${n.title}”.\n\nOpen it here: /app/notices${SIGNOFF}`,
+      at,
+    })
   }
   return n
 }
