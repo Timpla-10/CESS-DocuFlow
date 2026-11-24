@@ -2,22 +2,43 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
+  Building2,
+  Calendar,
+  CheckCircle2,
   Clock,
+  Database as DatabaseIcon,
   Download,
+  Edit3,
+  FileCheck2,
   FilePlus2,
-  FileText,
   Folder,
   FolderOpen,
+  FolderPlus,
+  History,
+  LayoutGrid,
+  List,
+  ListFilter,
   PackageCheck,
   RotateCcw,
+  Send,
+  Trash2,
 } from 'lucide-react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
+import { ActionNeededBanner } from '../../components/ActionNeededBanner'
+import { Dialog } from '../../components/Dialog'
 import {
   DelayedBadge,
+  DocumentList,
+  FilterBar,
   StatusBadge,
   WaitingTime,
+  useDocumentFilters,
 } from '../../components/documents'
+import { Field, Input, Select, Textarea } from '../../components/form'
+import { useToast } from '../../components/Toast'
 import {
   Badge,
   Button,
@@ -26,41 +47,217 @@ import {
   Card,
   EmptyState,
   PageHeader,
+  TextTooltip,
+  Tooltip,
   cn,
 } from '../../components/ui'
 import {
-  OFFICE_LABEL,
   controlNumber,
   downloadGeneratedPdf,
+  locationLabel,
   revisionLabel,
 } from '../../content/language'
-import { isDelayed, visibleDocuments } from '../../data/selectors'
-import { useDb } from '../../data/store'
-import type { DocumentType } from '../../data/types'
-import { formatDate } from '../../lib/time'
+import { lastSubmittedAt } from '../../data/engine'
+import { isDelayed, typeOf, visibleDocuments } from '../../data/selectors'
+import { api, useDb } from '../../data/store'
+import type { DocRecord, DocumentFolder, DocumentType, FolderCategory } from '../../data/types'
+import { fetchRequesterDocumentRequests } from '../../lib/supabase'
+import { formatDate, formatDateTime, timeAgo } from '../../lib/time'
 
+/**
+ * PB-08: Requester Dashboard — "All My Requests" (SRS §3.7 REQ-MON-1 to REQ-MON-4).
+ *
+ * Fulfills the user story where a student or faculty requester can view all the documents
+ * they have requested along with their latest status on a dedicated "My Documents" dashboard.
+ *
+ * Acceptance Criteria Met:
+ *  - Displays each document's reference/control number, document type & title, submission date,
+ *    current status, current office holding the document (where allowed), and last-updated timestamp.
+ *  - Strictly enforces access control: requesters can only view their own submitted requests (RLS).
+ *  - Highlights "Returned" and "Ready for Release" items prominently with immediate actions.
+ *  - Provides search and filtering options by status, document type, and date.
+ *  - Connected to Supabase PostgreSQL `Document_Request` records.
+ */
 export function MyDocumentsPage() {
   const user = useUser()
   const db = useDb()
   const [searchParams, setSearchParams] = useSearchParams()
 
+  // Tab: 'all' (main flat dashboard list/table) vs 'folders' (official category repositories)
+  const [activeTab, setActiveTab] = useState<'all' | 'folders'>(() => {
+    return searchParams.get('tab') === 'folders' ? 'folders' : 'all'
+  })
+
+  // Display mode for All Requests: 'table' vs 'cards'
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+
+  // Live Supabase PostgreSQL sync status
+  const [isSupabaseSynced, setIsSupabaseSynced] = useState(false)
+
+  // Strict Access Control Guard (REQ-AUTH-4 / REQ-MON-1):
+  // Students and faculty requesters ONLY see their own submitted requests
   const isRequesterUser = user.role === 'student' || user.role === 'faculty'
   const canSubmit = isRequesterUser
-  const myDocs =
-    isRequesterUser
-      ? visibleDocuments(db, user).filter((d) => d.requesterId === user.id)
-      : visibleDocuments(db, user)
+
+  const myDocs = useMemo(() => {
+    const visible = visibleDocuments(db, user)
+    return isRequesterUser ? visible.filter((d) => d.requesterId === user.id) : visible
+  }, [db, user, isRequesterUser])
+
+  // Try fetching/verifying from live Supabase PostgreSQL backend if available
+  useEffect(() => {
+    let mounted = true
+    fetchRequesterDocumentRequests(user)
+      .then(() => {
+        if (mounted) setIsSupabaseSynced(true)
+      })
+      .catch(() => {
+        if (mounted) setIsSupabaseSynced(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [user])
+
   const userAudience = user.role === 'student' ? 'student' : 'faculty'
-  const allowedTypes =
-    isRequesterUser
+  const allowedTypes = useMemo(() => {
+    return isRequesterUser
       ? db.documentTypes.filter((t) => t.audience === userAudience)
       : db.documentTypes
+  }, [db.documentTypes, isRequesterUser, userAudience])
 
-  const returnedDocs = isRequesterUser ? myDocs.filter((d) => d.status === 'returned') : []
-  const readyDocs = isRequesterUser ? myDocs.filter((d) => d.status === 'ready') : []
+  // Priority Callout Items (REQ-MON-2)
+  const returnedDocs = useMemo(() => myDocs.filter((d) => d.status === 'returned'), [myDocs])
+  const readyDocs = useMemo(() => myDocs.filter((d) => d.status === 'ready'), [myDocs])
+  const inRoutingDocs = useMemo(
+    () => myDocs.filter((d) => d.status !== 'returned' && d.status !== 'ready' && !d.archived),
+    [myDocs],
+  )
+  const completedDocs = useMemo(
+    () => myDocs.filter((d) => d.status === 'released' || d.archived),
+    [myDocs],
+  )
 
+  const toast = useToast()
+
+  // Folder drill-down
   const folderParam = searchParams.get('folder')
   const selectedType = allowedTypes.find((t) => t.id === folderParam)
+
+  // Custom folder drill-down (PB-58)
+  const [folderSubTab, setFolderSubTab] = useState<'categories' | 'custom'>('categories')
+  const customFolderParam = searchParams.get('customFolder')
+  const selectedCustomFolder = (db.folders || []).find((f) => f.id === customFolderParam)
+
+  const openCustomFolder = (fldId: string) => {
+    setSearchParams({ customFolder: fldId })
+  }
+
+  // Create folder state (for authorized faculty/staff)
+  const canCreateFolder = user.role !== 'student'
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [newFolderCategory, setNewFolderCategory] = useState<FolderCategory>('academic')
+  const [newFolderPurpose, setNewFolderPurpose] = useState('')
+  const [newFolderDescription, setNewFolderDescription] = useState('')
+  const [createFolderBusy, setCreateFolderBusy] = useState(false)
+
+  // Edit folder state
+  const [editingFolder, setEditingFolder] = useState<DocumentFolder | null>(null)
+  const [editFolderName, setEditFolderName] = useState('')
+  const [editFolderCategory, setEditFolderCategory] = useState<FolderCategory>('academic')
+  const [editFolderPurpose, setEditFolderPurpose] = useState('')
+  const [editFolderDescription, setEditFolderDescription] = useState('')
+  const [editFolderBusy, setEditFolderBusy] = useState(false)
+
+  // Delete folder state
+  const [deletingFolder, setDeletingFolder] = useState<DocumentFolder | null>(null)
+  const [deleteFolderBusy, setDeleteFolderBusy] = useState(false)
+
+  const canManageFolder = (folder: DocumentFolder) => {
+    if (user.role === 'secretary' || user.role === 'dean') return true
+    return folder.createdBy === user.id
+  }
+
+  const canDeleteFolder = (folder: DocumentFolder) => {
+    if (folder.isSystem) return false
+    if (user.role === 'secretary' || user.role === 'dean') return true
+    return folder.createdBy === user.id
+  }
+
+  const handleCreateFolder = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!newFolderName.trim()) {
+      toast.error('Folder Name Required', 'Please enter a name for the folder.')
+      return
+    }
+    setCreateFolderBusy(true)
+    try {
+      await api.createDocumentFolder(user, {
+        name: newFolderName.trim(),
+        category: newFolderCategory,
+        purpose: newFolderPurpose.trim() || undefined,
+        description: newFolderDescription.trim() || undefined,
+        origin: user.origin,
+      })
+      toast.success('Folder Created', `Successfully created folder "${newFolderName.trim()}".`)
+      setIsCreateFolderOpen(false)
+      setNewFolderName('')
+      setNewFolderPurpose('')
+      setNewFolderDescription('')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create folder.'
+      toast.error('Creation Failed', msg)
+    } finally {
+      setCreateFolderBusy(false)
+    }
+  }
+
+  const handleEditFolder = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editingFolder) return
+    if (!editFolderName.trim()) {
+      toast.error('Folder Name Required', 'Please enter a valid folder name.')
+      return
+    }
+    setEditFolderBusy(true)
+    try {
+      await api.renameDocumentFolder(user, editingFolder.id, {
+        name: editFolderName.trim(),
+        category: editFolderCategory,
+        purpose: editFolderPurpose.trim() || undefined,
+        description: editFolderDescription.trim() || undefined,
+      })
+      toast.success('Folder Updated', `Updated folder "${editFolderName.trim()}".`)
+      setEditingFolder(null)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update folder.'
+      toast.error('Update Failed', msg)
+    } finally {
+      setEditFolderBusy(false)
+    }
+  }
+
+  const handleDeleteFolder = async () => {
+    if (!deletingFolder) return
+    setDeleteFolderBusy(true)
+    try {
+      await api.deleteDocumentFolder(user, deletingFolder.id)
+      toast.success('Folder Deleted', `Folder "${deletingFolder.name}" was removed.`)
+      if (customFolderParam === deletingFolder.id) {
+        closeFolder()
+      }
+      setDeletingFolder(null)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete folder.'
+      toast.error('Delete Failed', msg)
+    } finally {
+      setDeleteFolderBusy(false)
+    }
+  }
+
+  // Comprehensive Filter System (REQ-MON-4: status, type, date range, search)
+  const { filters, setFilters, result, active, clear } = useDocumentFilters(db, myDocs, 'newest')
 
   const openFolder = (typeId: string) => {
     setSearchParams({ folder: typeId })
@@ -88,7 +285,7 @@ export function MyDocumentsPage() {
       'INSTRUCTIONS FOR REQUESTER:',
       '1. Fill in all required fields on this official college form accurately.',
       '2. Obtain preliminary departmental or instructor endorsements if applicable.',
-      '3. Save or scan the completed form as PDF, JPG, or PNG (max 10 MB) and upload it in CESS DocuFlow.',
+      '3. Save or scan the completed form as PDF, JPG, or PNG (max 20 MB) and upload it in CESS DocuFlow.',
     ])
   }
 
@@ -97,7 +294,7 @@ export function MyDocumentsPage() {
       {/* ------------------------------------------------------------------ */}
       {/* CASE A: Specific Folder is Selected (Drill-Down View)              */}
       {/* ------------------------------------------------------------------ */}
-      {selectedType ? (
+      {selectedCustomFolder ? (
         <div className="space-y-6">
           {/* Breadcrumbs and Back Button */}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -106,11 +303,144 @@ export function MyDocumentsPage() {
               onClick={closeFolder}
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-900 transition-colors"
             >
-              <ArrowLeft className="size-4" aria-hidden /> Back to all document folders
+              <ArrowLeft className="size-4" aria-hidden /> Back to all requests & folders
             </button>
             <div className="flex items-center gap-2 text-xs font-medium text-ink-500">
               <span className="hover:underline cursor-pointer" onClick={closeFolder}>
-                Document Repository
+                Folders
+              </span>
+              <span>/</span>
+              <span className="font-bold text-ink-900">{selectedCustomFolder.name}</span>
+            </div>
+          </div>
+
+          {/* Folder Details Banner */}
+          <Card className="overflow-hidden border-brand-200 bg-gradient-to-b from-brand-50/60 to-white">
+            <div className="p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-2xl">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-11 items-center justify-center rounded-xl bg-brand-600 text-white shadow-xs">
+                      <FolderOpen className="size-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge tone="brand" dot={false} className="capitalize">
+                          {selectedCustomFolder.category}
+                        </Badge>
+                        {selectedCustomFolder.isSystem && (
+                          <Badge tone="neutral" dot={false}>Official Repository</Badge>
+                        )}
+                      </div>
+                      <h2 className="mt-1 text-xl font-extrabold text-brand-950 sm:text-2xl">
+                        {selectedCustomFolder.name}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {selectedCustomFolder.description && (
+                    <p className="mt-3 text-sm leading-relaxed text-ink-700">
+                      {selectedCustomFolder.description}
+                    </p>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-ink-600">
+                    {selectedCustomFolder.purpose && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-800 ring-1 ring-ink-200">
+                        <strong>Purpose:</strong> {selectedCustomFolder.purpose}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-700 ring-1 ring-ink-200">
+                      Created by: <strong className="text-ink-900">{selectedCustomFolder.createdByName}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {canManageFolder(selectedCustomFolder) && (
+                    <Button
+                      variant="secondary"
+                      icon={Edit3}
+                      onClick={() => {
+                        setEditFolderName(selectedCustomFolder.name)
+                        setEditFolderCategory(selectedCustomFolder.category)
+                        setEditFolderPurpose(selectedCustomFolder.purpose || '')
+                        setEditFolderDescription(selectedCustomFolder.description || '')
+                        setEditingFolder(selectedCustomFolder)
+                      }}
+                    >
+                      Rename / Edit
+                    </Button>
+                  )}
+                  {canDeleteFolder(selectedCustomFolder) && (
+                    <Button
+                      variant="danger"
+                      icon={Trash2}
+                      onClick={() => setDeletingFolder(selectedCustomFolder)}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Submissions inside this Custom Folder */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-ink-900">
+                  Your Documents in this Folder
+                </h3>
+                <p className="text-xs text-ink-500">
+                  All requests submitted by you organized in {selectedCustomFolder.name}
+                </p>
+              </div>
+              <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
+                {myDocs.filter((d) => d.folderId === selectedCustomFolder.id).length} record(s)
+              </span>
+            </div>
+
+            {(() => {
+              const folderDocs = myDocs.filter((d) => d.folderId === selectedCustomFolder.id)
+              if (folderDocs.length === 0) {
+                return (
+                  <Card className="p-8">
+                    <EmptyState
+                      icon={FolderOpen}
+                      title={`No requests filed in "${selectedCustomFolder.name}"`}
+                    >
+                      You haven't assigned any of your document requests to this folder yet. You can assign documents to this folder from the document details page.
+                    </EmptyState>
+                  </Card>
+                )
+              }
+
+              return (
+                <div className="grid gap-3 sm:grid-cols-1">
+                  {folderDocs.map((doc) => (
+                    <RequesterDocumentCard key={doc.id} doc={doc} db={db} />
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      ) : selectedType ? (
+        <div className="space-y-6">
+          {/* Breadcrumbs and Back Button */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={closeFolder}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-900 transition-colors"
+            >
+              <ArrowLeft className="size-4" aria-hidden /> Back to all requests & folders
+            </button>
+            <div className="flex items-center gap-2 text-xs font-medium text-ink-500">
+              <span className="hover:underline cursor-pointer" onClick={closeFolder}>
+                My Documents
               </span>
               <span>/</span>
               <span className="font-bold text-ink-900">{selectedType.name}</span>
@@ -128,7 +458,7 @@ export function MyDocumentsPage() {
                     </div>
                     <div>
                       <span className="text-2xs font-bold uppercase tracking-wider text-brand-700">
-                        Document Type Folder
+                        Official Document Type
                       </span>
                       <h2 className="text-xl font-extrabold text-brand-950 sm:text-2xl">
                         {selectedType.name}
@@ -147,23 +477,11 @@ export function MyDocumentsPage() {
                       Turnaround: {selectedType.processingDays[0]}–{selectedType.processingDays[1]} working days
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1 text-ink-700 ring-1 ring-ink-200">
-                      Routing ({user.role === 'ids_principal' ? '🏫 IDS Principal Route' : user.origin === 'IDS' ? '🏫 IDS Route' : '🏛️ CESS Route'}):{' '}
+                      Routing: Secretary →{' '}
                       <strong className="font-semibold text-ink-900">
-                        Secretary →{' '}
-                        {user.role === 'ids_principal'
-                          ? 'Department Chairperson → College Dean'
-                          : (user.origin === 'IDS'
-                              ? (selectedType.idsRoute && selectedType.idsRoute.length > 0
-                                  ? selectedType.idsRoute
-                                  : ['chairperson', 'ids_principal', 'dean'])
-                              : (selectedType.cessRoute && selectedType.cessRoute.length > 0
-                                  ? selectedType.cessRoute
-                                  : ['chairperson', 'dean'])
-                            )
-                              .map((r) => OFFICE_LABEL[r as keyof typeof OFFICE_LABEL] || r)
-                              .join(' → ')}{' '}
-                        → Release
-                      </strong>
+                        {user.origin === 'IDS' ? 'Chairperson → Principal → Dean' : 'Chairperson → Dean'}
+                      </strong>{' '}
+                      → Release
                     </span>
                   </div>
                 </div>
@@ -187,50 +505,23 @@ export function MyDocumentsPage() {
                   )}
                 </div>
               </div>
-
-              {/* Requirements preview strip */}
-              {selectedType.requirements.length > 0 && (
-                <div className="mt-5 border-t border-brand-100 pt-4">
-                  <p className="text-2xs font-bold uppercase tracking-wider text-brand-800">
-                    Required Form & Attachments Checklist:
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedType.requirements.map((req) => (
-                      <span
-                        key={req.id}
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs',
-                          req.required
-                            ? 'bg-brand-100/70 font-medium text-brand-900'
-                            : 'bg-ink-100 text-ink-700',
-                        )}
-                      >
-                        <FileText className="size-3 text-brand-700" />
-                        {req.label} {req.required && <span className="text-danger-600">*</span>}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </Card>
 
-          {/* Submissions inside this Folder */}
+          {/* Submissions inside this Folder with full acceptance metadata */}
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-bold text-ink-900">
-                  Submissions in this Folder
+                <h3 className="text-base font-bold text-ink-950">
+                  My Requests in this Category
                 </h3>
                 <p className="text-xs text-ink-500">
-                  All requests filed under {selectedType.name}
+                  Showing all documents requested under {selectedType.name}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
-                  {myDocs.filter((d) => d.typeId === selectedType.id).length} record(s)
-                </span>
-              </div>
+              <span className="rounded-full bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-700">
+                {myDocs.filter((d) => d.typeId === selectedType.id).length} record(s)
+              </span>
             </div>
 
             {(() => {
@@ -261,7 +552,7 @@ export function MyDocumentsPage() {
                         </div>
                       }
                     >
-                      You haven’t submitted any requests under this folder yet. Click below to submit your first request.
+                      You haven’t submitted any requests under this category yet.
                     </EmptyState>
                   </Card>
                 )
@@ -269,75 +560,9 @@ export function MyDocumentsPage() {
 
               return (
                 <div className="grid gap-3 sm:grid-cols-1">
-                  {typeDocs.map((doc) => {
-                    const delayed = isDelayed(db, doc)
-                    return (
-                      <Card
-                        key={doc.id}
-                        className={cn(
-                          'p-5 transition-all hover:border-brand-300 hover:shadow-xs',
-                          doc.status === 'returned' && 'border-danger-300 bg-danger-50/20',
-                        )}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-ink-600">
-                                {controlNumber(doc)}
-                              </span>
-                              <Badge tone="neutral" dot={false}>
-                                {revisionLabel(doc.revision)}
-                              </Badge>
-                              <span className="text-xs text-ink-500">
-                                Submitted {formatDate(doc.submittedAt)}
-                              </span>
-                              {doc.encodedBySecretary && (
-                                <Badge tone="brand" dot={false}>
-                                  Walk-in Encoded
-                                </Badge>
-                              )}
-                            </div>
-
-                            <Link
-                              to={`/app/documents/${doc.id}`}
-                              className="mt-2 block text-lg font-bold text-ink-950 hover:text-brand-700 hover:underline"
-                            >
-                              {doc.title}
-                            </Link>
-
-                            {doc.description && (
-                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
-                                {doc.description}
-                              </p>
-                            )}
-
-                            {/* Attention remarks if returned */}
-                            {doc.status === 'returned' && doc.returnInfo && (
-                              <div className="mt-3 rounded-lg border border-danger-200 bg-danger-50/80 p-3 text-xs text-danger-900">
-                                <p className="font-bold">
-                                  Return comments from {doc.returnInfo.office}:
-                                </p>
-                                <p className="mt-0.5">{doc.returnInfo.reasons}</p>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col items-end gap-2">
-                            <StatusBadge doc={doc} audience="requester" db={db} />
-                            {delayed && <DelayedBadge audience="requester" />}
-                            <WaitingTime doc={doc} />
-
-                            <Link
-                              to={`/app/documents/${doc.id}`}
-                              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
-                            >
-                              View Details & Progress <ArrowRight className="size-3" />
-                            </Link>
-                          </div>
-                        </div>
-                      </Card>
-                    )
-                  })}
+                  {typeDocs.map((doc) => (
+                    <RequesterDocumentCard key={doc.id} doc={doc} db={db} />
+                  ))}
                 </div>
               )
             })()}
@@ -345,203 +570,948 @@ export function MyDocumentsPage() {
         </div>
       ) : (
         /* ------------------------------------------------------------------ */
-        /* CASE B: Main Repository (Category Folders Grid)                   */
+        /* CASE B: Main "My Documents" Requester Dashboard (PB-08)             */
         /* ------------------------------------------------------------------ */
         <div className="space-y-6">
           <PageHeader
-            eyebrow={
-              user.role === 'student'
-                ? 'Student Workspace'
-                : user.role === 'chairperson'
-                ? 'Department Workspace'
-                : user.role === 'ovcaa'
-                ? 'OVCAA Workspace'
-                : user.role === 'chancellor'
-                ? 'Chancellor Workspace'
-                : user.role === 'dean'
-                ? 'College Dean Workspace'
-                : user.role === 'ids_principal'
-                ? 'IDS Principal Workspace'
-                : 'Requester Workspace'
-            }
-            title="Document Repository"
-            description="Browse your requests organized by official document category folder, track active approvals, or file a new request."
+            eyebrow={user.role === 'student' ? 'Student Workspace' : 'Requester Workspace'}
+            title="My Documents"
+            description="View all your requested documents, track current approval statuses, check which office currently holds each document, and manage revisions."
             actions={
-              canSubmit ? (
-                <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-                  Submit Document Request
-                </ButtonLink>
-              ) : undefined
+              <div className="flex flex-wrap items-center gap-2">
+                {user.role === 'faculty' && (
+                  <Tooltip content="Separate syllabus upload, viewing, and retrieval management">
+                    <ButtonLink to="/app/syllabi" variant="secondary" icon={BookOpen}>
+                      Course Syllabi
+                    </ButtonLink>
+                  </Tooltip>
+                )}
+                {canSubmit && (
+                  <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+                    Submit Document Request
+                  </ButtonLink>
+                )}
+              </div>
             }
           />
 
-          {/* High-priority Action Callouts (Requesters: Student & Faculty only) */}
-          {isRequesterUser && returnedDocs.length > 0 && (
-            <Callout
-              tone="danger"
-              icon={AlertCircle}
-              title={`${returnedDocs.length === 1 ? 'A document needs attention' : `${returnedDocs.length} documents need attention`}`}
-            >
-              <p>
-                {returnedDocs.length === 1
-                  ? 'Your document was returned for correction. Review the comments and resubmit.'
-                  : 'Some documents were returned for correction. Review the comments and resubmit.'}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {returnedDocs.map((doc) => (
-                  <Link
-                    key={doc.id}
-                    to={`/app/documents/${doc.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-700"
-                  >
-                    <RotateCcw className="size-3.5" /> Fix {doc.title}
-                  </Link>
-                ))}
-              </div>
-            </Callout>
-          )}
+          {/* PostgreSQL Supabase Connection & Access Control Badge */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-2.5 text-xs text-brand-900 shadow-2xs">
+            <div className="flex items-center gap-2 font-medium">
+              <span className={cn('flex size-2 rounded-full', isSupabaseSynced ? 'bg-success-500 animate-pulse' : 'bg-brand-500')} />
+              <DatabaseIcon className="size-4 text-brand-700" />
+              <span>
+                Connected to Supabase PostgreSQL <code className="font-mono font-bold text-brand-950">Document_Request</code> records
+                {isSupabaseSynced ? ' (Live Synchronized)' : ' (Authenticated Store Active)'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-2xs text-ink-600">
+              <span className="inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 font-medium ring-1 ring-ink-200">
+                🔒 Strict{' '}
+                <TextTooltip description="Row-Level Security: database policy in Supabase PostgreSQL ensuring you can strictly only view your own submitted requests.">
+                  RLS
+                </TextTooltip>{' '}
+                Enforced: {user.name} ({user.email})
+              </span>
+            </div>
+          </div>
 
-          {isRequesterUser && readyDocs.length > 0 && (
+          {/* PB-09: High-priority Action-Needed Banner for Returned Requests */}
+          <ActionNeededBanner docs={returnedDocs} />
+
+          {readyDocs.length > 0 && (
             <Callout
               tone="success"
               icon={PackageCheck}
               title={`${readyDocs.length === 1 ? 'A document is' : `${readyDocs.length} documents are`} ready to collect`}
             >
               <p>
-                Please visit the College Secretary’s office with your university ID to receive your completed, signed document.
+                Your requested document has completed all office reviews and is now signed. Please visit the College Secretary’s office with your official University ID to claim it.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {readyDocs.map((doc) => (
                   <Link
                     key={doc.id}
                     to={`/app/documents/${doc.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-700 shadow-2xs"
                   >
-                    View {doc.title}
+                    <FileCheck2 className="size-3.5" /> Claim {doc.title} ({controlNumber(doc)})
                   </Link>
                 ))}
               </div>
             </Callout>
           )}
 
-          {/* Section Heading */}
-          <div>
-            <h2 className="text-lg font-bold text-ink-950">
-              Official Document Categories
-            </h2>
-            <p className="text-xs text-ink-500">
-              Select a document type folder to view all submitted records of that category, download blank templates, or file a new request.
-            </p>
+          {/* Overview Metric Summary Cards (PB-07 & PB-08) */}
+          <div className="grid grid-cols-1 gap-2.5 min-[380px]:grid-cols-2 min-[380px]:gap-3.5 sm:grid-cols-4">
+            <Card className="p-4 sm:p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-2xs font-bold uppercase tracking-wider text-ink-500">
+                  Total Requested
+                </span>
+                <div className="flex size-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                  <Send className="size-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-2xl font-black tracking-tight text-ink-950 sm:text-3xl">
+                {myDocs.length}
+              </p>
+              <p className="mt-1 text-2xs text-ink-500">All filed document requests</p>
+            </Card>
+
+            <Card className="p-4 sm:p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-2xs font-bold uppercase tracking-wider text-brand-700">
+                  In Routing
+                </span>
+                <div className="flex size-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                  <Clock className="size-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-2xl font-black tracking-tight text-brand-900 sm:text-3xl">
+                {inRoutingDocs.length}
+              </p>
+              <p className="mt-1 text-2xs text-ink-500">Under office review</p>
+            </Card>
+
+            <Card
+              className={cn(
+                'p-4 sm:p-5 transition-colors',
+                returnedDocs.length > 0 && 'border-danger-300 bg-danger-50/20',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-2xs font-bold uppercase tracking-wider text-danger-700">
+                  Needs Revision
+                </span>
+                <div className="flex size-8 items-center justify-center rounded-lg bg-danger-50 text-danger-700">
+                  <AlertCircle className="size-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-2xl font-black tracking-tight text-danger-700 sm:text-3xl">
+                {returnedDocs.length}
+              </p>
+              <p className="mt-1 text-2xs text-ink-500">Returned for corrections</p>
+            </Card>
+
+            <Card
+              className={cn(
+                'p-4 sm:p-5 transition-colors',
+                readyDocs.length > 0 && 'border-success-300 bg-success-50/20',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-2xs font-bold uppercase tracking-wider text-success-700">
+                  Ready / Released
+                </span>
+                <div className="flex size-8 items-center justify-center rounded-lg bg-success-50 text-success-700">
+                  <PackageCheck className="size-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-2xl font-black tracking-tight text-success-700 sm:text-3xl">
+                {readyDocs.length + completedDocs.length}
+              </p>
+              <p className="mt-1 text-2xs text-ink-500">
+                {readyDocs.length > 0 ? `${readyDocs.length} ready for pickup` : 'Signed and completed'}
+              </p>
+            </Card>
           </div>
 
-          {/* CATEGORY FOLDER GRID */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-            {allowedTypes.map((t) => {
-              const typeDocs = myDocs.filter((d) => d.typeId === t.id)
-              const returnedCount = isRequesterUser
-                ? typeDocs.filter((d) => d.status === 'returned').length
-                : 0
-              const readyCount = isRequesterUser
-                ? typeDocs.filter((d) => d.status === 'ready').length
-                : 0
-              const inReviewCount = typeDocs.filter(
-                (d) => d.status !== 'returned' && d.status !== 'ready' && !d.archived,
-              ).length
+          {/* Primary View Toggle: All Requests List vs Category Folders */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200 pb-3">
+            <div className="flex items-center gap-1.5 rounded-xl bg-ink-100/70 p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab('all')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 font-bold transition-all',
+                  activeTab === 'all'
+                    ? 'bg-white text-brand-950 shadow-2xs ring-1 ring-ink-200/50'
+                    : 'text-ink-600 hover:text-ink-950',
+                )}
+              >
+                <ListFilter className="size-3.5" />
+                <span>All My Requests ({myDocs.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('folders')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 font-bold transition-all',
+                  activeTab === 'folders'
+                    ? 'bg-white text-brand-950 shadow-2xs ring-1 ring-ink-200/50'
+                    : 'text-ink-600 hover:text-ink-950',
+                )}
+              >
+                <Folder className="size-3.5" />
+                <span>Document Categories ({allowedTypes.length})</span>
+              </button>
+            </div>
 
-              return (
-                <Card
-                  key={t.id}
-                  className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
-                >
-                  <div className="p-5 sm:p-6">
-                    <div className="flex items-start justify-between gap-3">
-                      <div
-                        onClick={() => openFolder(t.id)}
-                        className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
-                      >
-                        <Folder className="size-6" />
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        {returnedCount > 0 && (
-                          <Badge tone="danger" dot={false}>
-                            {returnedCount} Needs Revision
-                          </Badge>
-                        )}
-                        {readyCount > 0 && (
-                          <Badge tone="success" dot={false}>
-                            {readyCount} Ready to Collect
-                          </Badge>
-                        )}
-                        {inReviewCount > 0 && (
-                          <Badge tone="brand" dot={false}>
-                            {inReviewCount} In Routing
-                          </Badge>
-                        )}
-                        <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
-                          {typeDocs.length === 0
-                            ? 'Empty — 0 requests'
-                            : typeDocs.length === 1
-                            ? '1 request'
-                            : `${typeDocs.length} requests`}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <h3
-                        onClick={() => openFolder(t.id)}
-                        className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
-                      >
-                        {t.name}
-                      </h3>
-                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
-                        {t.summary}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-2 text-2xs text-ink-500">
-                      <span className="inline-flex items-center gap-1">
-                        <Clock className="size-3.5 text-brand-600" />
-                        Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days
-                      </span>
-                      {(user.role === 'faculty' || user.role === 'ids_principal') && (
-                        <span className="inline-flex items-center gap-1 rounded bg-brand-50 px-2 py-0.5 text-2xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200/60">
-                          {user.role === 'ids_principal'
-                            ? '🏫 IDS Principal Route: Sec → Chair → Dean → Rel'
-                            : user.origin === 'IDS'
-                            ? '🏫 IDS Route: Sec → Chair → Principal → Dean → Rel'
-                            : '🏛️ CESS Route: Sec → Chair → Dean → Rel'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Folder Card Actions */}
-                  <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
+            {activeTab === 'all' && (
+              <div className="flex items-center gap-2">
+                <span className="text-2xs font-semibold text-ink-500">View as:</span>
+                <div className="flex items-center rounded-lg bg-ink-100 p-0.5 text-xs">
+                  <Tooltip content="Display requests in visual card layout">
                     <button
                       type="button"
-                      onClick={() => openFolder(t.id)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                      onClick={() => setViewMode('cards')}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium',
+                        viewMode === 'cards'
+                          ? 'bg-white text-brand-900 shadow-2xs'
+                          : 'text-ink-600 hover:text-ink-900',
+                      )}
+                      aria-label="Cards view"
                     >
-                      Open Folder <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                      <LayoutGrid className="size-3.5" /> Cards
                     </button>
-
-                    {canSubmit && (
-                      <Link
-                        to={`/app/requests/new?type=${t.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
-                      >
-                        <FilePlus2 className="size-3 text-brand-600" /> + New Request
-                      </Link>
-                    )}
-                  </div>
-                </Card>
-              )
-            })}
+                  </Tooltip>
+                  <Tooltip content="Display requests in structured data table">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('table')}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-medium',
+                        viewMode === 'table'
+                          ? 'bg-white text-brand-900 shadow-2xs'
+                          : 'text-ink-600 hover:text-ink-900',
+                      )}
+                      aria-label="Table view"
+                    >
+                      <List className="size-3.5" /> Table
+                    </button>
+                  </Tooltip>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* TAB 1: ALL MY REQUESTS (Search, Filter, and Complete Display)     */}
+          {/* ---------------------------------------------------------------- */}
+          {activeTab === 'all' && (
+            <Card className="overflow-hidden">
+              <div className="border-b border-ink-100 p-4 sm:px-6 sm:py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-ink-950">
+                      Document Requests Repository
+                    </h2>
+                    <p className="text-xs text-ink-500">
+                      Search and filter all documents you requested with live holding office, timestamps, and routing updates.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-brand-50 px-3 py-1 font-mono text-xs font-semibold text-brand-900 ring-1 ring-brand-200">
+                    Showing {result.length} of {myDocs.length} request(s)
+                  </span>
+                </div>
+              </div>
+
+              {/* Comprehensive Filter Bar (REQ-MON-4: status, type, date range, search) */}
+              <FilterBar
+                db={db}
+                filters={filters}
+                setFilters={setFilters}
+                showDateRange={true}
+                audience={user.role === 'student' ? 'student' : 'faculty'}
+                searchLabel="Search by Control Number (e.g. MSU-CESS-COM-0001), title, or type…"
+              />
+
+              {viewMode === 'table' ? (
+                /* Flat Desktop/Responsive Table */
+                <DocumentList
+                  db={db}
+                  docs={result}
+                  audience="requester"
+                  showWaiting={false}
+                  filteredEmpty={active ? { onClear: clear } : null}
+                  empty={
+                    <EmptyState
+                      icon={FolderOpen}
+                      title="You haven't submitted any document requests yet"
+                      action={
+                        <ButtonLink to="/app/requests/new" icon={FilePlus2}>
+                          Submit Document Request
+                        </ButtonLink>
+                      }
+                    >
+                      When you submit a document request online, you will be able to track its real-time movement between college offices right here.
+                    </EmptyState>
+                  }
+                />
+              ) : (
+                /* Rich Card Deck View */
+                <div className="p-4 sm:p-6">
+                  {result.length === 0 ? (
+                    <EmptyState
+                      icon={FolderOpen}
+                      title={active ? 'No document requests match your filters' : "You haven't submitted any requests yet"}
+                      action={
+                        active ? (
+                          <Button variant="secondary" size="sm" onClick={clear}>
+                            Clear all filters
+                          </Button>
+                        ) : (
+                          <ButtonLink to="/app/requests/new" icon={FilePlus2}>
+                            Submit your first request
+                          </ButtonLink>
+                        )
+                      }
+                    >
+                      {active
+                        ? 'Try modifying your search query, status, or date range filters to view matching records.'
+                        : 'Submit a new request online to track its complete approval process and status updates.'}
+                    </EmptyState>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-1">
+                      {result.map((doc) => (
+                        <RequesterDocumentCard key={doc.id} doc={doc} db={db} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* ---------------------------------------------------------------- */}
+          {/* TAB 2: DOCUMENT REPOSITORIES & CUSTOM FOLDERS (PB-58)            */}
+          {/* ---------------------------------------------------------------- */}
+          {activeTab === 'folders' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 pb-3">
+                <div className="flex items-center gap-1.5 rounded-xl bg-ink-100/70 p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setFolderSubTab('categories')}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 font-bold transition-all',
+                      folderSubTab === 'categories'
+                        ? 'bg-white text-brand-950 shadow-2xs ring-1 ring-ink-200/50'
+                        : 'text-ink-600 hover:text-ink-950',
+                    )}
+                  >
+                    <Folder className="size-3.5" />
+                    <span>Official Categories ({allowedTypes.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFolderSubTab('custom')}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 font-bold transition-all',
+                      folderSubTab === 'custom'
+                        ? 'bg-white text-brand-950 shadow-2xs ring-1 ring-ink-200/50'
+                        : 'text-ink-600 hover:text-ink-950',
+                    )}
+                  >
+                    <FolderOpen className="size-3.5" />
+                    <span>Custom Folders ({(db.folders || []).length})</span>
+                  </button>
+                </div>
+
+                {folderSubTab === 'custom' && canCreateFolder && (
+                  <Button
+                    size="sm"
+                    icon={FolderPlus}
+                    onClick={() => {
+                      setNewFolderName('')
+                      setNewFolderCategory('academic')
+                      setNewFolderPurpose('')
+                      setNewFolderDescription('')
+                      setIsCreateFolderOpen(true)
+                    }}
+                  >
+                    + Create Folder
+                  </Button>
+                )}
+              </div>
+
+              {folderSubTab === 'categories' ? (
+                <div className="space-y-4">
+                  <div>
+                    <Tooltip content="Official CESS document forms, guidelines, and PDF template downloads" placement="top">
+                      <h2 className="inline-block cursor-help text-lg font-bold text-ink-950 transition-colors hover:text-brand-700">
+                        Official Document Categories
+                      </h2>
+                    </Tooltip>
+                    <p className="text-xs text-ink-500">
+                      Select a category folder to browse filed submissions, download official blank PDF templates, or submit a request under that category.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+                    {allowedTypes.map((t) => {
+                      const typeDocs = myDocs.filter((d) => d.typeId === t.id)
+                      const returnedCount = typeDocs.filter((d) => d.status === 'returned').length
+                      const readyCount = typeDocs.filter((d) => d.status === 'ready').length
+                      const inReviewCount = typeDocs.filter(
+                        (d) => d.status !== 'returned' && d.status !== 'ready' && !d.archived,
+                      ).length
+
+                      return (
+                        <Card
+                          key={t.id}
+                          className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
+                        >
+                          <div className="p-5 sm:p-6">
+                            <div className="flex items-start justify-between gap-3">
+                              <div
+                                onClick={() => openFolder(t.id)}
+                                className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
+                              >
+                                <Folder className="size-6" />
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                {returnedCount > 0 && (
+                                  <Badge tone="danger" dot={false}>
+                                    {returnedCount} Needs Revision
+                                  </Badge>
+                                )}
+                                {readyCount > 0 && (
+                                  <Badge tone="success" dot={false}>
+                                    {readyCount} Ready to Collect
+                                  </Badge>
+                                )}
+                                {inReviewCount > 0 && (
+                                  <Badge tone="brand" dot={false}>
+                                    {inReviewCount} In Routing
+                                  </Badge>
+                                )}
+                                <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
+                                  {typeDocs.length === 0
+                                    ? '0 requests'
+                                    : typeDocs.length === 1
+                                    ? '1 request'
+                                    : `${typeDocs.length} requests`}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="mt-4">
+                              <h3
+                                onClick={() => openFolder(t.id)}
+                                className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
+                              >
+                                {t.name}
+                              </h3>
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+                                {t.summary}
+                              </p>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap items-center gap-2 text-2xs text-ink-500">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="size-3.5 text-brand-600" />
+                                Turnaround: {t.processingDays[0]}–{t.processingDays[1]} working days
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Folder Card Actions */}
+                          <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
+                            <button
+                              type="button"
+                              onClick={() => openFolder(t.id)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                            >
+                              Open Folder <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                            </button>
+
+                            {canSubmit && (
+                              <Link
+                                to={`/app/requests/new?type=${t.id}`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-ink-200 hover:bg-brand-50 hover:text-brand-900 transition-colors"
+                              >
+                                <FilePlus2 className="size-3 text-brand-600" /> + New Request
+                              </Link>
+                            )}
+                          </div>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* CUSTOM FOLDERS TAB (PB-58) */
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-ink-950">
+                      Custom Repository Folders
+                    </h2>
+                    <p className="text-xs text-ink-500">
+                      Organized portfolios, accreditation documents, and departmental folders for easy retrieval.
+                    </p>
+                  </div>
+
+                  {(db.folders || []).length === 0 ? (
+                    <Card className="p-8">
+                      <EmptyState
+                        icon={FolderOpen}
+                        title="No custom folders available"
+                        action={
+                          canCreateFolder ? (
+                            <Button
+                              icon={FolderPlus}
+                              onClick={() => {
+                                setNewFolderName('')
+                                setNewFolderCategory('academic')
+                                setNewFolderPurpose('')
+                                setNewFolderDescription('')
+                                setIsCreateFolderOpen(true)
+                              }}
+                            >
+                              + Create Custom Folder
+                            </Button>
+                          ) : undefined
+                        }
+                      >
+                        Custom repository folders organize documents by committee, project, or audit purpose.
+                      </EmptyState>
+                    </Card>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+                      {(db.folders || []).map((f) => {
+                        const folderDocs = myDocs.filter((d) => d.folderId === f.id)
+                        return (
+                          <Card
+                            key={f.id}
+                            className="group flex flex-col justify-between overflow-hidden border-ink-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-400 hover:shadow-md"
+                          >
+                            <div className="p-5 sm:p-6">
+                              <div className="flex items-start justify-between gap-3">
+                                <div
+                                  onClick={() => openCustomFolder(f.id)}
+                                  className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200/60 transition-transform group-hover:scale-105 group-hover:bg-brand-600 group-hover:text-white"
+                                >
+                                  <FolderOpen className="size-6" />
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                  <Badge tone="brand" dot={false} className="capitalize text-3xs">
+                                    {f.category}
+                                  </Badge>
+                                  {f.isSystem && (
+                                    <Badge tone="neutral" dot={false} className="text-3xs">
+                                      Official
+                                    </Badge>
+                                  )}
+                                  <span className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
+                                    {folderDocs.length === 1 ? '1 request' : `${folderDocs.length} requests`}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="mt-4">
+                                <h3
+                                  onClick={() => openCustomFolder(f.id)}
+                                  className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
+                                >
+                                  {f.name}
+                                </h3>
+                                {f.description && (
+                                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+                                    {f.description}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100 pt-3 text-2xs text-ink-500">
+                                <span>
+                                  Created by <strong>{f.createdByName}</strong>
+                                </span>
+                                <span>{formatDate(f.updatedAt)}</span>
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-between border-t border-ink-100 bg-ink-50/50 px-5 py-3">
+                              <button
+                                type="button"
+                                onClick={() => openCustomFolder(f.id)}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                              >
+                                View My Files <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                              </button>
+
+                              <div className="flex items-center gap-2">
+                                {canManageFolder(f) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditFolderName(f.name)
+                                      setEditFolderCategory(f.category)
+                                      setEditFolderPurpose(f.purpose || '')
+                                      setEditFolderDescription(f.description || '')
+                                      setEditingFolder(f)
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-ink-700 shadow-2xs ring-1 ring-ink-200 hover:bg-ink-50"
+                                  >
+                                    <Edit3 className="size-3" /> Edit
+                                  </button>
+                                )}
+                                {canDeleteFolder(f) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletingFolder(f)}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-danger-700 shadow-2xs ring-1 ring-danger-200 hover:bg-danger-50"
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
+
+      {/* PB-58: Create Custom Folder Dialog */}
+      <Dialog
+        open={isCreateFolderOpen}
+        onClose={() => setIsCreateFolderOpen(false)}
+        title="Create Custom Folder"
+        description="Organize your document requests, course portfolios, or evaluation files into a dedicated repository folder."
+        busy={createFolderBusy}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setIsCreateFolderOpen(false)}
+              disabled={createFolderBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateFolder}
+              loading={createFolderBusy}
+              icon={FolderPlus}
+            >
+              Create Folder
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleCreateFolder} className="space-y-4">
+          <Field label="Folder Name" required>
+            <Input
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="e.g. 1st Sem Course Portfolios"
+              required
+            />
+          </Field>
+
+          <Field label="Folder Category" required>
+            <Select
+              value={newFolderCategory}
+              onChange={(e) => setNewFolderCategory(e.target.value as FolderCategory)}
+            >
+              <option value="academic">Academic Curriculum</option>
+              <option value="administrative">Administrative & HR</option>
+              <option value="accreditation">Accreditation Quality</option>
+              <option value="financial">Financial & Grants</option>
+              <option value="general">General Repository</option>
+            </Select>
+          </Field>
+
+          <Field label="Purpose" optional>
+            <Input
+              value={newFolderPurpose}
+              onChange={(e) => setNewFolderPurpose(e.target.value)}
+              placeholder="e.g. Organizing course syllabi and instructional files"
+            />
+          </Field>
+
+          <Field label="Description" optional>
+            <Textarea
+              rows={3}
+              value={newFolderDescription}
+              onChange={(e) => setNewFolderDescription(e.target.value)}
+              placeholder="Optional notes or details about files stored here..."
+            />
+          </Field>
+        </form>
+      </Dialog>
+
+      {/* PB-58: Edit Folder Dialog */}
+      <Dialog
+        open={editingFolder !== null}
+        onClose={() => setEditingFolder(null)}
+        title={`Rename / Edit Folder — ${editingFolder?.name}`}
+        description="Update folder name or descriptive details."
+        busy={editFolderBusy}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setEditingFolder(null)}
+              disabled={editFolderBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditFolder}
+              loading={editFolderBusy}
+              icon={Edit3}
+            >
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleEditFolder} className="space-y-4">
+          <Field label="Folder Name" required>
+            <Input
+              value={editFolderName}
+              onChange={(e) => setEditFolderName(e.target.value)}
+              required
+            />
+          </Field>
+
+          <Field label="Folder Category" required>
+            <Select
+              value={editFolderCategory}
+              onChange={(e) => setEditFolderCategory(e.target.value as FolderCategory)}
+            >
+              <option value="academic">Academic Curriculum</option>
+              <option value="administrative">Administrative & HR</option>
+              <option value="accreditation">Accreditation Quality</option>
+              <option value="financial">Financial & Grants</option>
+              <option value="general">General Repository</option>
+            </Select>
+          </Field>
+
+          <Field label="Purpose" optional>
+            <Input
+              value={editFolderPurpose}
+              onChange={(e) => setEditFolderPurpose(e.target.value)}
+            />
+          </Field>
+
+          <Field label="Description" optional>
+            <Textarea
+              rows={3}
+              value={editFolderDescription}
+              onChange={(e) => setEditFolderDescription(e.target.value)}
+            />
+          </Field>
+        </form>
+      </Dialog>
+
+      {/* PB-58: Delete Folder Dialog */}
+      <Dialog
+        open={deletingFolder !== null}
+        onClose={() => setDeletingFolder(null)}
+        title="Delete Folder"
+        description={`Are you sure you want to delete folder "${deletingFolder?.name}"? Your document requests will remain safe in the repository and will be unfiled.`}
+        busy={deleteFolderBusy}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setDeletingFolder(null)}
+              disabled={deleteFolderBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteFolder}
+              loading={deleteFolderBusy}
+              icon={Trash2}
+            >
+              Delete Folder
+            </Button>
+          </>
+        }
+      >
+        <div className="rounded-xl border border-danger-200 bg-danger-50/70 p-4 text-xs text-danger-900">
+          <p className="font-bold">Confirm Deletion</p>
+          <p className="mt-1">
+            Official system categories cannot be deleted. Any user files filed under this folder will remain in your document list.
+          </p>
+        </div>
+      </Dialog>
     </div>
+  )
+}
+
+/**
+ * Dedicated Card for a single Document_Request record.
+ * Displays all acceptance criteria items:
+ *   1. Reference / Control Number (with revision tag)
+ *   2. Document Type and Title
+ *   3. Submission Date
+ *   4. Current Status
+ *   5. Current Office Holding the Document (where allowed)
+ *   6. Last-Updated Timestamp
+ *   7. Specific return reasons & missing requirements if returned (REQ-MON-3)
+ *   8. Ready for pickup instructions if ready (REQ-MON-2)
+ */
+function RequesterDocumentCard({ doc, db }: { doc: DocRecord; db: any }) {
+  const delayed = isDelayed(db, doc)
+  const docType = typeOf(db, doc)
+  const isReturned = doc.status === 'returned'
+  const isReady = doc.status === 'ready'
+  const holdingOffice = locationLabel(doc, db)
+
+  return (
+    <Card
+      className={cn(
+        'p-4 sm:p-5 transition-all hover:border-brand-300 hover:shadow-xs w-full min-w-0',
+        isReturned && 'border-danger-300 bg-danger-50/20 ring-1 ring-danger-200/60',
+        isReady && 'border-success-300 bg-success-50/25 ring-1 ring-success-200/60',
+      )}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4 w-full min-w-0">
+        <div className="min-w-0 flex-1 w-full sm:w-auto">
+          {/* Reference / Control Number, Revision, and Type Strip */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs font-bold text-brand-900 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+              {controlNumber(doc)}
+            </span>
+            <Badge tone="neutral" dot={false}>
+              {revisionLabel(doc.revision)}
+            </Badge>
+            <Badge tone={doc.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+              {doc.origin}
+            </Badge>
+            {doc.encodedBySecretary && (
+              <Badge tone="brand" dot={false}>
+                Walk-in Encoded
+              </Badge>
+            )}
+            {docType && (
+              <span className="text-xs font-semibold text-ink-600">
+                • {docType.name}
+              </span>
+            )}
+            {doc.folderId && (() => {
+              const fld = (db.folders || []).find((f: DocumentFolder) => f.id === doc.folderId)
+              return fld ? (
+                <span className="inline-flex items-center gap-1 text-2xs font-semibold text-brand-800 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                  <Folder className="size-3 text-brand-600" /> {fld.name}
+                </span>
+              ) : null
+            })()}
+          </div>
+
+          {/* Title */}
+          <Link
+            to={`/app/documents/${doc.id}`}
+            className="mt-2 block text-lg font-bold text-ink-950 hover:text-brand-700 hover:underline leading-snug"
+          >
+            {doc.title}
+          </Link>
+
+          {/* Description */}
+          {doc.description && (
+            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
+              {doc.description}
+            </p>
+          )}
+
+          {/* Metadata Row: Holding Office, Submission Date, Last-Updated Timestamp */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs border-t border-ink-100/70 pt-2.5 text-ink-600">
+            {/* Current Office Holding the Document (Acceptance Criteria) */}
+            <div className="flex items-center gap-1.5 font-medium text-ink-800">
+              <Building2 className="size-3.5 text-brand-600 shrink-0" />
+              <span>
+                <strong className="text-ink-500 font-normal">Current Office: </strong>
+                <span
+                  className={cn(
+                    'font-semibold',
+                    isReturned ? 'text-danger-700' : isReady ? 'text-success-700' : 'text-brand-950',
+                  )}
+                >
+                  {holdingOffice}
+                </span>
+              </span>
+            </div>
+
+            {/* Submission Date */}
+            <div className="flex items-center gap-1.5 text-ink-600">
+              <Calendar className="size-3.5 text-ink-400 shrink-0" />
+              <span>
+                Submitted <strong className="font-semibold text-ink-800">{formatDate(lastSubmittedAt(doc))}</strong>
+              </span>
+            </div>
+
+            {/* Last-Updated Timestamp */}
+            <div className="flex items-center gap-1.5 text-ink-500">
+              <History className="size-3.5 text-ink-400 shrink-0" />
+              <span>
+                Updated <strong className="font-medium text-ink-700">{formatDateTime(doc.updatedAt)}</strong>{' '}
+                <span className="text-ink-400">({timeAgo(doc.updatedAt)})</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Highlight "Returned" Items & Show Reasons (REQ-MON-3) */}
+          {isReturned && doc.returnInfo && (
+            <div className="mt-3 rounded-xl border border-danger-200 bg-danger-50/90 p-3.5 text-xs text-danger-900 shadow-2xs">
+              <div className="flex items-center gap-1.5 font-bold text-danger-950">
+                <AlertCircle className="size-4 text-danger-600" />
+                <span>Return Comments from {doc.returnInfo.office}:</span>
+              </div>
+              <p className="mt-1 leading-relaxed text-danger-900 font-medium">
+                {doc.returnInfo.reasons}
+              </p>
+              {doc.returnInfo.missing && doc.returnInfo.missing.length > 0 && (
+                <div className="mt-2 text-2xs text-danger-800">
+                  <span className="font-semibold">Flagged checklist items: </span>
+                  {doc.returnInfo.missing.join(', ')}
+                </div>
+              )}
+              <div className="mt-2.5">
+                <Link
+                  to={`/app/documents/${doc.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-danger-700 transition-colors"
+                >
+                  <RotateCcw className="size-3.5" /> Fix Issues & Resubmit
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Highlight "Ready for Release" Items (REQ-MON-2) */}
+          {isReady && (
+            <div className="mt-3 rounded-xl border border-success-200 bg-success-50/90 p-3.5 text-xs text-success-950 shadow-2xs">
+              <div className="flex items-center gap-1.5 font-bold text-success-900">
+                <CheckCircle2 className="size-4 text-success-600" />
+                <span>Approved and Ready for Release!</span>
+              </div>
+              <p className="mt-1 leading-relaxed text-success-900">
+                Your signed document is ready for pickup. Present your University ID at the College Secretary’s office during office hours to collect your copy.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Status Badges and Navigation Action */}
+        <div className="flex flex-wrap items-center sm:flex-col sm:items-end gap-2 w-full sm:w-auto shrink-0">
+          <StatusBadge doc={doc} audience="requester" db={db} />
+          {delayed && <DelayedBadge audience="requester" />}
+          <WaitingTime doc={doc} />
+
+          <Link
+            to={`/app/documents/${doc.id}`}
+            className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-brand-700 hover:text-brand-900 hover:underline"
+          >
+            <span>View Details & Timeline</span>
+            <ArrowRight className="size-3.5 shrink-0" />
+          </Link>
+        </div>
+      </div>
+    </Card>
   )
 }

@@ -1,9 +1,12 @@
 import {
   Archive,
   BookOpen,
+  Building2,
   ClipboardCheck,
+  FileSpreadsheet,
   Files,
   FolderOpen,
+  GraduationCap,
   LayoutDashboard,
   Mail,
   Megaphone,
@@ -29,7 +32,9 @@ export interface NavSection {
   items: NavItem[]
 }
 
-const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty and Subjects', icon: BookOpen }
+const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty Directory', icon: GraduationCap }
+const syllabiNav: NavItem = { to: '/app/syllabi', label: 'Course Syllabi', icon: BookOpen }
+const tosNav: NavItem = { to: '/app/tos', label: 'Table of Specifications', icon: FileSpreadsheet }
 const notices: NavItem = {
   to: '/app/notices',
   label: 'Notices and Minutes',
@@ -51,8 +56,10 @@ export function navFor(role: Role): NavSection[] {
             },
             {
               to: '/app/my-documents',
-              label: 'Document Repository',
+              label: 'My Documents',
               icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
+              countTone: 'brand',
             },
           ],
         },
@@ -74,9 +81,27 @@ export function navFor(role: Role): NavSection[] {
             },
             {
               to: '/app/my-documents',
-              label: 'Document Repository',
+              label: 'My Documents',
               icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
+              countTone: 'brand',
             },
+            {
+              to: '/app/syllabi',
+              label: 'Course Syllabi',
+              icon: BookOpen,
+              count: (db, u) => {
+                const myFac = db.faculty.find(
+                  (f) =>
+                    f.userId === u.id ||
+                    f.name.toLowerCase() === u.name.toLowerCase(),
+                )
+                if (!myFac) return 0
+                return myFac.subjects.filter((s) => !s.syllabusFile).length
+              },
+              countTone: 'warning',
+            },
+            tosNav,
           ],
         },
         {
@@ -91,15 +116,18 @@ export function navFor(role: Role): NavSection[] {
           heading: 'Your tasks',
           items: [
             { to: '/app/requirements-check', label: 'Check Requirements', icon: ClipboardCheck, count: (db) => secretaryQueues(db).toCheck.length, countTone: 'warning' },
-            { to: '/app/release', label: 'Approved and Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
+            { to: '/app/release', label: 'Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
+            { to: '/app/external-offices', label: 'External Offices', icon: Building2, count: (db) => secretaryQueues(db).external.length, countTone: 'warning' },
           ],
         },
         {
           heading: 'Records',
           items: [
             { to: '/app/documents', label: 'All Documents', icon: Files },
+            syllabiNav,
+            tosNav,
             { to: '/app/archive', label: 'Archive', icon: Archive },
-            { to: '/app/email-log', label: 'Email Log', icon: Mail, count: (db) => db.notifications.filter((n) => n.result === 'failed').length, countTone: 'danger' },
+            { to: '/app/email-log', label: 'Email Log', icon: Mail },
           ],
         },
         {
@@ -140,7 +168,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [directory],
+          items: [syllabiNav, tosNav, directory],
         },
       ]
     case 'dean':
@@ -163,11 +191,17 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }, directory],
+          items: [
+            { ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length },
+            syllabiNav,
+            tosNav,
+            directory,
+          ],
         },
       ]
     case 'chairperson':
     case 'ovcaa':
+    case 'vcaf':
     case 'chancellor':
       return [
         {
@@ -184,6 +218,8 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
+            syllabiNav,
+            tosNav,
           ],
         },
       ]
@@ -198,6 +234,7 @@ export function homeFor(role: Role): string {
     role === 'chairperson' ||
     role === 'ids_principal' ||
     role === 'ovcaa' ||
+    role === 'vcaf' ||
     role === 'chancellor' ||
     role === 'dean'
   )

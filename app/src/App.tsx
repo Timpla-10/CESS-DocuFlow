@@ -26,8 +26,10 @@ import { ReleasePage } from './pages/secretary/ReleasePage'
 import { RequirementsCheckPage } from './pages/secretary/RequirementsCheckPage'
 import { SettingsPage } from './pages/secretary/SettingsPage'
 import { UserManagementPage } from './pages/secretary/UserManagementPage'
+import { SyllabusManagementPage } from './pages/syllabi/SyllabusManagementPage'
+import { TosManagementPage } from './pages/tos/TosManagementPage'
 
-const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'chancellor']
+const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor']
 
 function Protected({ allowedRoles, children }: { allowedRoles?: Role[]; children: ReactNode }) {
   const { user } = useSession()
@@ -80,7 +82,7 @@ export default function App() {
               <Route
                 path="dashboard"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'chancellor', 'dean']}>
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor', 'dean']}>
                     <DashboardPage />
                   </Protected>
                 }
@@ -88,7 +90,7 @@ export default function App() {
               <Route
                 path="my-documents"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'chancellor', 'dean', 'secretary']}>
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor', 'dean', 'secretary']}>
                     <MyDocumentsPage />
                   </Protected>
                 }
@@ -193,6 +195,26 @@ export default function App() {
                 element={
                   <Protected allowedRoles={REVIEWER_ROLES}>
                     <ReviewedPage />
+                  </Protected>
+                }
+              />
+
+              {/* PB-56: Dedicated Course Syllabus Management Section (Students are not authorized) */}
+              <Route
+                path="syllabi"
+                element={
+                  <Protected allowedRoles={['faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
+                    <SyllabusManagementPage />
+                  </Protected>
+                }
+              />
+
+              {/* PB-57: Dedicated Table of Specifications (TOS) Management Module (Students are not authorized) */}
+              <Route
+                path="tos"
+                element={
+                  <Protected allowedRoles={['faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
+                    <TosManagementPage />
                   </Protected>
                 }
               />

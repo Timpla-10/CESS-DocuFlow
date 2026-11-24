@@ -11,10 +11,11 @@ export type Role =
   | 'ids_principal'
   | 'dean'
   | 'ovcaa'
+  | 'vcaf'
   | 'chancellor'
 
 /** Offices that have accounts and can hold a document (REQ-AUTH-2). */
-export type OfficeId = 'secretary' | 'chairperson' | 'ids_principal' | 'dean' | 'ovcaa' | 'chancellor'
+export type OfficeId = 'secretary' | 'chairperson' | 'ids_principal' | 'dean' | 'ovcaa' | 'vcaf' | 'chancellor'
 
 /** Offices without accounts; the College Secretary records hand-offs for them (REQ-EXT-1). */
 export type ExternalOfficeId = string
@@ -23,6 +24,37 @@ export interface ExternalOfficeItem {
   id: ExternalOfficeId
   label: string
   shortLabel: string
+}
+
+export type ExternalReturnOutcome =
+  | 'signed'
+  | 'endorsed'
+  | 'needs_clarification'
+  | 'returned_without_action'
+  | 'other'
+
+export const EXTERNAL_RETURN_OUTCOMES: { value: ExternalReturnOutcome; label: string }[] = [
+  { value: 'signed', label: 'Signed / Completed' },
+  { value: 'endorsed', label: 'Endorsed with Action / Comments' },
+  { value: 'needs_clarification', label: 'Needs Additional Requirements / Clarification' },
+  { value: 'returned_without_action', label: 'Returned Without Action' },
+  { value: 'other', label: 'Other (see notes)' },
+]
+
+export interface ExternalTransferInfo {
+  office: ExternalOfficeId
+  officeName: string
+  transferredAt: string
+  transferDate?: string
+  handedBy: string
+  referenceNumber?: string
+  notes?: string
+  returnedAt?: string
+  returnDate?: string
+  returnRecordedBy?: string
+  returnOutcome?: ExternalReturnOutcome
+  returnOutcomeLabel?: string
+  returnNotes?: string
 }
 
 export type Origin = 'CESS' | 'IDS'
@@ -161,6 +193,7 @@ export interface DocRecord {
   status: Status
   currentOffice: OfficeId | null
   externalOffice?: ExternalOfficeId
+  externalTransfer?: ExternalTransferInfo
   route: RouteStep[]
   routeIndex: number
   submittedAt: string
@@ -177,6 +210,8 @@ export interface DocRecord {
   contentVerification?: ContentVerification
   /** True when the record was encoded by the College Secretary for a walk-in submission (REQ-REC-8). */
   encodedBySecretary?: boolean
+  /** PB-58: Custom folder assignment in the document repository. */
+  folderId?: string
   release?: {
     receivedBy: string
     at: string
@@ -231,6 +266,102 @@ export interface SyllabusTemplate {
   fileSize?: string
 }
 
+/**
+ * PB-56: Dedicated Course Syllabus Record.
+ * Stored separately from regular document requests to facilitate
+ * faculty course management, accreditation retrieval, and departmental organization.
+ */
+export interface SyllabusRecord {
+  id: string
+  subjectCode: string
+  subjectTitle: string
+  facultyId: string
+  facultyName: string
+  facultyUserId?: string
+  department: string
+  academicYear: string
+  semester: string
+  fileName: string
+  fileUrl?: string
+  fileSizeKb?: number
+  uploadedAt: string
+  description?: string
+  status: 'active' | 'archived'
+}
+
+/**
+ * PB-57: Table of Specifications (TOS) Template.
+ * Standard institutional test blueprint template maintained by the College Secretary.
+ */
+export interface TosTemplate {
+  fileName: string
+  fileUrl?: string
+  updatedAt: string
+  uploadedBy: string
+  fileSize?: string
+}
+
+export interface TosCognitiveLevels {
+  remembering?: number
+  understanding?: number
+  applying?: number
+  analyzing?: number
+  evaluating?: number
+  creating?: number
+}
+
+/**
+ * PB-57: Table of Specifications (TOS) Record.
+ * Dedicated curriculum assessment blueprint mapping examination questions to cognitive levels
+ * (Remembering, Understanding, Applying, Analyzing, Evaluating, Creating) and Course Learning Outcomes (CLOs).
+ * Managed and organized strictly separately from course syllabi and general administrative requests.
+ */
+export interface TosRecord {
+  id: string
+  subjectCode: string
+  subjectTitle: string
+  facultyId: string
+  facultyName: string
+  facultyUserId?: string
+  department: string
+  academicYear: string
+  semester: string
+  term: 'Midterm' | 'Final' | 'Midterm & Final'
+  examType: string
+  totalItems: number
+  cognitiveDistribution?: TosCognitiveLevels
+  fileName: string
+  fileUrl?: string
+  fileSizeKb?: number
+  uploadedAt: string
+  description?: string
+  status: 'active' | 'archived'
+}
+
+export type FolderCategory = 'academic' | 'administrative' | 'accreditation' | 'financial' | 'general'
+
+/**
+ * PB-58: Custom Document Repository Folder.
+ * Allows authorized users (Secretary, Dean, Chairs, Faculty) to create, name, rename,
+ * and manage folders in the document repository to organize documents by type, category, or purpose.
+ * Enforces role-based access control to prevent unauthorized modifications.
+ */
+export interface DocumentFolder {
+  id: string
+  name: string
+  description?: string
+  category: FolderCategory
+  purpose?: string
+  createdBy: string
+  createdByName: string
+  createdByRole: Role
+  createdAt: string
+  updatedAt: string
+  isSystem?: boolean
+  origin?: Origin
+  allowedRoles?: Role[]
+}
+
 export interface FacultyEntry {
   id: string
   userId?: string
@@ -280,6 +411,10 @@ export interface Database {
   notices: Notice[]
   faculty: FacultyEntry[]
   syllabusTemplate?: SyllabusTemplate
+  syllabi?: SyllabusRecord[]
+  tosTemplate?: TosTemplate
+  tos?: TosRecord[]
+  folders?: DocumentFolder[]
   settings: Settings
   counter: number
   whitelist: WhitelistEntry[]

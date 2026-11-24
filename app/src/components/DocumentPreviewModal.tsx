@@ -24,6 +24,8 @@ import type { Database, DocRecord } from '../data/types'
 import { formatDateTime } from '../lib/time'
 import { formatSize, sessionFiles } from './documents'
 import { cn } from './ui'
+import { useSession } from '../app/session'
+import { canView } from '../data/selectors'
 
 export interface DocumentPreviewModalProps {
   open: boolean
@@ -86,7 +88,31 @@ export function DocumentPreviewModal({
     }
   }, [open, onClose])
 
+  const { user } = useSession()
   if (!open) return null
+
+  const isAuthorized = user && canView(user, doc)
+  if (!isAuthorized) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl">
+          <AlertCircle className="mx-auto size-10 text-danger-500" />
+          <h3 className="mt-3 text-lg font-bold text-ink-900">Access Restricted</h3>
+          <p className="mt-2 text-sm text-ink-600">
+            Files attached to this document are access-controlled and restricted to the requester, College Secretary, and authorized reviewing officials.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>,
+      document.body,
+    )
+  }
 
   const activeAttachment = attachments.find((a) => a.id === activeTab)
   const activeReq = docType?.requirements.find((r) => r.id === activeAttachment?.requirementId)
@@ -101,7 +127,7 @@ export function DocumentPreviewModal({
         `Document Type: ${docType?.name ?? doc.typeId}`,
         `Origin: ${doc.origin}`,
         `Requester: ${requester?.name ?? 'Unknown'} (${requester?.department ?? ''})`,
-        `Attachment Category: ${activeAttachment.isSignedCopy ? 'Final Signed Release Copy (REQ-REL-4)' : (activeReq?.label ?? 'Supporting Attachment')}`,
+        `Attachment Category: ${activeAttachment.isSignedCopy ? 'Final Signed Release Copy' : (activeReq?.label ?? 'Supporting Attachment')}`,
         `Uploaded By: ${activeAttachment.uploadedBy}`,
         `Uploaded At: ${formatDateTime(activeAttachment.uploadedAt)}`,
         `Revision: ${revisionLabel(activeAttachment.revision)}`,
