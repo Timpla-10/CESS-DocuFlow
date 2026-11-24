@@ -40,6 +40,8 @@ function createMockSessionClient() {
       };
       const builder = {
         insert(p) { state.op = 'insert'; state.payload = p; return builder; },
+        update(p) { state.op = 'update'; state.payload = p; return builder; },
+        eq() { return builder; },
         select() { return builder; },
         single() { return execute(); },
         then(res, rej) { return execute().then(res, rej); },
@@ -53,7 +55,9 @@ async function runTests() {
   const origNodeEnv = process.env.NODE_ENV;
   const origAllowDemo = process.env.ALLOW_DEMO_AUTH;
   const origFindByEmail = UserModel.findByEmail;
-  const origSignIn = supabase.auth.signInWithPassword;
+  const origCreateAuthClient = supabase.createAuthClient;
+  const origSharedSignIn = supabase.auth.signInWithPassword;
+  const origUpdateUser = supabase.auth.admin.updateUserById;
 
   const studentUser = {
     id: crypto.randomUUID(),
@@ -89,14 +93,34 @@ async function runTests() {
   };
 
   let signInCalls = 0;
+  let sharedSignInCalls = 0;
+  const createdAuthClients = [];
   const REAL_PASSWORD = 'RealSupabasePassword#2026!';
-  supabase.auth.signInWithPassword = async ({ email, password }) => {
+
+  // Guard: shared privileged DB client's signInWithPassword must NEVER be called
+  supabase.auth.signInWithPassword = async () => {
+    sharedSignInCalls++;
+    throw new Error('BUG: signInWithPassword called on shared privileged DB client!');
+  };
+
+  let mockAuthHandler = async ({ email, password }) => {
     signInCalls++;
     if (password === REAL_PASSWORD) {
       const u = email === secretaryUser.email ? secretaryUser : studentUser;
       return { data: { user: { id: u.id, email: u.email } }, error: null };
     }
     return { data: { user: null }, error: { message: 'Invalid login credentials' } };
+  };
+
+  supabase.createAuthClient = () => {
+    const client = {
+      _id: createdAuthClients.length + 1,
+      auth: {
+        signInWithPassword: (...args) => mockAuthHandler(...args),
+      },
+    };
+    createdAuthClients.push(client);
+    return client;
   };
 
   try {
@@ -144,7 +168,7 @@ async function runTests() {
 
     // 5. Supabase authentication outage/exception fails closed (503, no token issued)
     const beforeRows = mockSessionDb._rows.length;
-    supabase.auth.signInWithPassword = async () => {
+    mockAuthHandler = async () => {
       throw new Error('ECONNREFUSED: Supabase Auth unreachable');
     };
     await assert.rejects(
@@ -155,7 +179,7 @@ async function runTests() {
     console.log('PASS 5: Supabase authentication errors/outages fail closed (503, no session issued).');
 
     // Restore mock signInWithPassword for Test 6
-    supabase.auth.signInWithPassword = async () => ({
+    mockAuthHandler = async () => ({
       data: { user: null },
       error: { message: 'Invalid login credentials' },
     });
@@ -209,14 +233,96 @@ async function runTests() {
     console.log('PASS 7: Frontend production mode cannot authenticate using `cess2026` (DEMO_PASSWORD gated off in PROD).');
     console.log('PASS 8: Frontend backend/network failure fails closed with explicit error in production mode.');
 
-    console.log('\nALL 8 AUTH SECURITY HARDENING TESTS PASSED!');
+    // 9. Verify loginUser() uses isolated auth client and NEVER mutates shared privileged DB client
+    process.env.NODE_ENV = 'production';
+    delete process.env.ALLOW_DEMO_AUTH;
+    const clientsBefore = createdAuthClients.length;
+    mockAuthHandler = async ({ email, password }) => {
+      signInCalls++;
+      if (password === REAL_PASSWORD) {
+        const u = email === secretaryUser.email ? secretaryUser : studentUser;
+        return { data: { user: { id: u.id, email: u.email } }, error: null };
+      }
+      return { data: { user: null }, error: { message: 'Invalid login credentials' } };
+    };
+    const isolatedLoginRes = await AuthService.loginUser(studentUser.email, REAL_PASSWORD);
+    assert.strictEqual(isolatedLoginRes.verified, true);
+    assert.strictEqual(createdAuthClients.length, clientsBefore + 1, 'loginUser must allocate a disposable isolated auth client');
+    assert.strictEqual(sharedSignInCalls, 0, 'Shared privileged DB client signInWithPassword must NEVER be called');
+    console.log('PASS 9: loginUser uses isolated auth client; shared privileged DB client remains untouched.');
+
+    // 10. Verify changePassword() uses isolated auth client and NEVER mutates shared DB client
+    const EmailService = require('../services/emailService');
+    const origSendChanged = EmailService.sendPasswordChangedAlert;
+    EmailService.sendPasswordChangedAlert = async () => ({ success: true });
+    supabase.auth.admin.updateUserById = async () => ({ data: { user: { id: studentUser.id } }, error: null });
+    const clientsBeforeChange = createdAuthClients.length;
+    try {
+      const chRes = await AuthService.changePassword(studentUser, {
+        currentPassword: REAL_PASSWORD,
+        newPassword: 'AnotherStrongPassword#2027',
+        confirmPassword: 'AnotherStrongPassword#2027',
+      });
+      assert.strictEqual(chRes.success, true);
+      assert.strictEqual(createdAuthClients.length, clientsBeforeChange + 1, 'changePassword must use an isolated auth client');
+      assert.strictEqual(sharedSignInCalls, 0, 'Shared DB client must NEVER be called by changePassword');
+    } finally {
+      EmailService.sendPasswordChangedAlert = origSendChanged;
+    }
+    console.log('PASS 10: changePassword uses isolated auth client; shared DB client remains untouched.');
+
+    // 11. Two concurrent logins use separate disposable auth clients and cannot mutate each other or SessionModel's DB client
+    const clientsBeforeConcurrent = createdAuthClients.length;
+    const rowsBeforeConcurrent = mockSessionDb._rows.length;
+    const [cLogin1, cLogin2] = await Promise.all([
+      AuthService.loginUser(studentUser.email, REAL_PASSWORD),
+      AuthService.loginUser(secretaryUser.email, REAL_PASSWORD),
+    ]);
+    assert.strictEqual(cLogin1.verified, true);
+    assert.strictEqual(cLogin2.verified, true);
+    assert.strictEqual(createdAuthClients.length, clientsBeforeConcurrent + 2, 'Each concurrent login must get its own isolated auth client');
+    assert.notStrictEqual(
+      createdAuthClients[clientsBeforeConcurrent],
+      createdAuthClients[clientsBeforeConcurrent + 1],
+      'Concurrent logins must not share the same auth client instance'
+    );
+    assert.strictEqual(mockSessionDb._rows.length, rowsBeforeConcurrent + 2, 'SessionModel must persist both sessions on privileged client');
+    assert.strictEqual(sharedSignInCalls, 0);
+    console.log('PASS 11: Concurrent logins use separate disposable auth clients without mutating shared DB client.');
+
+    // 12. Real createAuthClient() refuses to fall back to SUPABASE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY when public key is missing
+    const origPub = process.env.SUPABASE_PUBLISHABLE_KEY;
+    const origAnon = process.env.SUPABASE_ANON_KEY;
+    const origSecret = process.env.SUPABASE_SECRET_KEY;
+    const origSvc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    try {
+      delete process.env.SUPABASE_PUBLISHABLE_KEY;
+      delete process.env.SUPABASE_ANON_KEY;
+      process.env.SUPABASE_SECRET_KEY = 'sb_secret_should_never_be_used_for_auth_client';
+      process.env.SUPABASE_SERVICE_ROLE_KEY = 'sb_secret_should_never_be_used_for_auth_client';
+      assert.throws(
+        () => origCreateAuthClient(),
+        /SUPABASE_PUBLISHABLE_KEY \/ SUPABASE_ANON_KEY/,
+        'createAuthClient must fail closed when public/anon key is missing instead of falling back to service-role key'
+      );
+    } finally {
+      if (origPub === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY; else process.env.SUPABASE_PUBLISHABLE_KEY = origPub;
+      if (origAnon === undefined) delete process.env.SUPABASE_ANON_KEY; else process.env.SUPABASE_ANON_KEY = origAnon;
+      if (origSecret === undefined) delete process.env.SUPABASE_SECRET_KEY; else process.env.SUPABASE_SECRET_KEY = origSecret;
+      if (origSvc === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = origSvc;
+    }
+    console.log('PASS 12: createAuthClient fails closed when public/anon key is missing (never falls back to service-role key).');
+
+    console.log('\nALL 12 AUTH SECURITY HARDENING TESTS PASSED!');
   } finally {
     if (origNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = origNodeEnv;
     if (origAllowDemo === undefined) delete process.env.ALLOW_DEMO_AUTH;
     else process.env.ALLOW_DEMO_AUTH = origAllowDemo;
     UserModel.findByEmail = origFindByEmail;
-    supabase.auth.signInWithPassword = origSignIn;
+    supabase.createAuthClient = origCreateAuthClient;
+    supabase.auth.signInWithPassword = origSharedSignIn;
+    supabase.auth.admin.updateUserById = origUpdateUser;
     SessionModel._resetClient();
   }
 }

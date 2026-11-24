@@ -219,8 +219,15 @@ function assertStagingEnvironment(env = process.env) {
  */
 function initializeStagingTestEnvironment(options = {}) {
   const targetEnv = options.targetEnv || process.env;
+  const resolvedEnvPath =
+    options.envPath !== undefined
+      ? options.envPath
+      : typeof targetEnv.STAGING_ENV_FILE === 'string' && targetEnv.STAGING_ENV_FILE.trim()
+        ? targetEnv.STAGING_ENV_FILE.trim()
+        : DEFAULT_STAGING_ENV_PATH;
+
   const loadResult = loadStagingEnv({
-    envPath: options.envPath || DEFAULT_STAGING_ENV_PATH,
+    envPath: resolvedEnvPath,
     targetEnv,
   });
   const verified = assertStagingEnvironment(targetEnv);

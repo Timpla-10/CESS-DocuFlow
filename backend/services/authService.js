@@ -422,7 +422,8 @@ const AuthService = {
     if (!authenticatedViaDemo) {
       let signInRes;
       try {
-        signInRes = await supabase.auth.signInWithPassword({
+        const authClient = supabase.createAuthClient();
+        signInRes = await authClient.auth.signInWithPassword({
           email: cleanEmail,
           password,
         });
@@ -873,7 +874,8 @@ const AuthService = {
     } else {
       let signInRes;
       try {
-        signInRes = await supabase.auth.signInWithPassword({
+        const authClient = supabase.createAuthClient();
+        signInRes = await authClient.auth.signInWithPassword({
           email: cleanEmail,
           password: currentPassword,
         });

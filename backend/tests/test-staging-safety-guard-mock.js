@@ -179,14 +179,16 @@ function runTests() {
 
   // 11. Guard blocks PB-03 and PB-04 BEFORE any Supabase client or DB/Auth mutation occurs
   const backendDir = path.resolve(__dirname, '..');
+  const nonexistentEnvFile = path.join(os.tmpdir(), `cess-nonexistent-staging-env-${Date.now()}`);
   for (const script of ['tests/test-pb03-password-reset-security.js', 'tests/test-pb04-session-remember-me.js']) {
-    // Run in an isolated child process with an unsafe/production-like env (no live DB contact possible
-    // because initializeStagingTestEnvironment() throws before ../server or ../config/database is required!)
+    // Run in an isolated child process with an unsafe/production-like env and explicit nonexistent
+    // STAGING_ENV_FILE so a real local backend/.env.staging cannot mask the unsafe shell config.
     const proc = spawnSync(process.execPath, [script], {
       cwd: backendDir,
       env: {
         PATH: process.env.PATH,
         SYSTEMROOT: process.env.SYSTEMROOT,
+        STAGING_ENV_FILE: nonexistentEnvFile,
         APP_ENV: 'development',
         NODE_ENV: 'test',
         EXPECTED_STAGING_PROJECT_REF: MOCK_STAGING_REF,
@@ -316,7 +318,23 @@ function runTests() {
   assert.strictEqual(denylistOk.projectRef, MOCK_STAGING_REF);
   console.log('PASS 16: Legitimate staging project passes when FORBIDDEN_PRODUCTION_PROJECT_REF is configured.');
 
-  console.log('\nALL 16 STAGING SAFETY GUARD TESTS PASSED!');
+  // 17. Explicit nonexistent STAGING_ENV_FILE never falls back to backend/.env.staging and rejects unsafe shell env
+  const unsafeShellWithOverride = {
+    STAGING_ENV_FILE: nonexistentEnvFile,
+    APP_ENV: 'development',
+    NODE_ENV: 'test',
+    EXPECTED_STAGING_PROJECT_REF: MOCK_STAGING_REF,
+    SUPABASE_URL: MOCK_PROD_URL,
+    SUPABASE_SERVICE_ROLE_KEY: MOCK_SECRET,
+  };
+  assertBlocksWithoutLeakingSecrets(
+    () => initializeStagingTestEnvironment({ targetEnv: unsafeShellWithOverride }),
+    'APP_ENV',
+    'STAGING_ENV_FILE nonexistent path must not fall back to backend/.env.staging'
+  );
+  console.log('PASS 17: Explicit nonexistent STAGING_ENV_FILE does not fall back to backend/.env.staging and rejects unsafe shell env.');
+
+  console.log('\nALL 17 STAGING SAFETY GUARD TESTS PASSED!');
 }
 
 runTests();

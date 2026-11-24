@@ -35,3 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_user_session_expires_at
 
 -- Deny all direct client (anon / authenticated) access; backend uses service-role client only
 ALTER TABLE user_session ENABLE ROW LEVEL SECURITY;
+
+-- Grant required SessionModel operations strictly to backend service_role (never anon or authenticated)
+GRANT USAGE ON SCHEMA public TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_session TO service_role;
