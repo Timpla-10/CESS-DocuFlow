@@ -186,6 +186,8 @@ export interface DocRecord {
   controlBase: string
   revision: number
   typeId: string
+  /** Requester-supplied name for a document in the Others category. */
+  customTypeName?: string
   title: string
   description: string
   origin: Origin
@@ -391,6 +393,26 @@ export interface FacultyEntry {
   subjects: Subject[]
 }
 
+export type ConsultationStatus = 'pending' | 'responded' | 'completed'
+
+export interface ConsultationUpdate {
+  id: string
+  message: string
+  status: Exclude<ConsultationStatus, 'pending'>
+  at: string
+}
+
+export interface Consultation {
+  id: string
+  studentId: string
+  assigneeId: string
+  purpose: string
+  status: ConsultationStatus
+  submittedAt: string
+  updatedAt: string
+  updates: ConsultationUpdate[]
+}
+
 export interface Settings {
   reminderEveryDays: number
 }
@@ -430,6 +452,7 @@ export interface Database {
   documents: DocRecord[]
   notifications: NotificationLog[]
   notices: Notice[]
+  consultations?: Consultation[]
   faculty: FacultyEntry[]
   syllabusTemplate?: SyllabusTemplate
   syllabi?: SyllabusRecord[]

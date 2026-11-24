@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Mail,
   Megaphone,
+  MessagesSquare,
   PackageCheck,
   Settings,
   Users,
@@ -58,6 +59,11 @@ export function visibleNoticesCount(db: Database, u: User): number {
 }
 
 const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty Directory', icon: GraduationCap }
+const consultations: NavItem = {
+  to: '/app/consultations',
+  label: 'Consultations',
+  icon: MessagesSquare,
+}
 const syllabiNav: NavItem = { to: '/app/syllabi', label: 'Course Syllabi', icon: BookOpen }
 const tosNav: NavItem = { to: '/app/tos', label: 'Table of Specifications', icon: FileSpreadsheet }
 const notices: NavItem = {
@@ -87,6 +93,7 @@ export function navFor(role: Role): NavSection[] {
               count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
               countTone: 'brand',
             },
+            consultations,
           ],
         },
         {
@@ -112,6 +119,7 @@ export function navFor(role: Role): NavSection[] {
               count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
               countTone: 'brand',
             },
+            consultations,
             {
               to: '/app/syllabi',
               label: 'Course Syllabi',
@@ -141,6 +149,7 @@ export function navFor(role: Role): NavSection[] {
         {
           heading: 'Your tasks',
           items: [
+            consultations,
             { to: '/app/requirements-check', label: 'Check Requirements', icon: ClipboardCheck, count: (db) => secretaryQueues(db).toCheck.length, countTone: 'warning' },
             { to: '/app/release', label: 'Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
             { to: '/app/external-offices', label: 'External Offices', icon: Building2, count: (db) => secretaryQueues(db).external.length, countTone: 'warning' },
@@ -190,6 +199,7 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
+            consultations,
           ],
         },
         {
@@ -213,6 +223,7 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
+            consultations,
           ],
         },
         {
@@ -239,6 +250,7 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
+            consultations,
             syllabiNav,
             tosNav,
           ],

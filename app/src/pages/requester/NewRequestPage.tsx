@@ -18,7 +18,7 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react'
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
@@ -28,6 +28,7 @@ import { useToast } from '../../components/Toast'
 import { Badge, Button, ButtonLink, Card, CardHeader, PageHeader } from '../../components/ui'
 import { controlNumber, downloadGeneratedPdf, formatRoleTitle } from '../../content/language'
 import { formatDateTime } from '../../lib/time'
+import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
 import { api, useDb } from '../../data/store'
 import type { DocRecord, DocumentType, Origin, Requirement } from '../../data/types'
@@ -40,15 +41,20 @@ interface SelectedFileItem {
 }
 
 export function NewRequestPage() {
+  const [searchParams] = useSearchParams()
+  const initialType = searchParams.get('type')
+  return <NewRequestForm key={initialType} initialType={initialType} />
+}
+
+function NewRequestForm({ initialType }: { initialType: string | null }) {
   const user = useUser()
   const db = useDb()
   const toast = useToast()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
 
   // Allowed document types for this user's role (REQ-SUB-1)
   const userAudience = user.role === 'student' ? 'student' : 'faculty'
-  const types = db.documentTypes.filter((t) => t.audience === userAudience)
+  const types = useMemo(() => db.documentTypes.filter((t) => t.audience === userAudience), [db.documentTypes, userAudience])
 
   // Origin is strictly derived from account and affiliation (REQ-SUB-6)
   const derivedOrigin: Origin =
@@ -65,33 +71,44 @@ export function NewRequestPage() {
     return () => clearInterval(timer)
   }, [])
 
-  const initialTypeFromUrl = searchParams.get('type')
-  const defaultTypeId = types.find((t) => t.id === initialTypeFromUrl)?.id ?? types[0]?.id ?? ''
+  const defaultTypeId = types.find((t) => t.id === initialType)?.id ?? types[0]?.id ?? ''
 
   const [selectedTypeId, setSelectedTypeId] = useState<string>(defaultTypeId)
   const selectedType: DocumentType | undefined = types.find((t) => t.id === selectedTypeId)
-
-  useEffect(() => {
-    const typeFromUrl = searchParams.get('type')
-    if (typeFromUrl && types.some((t) => t.id === typeFromUrl)) {
-      setSelectedTypeId(typeFromUrl)
-    }
-  }, [searchParams, types])
+  const isCustom = isCustomDocumentType(selectedTypeId)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [customTypeName, setCustomTypeName] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<SelectedFileItem[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({})
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submissionError, setSubmissionError] = useState('')
   const [submittedDoc, setSubmittedDoc] = useState<DocRecord | null>(null)
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
 
-  // PB-16: Pre-submission review screen with editing and confirmation
   const [submissionStep, setSubmissionStep] = useState<'fill' | 'review'>('fill')
   const [isCertified, setIsCertified] = useState(false)
   const [previewFile, setPreviewFile] = useState<{ name: string; url: string } | null>(null)
+  const stepHeading = useRef<HTMLDivElement>(null)
+  const submitAlert = useRef<HTMLParagraphElement>(null)
+
+  const editDetails = () => {
+    setSubmissionStep('fill')
+    setIsCertified(false)
+    setSubmissionError('')
+    requestAnimationFrame(() => stepHeading.current?.querySelector('h1')?.focus())
+  }
+
+  const clearError = (field: string) => {
+    setErrors((previous) => {
+      const next = { ...previous }
+      delete next[field]
+      return next
+    })
+  }
 
   // Handle switching document type
   const handleTypeChange = (newTypeId: string) => {
@@ -239,7 +256,7 @@ export function NewRequestPage() {
 
   const requiredList = selectedType ? selectedType.requirements.filter((r) => r.required) : []
   const attachedRequiredCount = requiredList.filter((r) => attachedFiles.some((f) => f.requirementId === r.id)).length
-  const allRequiredAttached = requiredList.length > 0 && attachedRequiredCount === requiredList.length
+  const allRequiredAttached = attachedRequiredCount === requiredList.length
 
   const mandatoryMissing = selectedType
     ? selectedType.requirements.filter((r) => r.required && !attachedFiles.some((f) => f.requirementId === r.id))
@@ -247,9 +264,11 @@ export function NewRequestPage() {
 
   const isTitleValid = title.trim().length >= 3
   const isDescriptionValid = description.trim().length > 0
-  const isFormComplete = isTitleValid && isDescriptionValid && allRequiredAttached
+  const customTypeError = isCustom ? customDocumentTypeError(customTypeName) : undefined
+  const isFormComplete = !!selectedType && isTitleValid && isDescriptionValid && !customTypeError && allRequiredAttached
 
   const missingItemsSummary: string[] = []
+  if (customTypeError) missingItemsSummary.push('Custom document type (required, up to 100 characters)')
   if (!title.trim()) {
     missingItemsSummary.push('Title or Subject (required, min 3 characters)')
   } else if (title.trim().length < 3) {
@@ -262,17 +281,12 @@ export function NewRequestPage() {
     missingItemsSummary.push(`Required form: ${m.label}`)
   })
 
-  // PB-16: Step 1 Validation & Transition to Pre-Submission Review Screen
-  const handleProceedToReview = (e?: FormEvent) => {
-    if (e) e.preventDefault()
+  const handleProceedToReview = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
     setHasAttemptedSubmit(true)
-    if (!selectedTypeId || !selectedType) {
-      setErrors({ typeId: 'Please select a document type.' })
-      toast.error('Submission Incomplete', 'Please select a document type.')
-      return
-    }
-
     const newErrors: Record<string, string> = {}
+    if (!selectedType) newErrors.typeId = 'Please select a document type.'
+    if (customTypeError) newErrors.customTypeName = customTypeError
 
     if (!title.trim()) {
       newErrors.title = 'Please enter a title or subject for this request.'
@@ -291,26 +305,35 @@ export function NewRequestPage() {
 
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) {
-      toast.error(
-        'Submission Incomplete — Cannot Advance',
-        `Missing ${missingItemsSummary.length} required item(s). Please attach all required forms and fill in required fields.`,
-      )
+      const form = e.currentTarget
+      const field = newErrors.attachments && Object.keys(newErrors).length === 1
+        ? 'input[data-missing-required]'
+        : `[name="${Object.keys(newErrors)[0]}"]`
+      requestAnimationFrame(() => form.querySelector<HTMLElement>(field)?.focus())
       return
     }
 
     setSubmissionStep('review')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    requestAnimationFrame(() => stepHeading.current?.querySelector('h1')?.focus())
     toast.info('Review Your Request', 'Please verify all request information and check the certification box before confirming submission.')
   }
 
-  // PB-16: Step 2 Final Confirmed Submission
   const handleConfirmedSubmit = async () => {
-    if (!selectedType) return
+    if (!selectedType || isSubmitting || submittedDoc) return
     if (!isCertified) {
       toast.error('Institutional Certification Required', 'Please check the certification box to confirm your request details before submitting.')
       return
     }
+    if (!isTitleValid || !isDescriptionValid) {
+      setErrors({
+        ...(!isTitleValid && { title: 'Enter a title or subject with at least 3 characters.' }),
+        ...(!isDescriptionValid && { description: 'Enter a description or purpose for your request.' }),
+      })
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(!isTitleValid ? '[name="title"]' : '[name="description"]')?.focus())
+      return
+    }
 
+    setSubmissionError('')
     setIsSubmitting(true)
     try {
       const payloadFiles: NewFile[] = attachedFiles.map((f) => ({
@@ -323,6 +346,7 @@ export function NewRequestPage() {
         typeId: selectedType.id,
         title: title.trim(),
         description: description.trim(),
+        customTypeName: isCustom ? customTypeName : undefined,
         files: payloadFiles,
       })
 
@@ -341,7 +365,8 @@ export function NewRequestPage() {
       )
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'We could not submit your request. Please try again.'
-      toast.error('Submission Unsuccessful', msg)
+      setSubmissionError(msg)
+      requestAnimationFrame(() => submitAlert.current?.focus())
     } finally {
       setIsSubmitting(false)
     }
@@ -360,6 +385,7 @@ export function NewRequestPage() {
         <ArrowLeft className="size-4" aria-hidden /> Back to Document Repository
       </Link>
 
+      <div ref={stepHeading} className="scroll-mt-20 [&_h1]:scroll-mt-20">
       <PageHeader
         eyebrow="New Submission"
         title={submissionStep === 'fill' ? 'Submit Document Request' : 'Pre-Submission Review & Confirmation'}
@@ -369,13 +395,15 @@ export function NewRequestPage() {
             : 'Carefully verify your document information, preview attachments, and confirm official submission.'
         }
       />
+      </div>
 
       {/* 2-Step Stepper */}
       <div className="rounded-xl border border-ink-200 bg-white p-4 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
           <button
             type="button"
-            onClick={() => setSubmissionStep('fill')}
+            onClick={editDetails}
+            disabled={isSubmitting}
             className={`flex items-center gap-2.5 text-left transition-colors ${
               submissionStep === 'fill' ? 'text-brand-900 font-bold' : 'text-ink-600 hover:text-brand-700'
             }`}
@@ -425,7 +453,7 @@ export function NewRequestPage() {
             {/* Step 1: Document Type Choice & Template Download (REQ-SUB-1, REQ-REQT-9) */}
             <Card className="p-5 sm:p-6">
               <CardHeader
-                title="1. Select Document Type & Download Template"
+                title="1. Select Document Type"
                 description="Choose the document you are requesting."
               />
           <div className="mt-4 space-y-4">
@@ -436,6 +464,8 @@ export function NewRequestPage() {
               hint="Showing document types available for your role."
             >
               <Select
+                name="typeId"
+                required
                 value={selectedTypeId}
                 onChange={(e) => handleTypeChange(e.target.value)}
                 className="w-full"
@@ -448,7 +478,26 @@ export function NewRequestPage() {
               </Select>
             </Field>
 
-            {selectedType && (
+            {isCustom && (
+              <>
+                <p className="text-sm text-ink-600">{selectedType?.summary}</p>
+                <Field label="Custom document type" required error={errors.customTypeName}>
+                  <Input
+                    name="customTypeName"
+                    required
+                    maxLength={CUSTOM_DOCUMENT_TYPE_LIMIT}
+                    value={customTypeName}
+                    onChange={(event) => {
+                      setCustomTypeName(event.target.value)
+                      if (errors.customTypeName) clearError('customTypeName')
+                    }}
+                    placeholder="e.g. Certification of project participation"
+                  />
+                </Field>
+              </>
+            )}
+
+            {selectedType && (!isCustom || selectedType.templateName) && (
               <div className="rounded-xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-100">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
@@ -620,10 +669,12 @@ export function NewRequestPage() {
             >
               <Input
                 type="text"
+                name="title"
+                required
                 value={title}
                 onChange={(e) => {
                   setTitle(e.target.value)
-                  if (errors.title) setErrors((prev) => { const n = { ...prev }; delete n.title; return n })
+                  if (errors.title) clearError('title')
                 }}
                 placeholder="Briefly state the document purpose"
               />
@@ -637,12 +688,14 @@ export function NewRequestPage() {
             >
               <Textarea
                 rows={3}
+                name="description"
+                required
                 value={description}
                 onChange={(e) => {
                   setDescription(e.target.value)
-                  if (errors.description) setErrors((prev) => { const n = { ...prev }; delete n.description; return n })
+                  if (errors.description) clearError('description')
                 }}
-                placeholder="Provide any additional context or remarks (optional)..."
+                placeholder="Explain why you need this document and include any details useful to the College Secretary."
               />
             </Field>
           </div>
@@ -652,12 +705,12 @@ export function NewRequestPage() {
         {selectedType && (
           <Card className="p-5 sm:p-6">
             <CardHeader
-              title="3. Required Forms & Automatic Completeness Check"
-              description="The system automatically verifies that all required forms are uploaded before your request is sent to the College Secretary. Accepted formats: PDF, JPG, PNG (max 20 MB per file)."
+              title={requiredList.length === 0 ? '3. Supporting Files' : '3. Required Forms & Automatic Completeness Check'}
+              description={requiredList.length === 0 ? 'Add supporting files if you have them. PDF, JPG and PNG files up to 20 MB are accepted.' : 'The system automatically verifies that all required forms are uploaded before your request is sent to the College Secretary. Accepted formats: PDF, JPG, PNG (max 20 MB per file).'}
             />
 
             {/* Live Automatic Completeness Indicator (REQ-REQT-3) */}
-            <div
+            {requiredList.length > 0 && <div
               className={`mt-4 rounded-xl p-4 text-xs ring-1 ring-inset transition-all ${
                 allRequiredAttached
                   ? 'bg-success-50 text-success-800 ring-success-200'
@@ -707,10 +760,10 @@ export function NewRequestPage() {
                   </ul>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Missing items listed explicitly when attempted or missing (Acceptance Criteria: missing items are listed) */}
-            {(hasAttemptedSubmit || mandatoryMissing.length > 0) && missingItemsSummary.length > 0 && (
+            {!isCustom && (hasAttemptedSubmit || mandatoryMissing.length > 0) && missingItemsSummary.length > 0 && (
               <div className="mt-4 rounded-xl bg-danger-50 p-4 text-xs font-medium text-danger-900 ring-1 ring-inset ring-danger-200" role="alert">
                 <div className="flex items-start gap-2.5">
                   <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger-600" aria-hidden />
@@ -800,11 +853,14 @@ export function NewRequestPage() {
                             </button>
                           </div>
                         ) : (
-                          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 transition-colors hover:bg-brand-100">
+                          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 transition-colors hover:bg-brand-100 focus-within:ring-2 focus-within:ring-brand-500">
                             <UploadCloud className="size-3.5" aria-hidden />
                             Attach File (Max 20 MB)
                             <input
                               type="file"
+                              aria-label={`Attach ${req.label}`}
+                              aria-invalid={Boolean(hasError)}
+                              data-missing-required={req.required ? '' : undefined}
                               accept=".pdf,.jpg,.jpeg,.png"
                               className="sr-only"
                               onChange={(e) => handleFileChosen(e, req)}
@@ -835,7 +891,7 @@ export function NewRequestPage() {
               {/* REQ-SUB-3: Multiple supporting documents upload */}
               <div className="pt-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-brand-700 hover:underline">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md text-sm font-semibold text-brand-700 hover:underline focus-within:ring-2 focus-within:ring-brand-500">
                     <Paperclip className="size-4" aria-hidden />
                     Attach supporting documents (multiple files allowed, max 20 MB each)
                     <input
@@ -876,8 +932,8 @@ export function NewRequestPage() {
                       .filter(({ f }) => !f.requirementId)
                       .map(({ f, i }) => (
                         <li key={i} className="flex items-center justify-between bg-white px-3 py-2 text-xs">
-                          <span className="flex items-center gap-2 font-medium text-ink-800">
-                            <FileText className="size-3.5 text-brand-600" aria-hidden />
+                          <span className="flex min-w-0 items-center gap-2 wrap-anywhere font-medium text-ink-800">
+                            <FileText className="size-3.5 shrink-0 text-brand-600" aria-hidden />
                             {f.name} ({f.sizeKb} KB)
                           </span>
                           <button
@@ -901,9 +957,7 @@ export function NewRequestPage() {
         <div className="rounded-2xl bg-brand-50/70 p-5 ring-1 ring-inset ring-brand-100">
           <p className="text-sm font-bold text-brand-900">What happens after you submit?</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-600">
-            Because the system automatically checks that all required files are present, the College Secretary focuses on verifying that the
-            content inside your attachments is accurate and complete. Once verified, your document is routed automatically along the{' '}
-            <strong>{user.origin ?? 'CESS'}</strong> approval path.
+            The College Secretary will review {isCustom ? 'the custom document type, purpose, and any supporting files' : 'your details and required files'}. After verification, you can track the request along the <strong>{derivedOrigin}</strong> approval path.
           </p>
         </div>
 
@@ -1089,7 +1143,7 @@ export function NewRequestPage() {
             <div className="rounded-2xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-100 text-xs">
               <p className="font-bold text-brand-900">What happens next?</p>
               <p className="mt-1 leading-relaxed text-ink-600 text-2xs">
-                The College Secretary verifies the content of all required files. Once confirmed, your document routes automatically along the official collegiate path with real-time tracking.
+                {isCustom ? 'The College Secretary reviews your purpose and any supporting files before routing your request.' : 'The College Secretary verifies your required files before routing your request.'}
               </p>
             </div>
           </div>
@@ -1121,7 +1175,8 @@ export function NewRequestPage() {
                   variant="secondary"
                   size="sm"
                   icon={ArrowLeft}
-                  onClick={() => setSubmissionStep('fill')}
+                  onClick={editDetails}
+                  disabled={isSubmitting}
                 >
                   Back to Edit Details
                 </Button>
@@ -1143,7 +1198,8 @@ export function NewRequestPage() {
                       variant="ghost"
                       size="sm"
                       icon={Edit3}
-                      onClick={() => setSubmissionStep('fill')}
+                      onClick={editDetails}
+                      disabled={isSubmitting}
                     >
                       Return to Form
                     </Button>
@@ -1153,8 +1209,8 @@ export function NewRequestPage() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="rounded-xl bg-ink-50/70 p-3.5 border border-ink-100">
                         <span className="block text-2xs font-bold uppercase tracking-wider text-ink-500">Document Type</span>
-                        <span className="mt-0.5 block text-sm font-bold text-brand-950">{selectedType.name}</span>
-                        <span className="text-2xs text-ink-600">{selectedType.summary}</span>
+                        <span className="mt-0.5 block wrap-anywhere text-sm font-bold text-brand-950">{isCustom ? customTypeName.trim() : selectedType.name}</span>
+                        <span className="text-2xs text-ink-600">{isCustom ? 'Others' : selectedType.summary}</span>
                       </div>
                       <div className="rounded-xl bg-ink-50/70 p-3.5 border border-ink-100">
                         <span className="block text-2xs font-bold uppercase tracking-wider text-ink-500">Routing Origin & SLA</span>
@@ -1170,20 +1226,32 @@ export function NewRequestPage() {
                       </div>
                     </div>
 
-                    <Field label="Request Title / Subject" required>
+                    <Field label="Request Title / Subject" required error={errors.title}>
                       <Input
                         type="text"
+                        name="title"
+                        required
+                        disabled={isSubmitting}
                         value={title}
-                        onChange={(e) => setTitle(e.target.value)}
+                        onChange={(e) => {
+                          setTitle(e.target.value)
+                          if (errors.title) clearError('title')
+                        }}
                         placeholder="Document title or subject"
                       />
                     </Field>
 
-                    <Field label="Purpose / Description of Request" required>
+                    <Field label="Purpose / Description of Request" required error={errors.description}>
                       <Textarea
                         rows={3}
+                        name="description"
+                        required
+                        disabled={isSubmitting}
                         value={description}
-                        onChange={(e) => setDescription(e.target.value)}
+                        onChange={(e) => {
+                          setDescription(e.target.value)
+                          if (errors.description) clearError('description')
+                        }}
                         placeholder="Purpose and context of request"
                       />
                     </Field>
@@ -1199,10 +1267,11 @@ export function NewRequestPage() {
                         Verified Attached Files ({attachedFiles.length} {attachedFiles.length === 1 ? 'file' : 'files'})
                       </h4>
                     </div>
-                    <Badge tone="success" dot={false}>Completeness Passed</Badge>
+                    {requiredList.length > 0 && <Badge tone="success" dot={false}>Completeness Passed</Badge>}
                   </div>
 
                   <div className="mt-4 space-y-3">
+                    {attachedFiles.length === 0 && <p className="text-sm text-ink-600">No supporting files attached.</p>}
                     {attachedFiles.map((f, i) => {
                       const reqObj = selectedType.requirements.find((r) => r.id === f.requirementId)
                       return (
@@ -1266,7 +1335,7 @@ export function NewRequestPage() {
                       <p className="font-semibold text-ink-900 mb-1.5">Official Submission Declarations:</p>
                       <ul className="list-disc list-inside space-y-1 text-ink-600">
                         <li>I confirm that all statements made in this request are authentic and complete.</li>
-                        <li>I verify that the uploaded forms contain valid signatures and meet CESS institutional policies.</li>
+                        {attachedFiles.length > 0 && <li>I verify that the uploaded forms contain valid signatures and meet CESS institutional policies.</li>}
                         <li>I understand that once submitted, this request cannot be edited unless returned for revisions by a reviewing authority.</li>
                       </ul>
                     </div>
@@ -1274,6 +1343,7 @@ export function NewRequestPage() {
                     <div className="rounded-xl border border-brand-200 bg-white p-4 shadow-2xs">
                       <Checkbox
                         checked={isCertified}
+                        disabled={isSubmitting}
                         onChange={(e) => setIsCertified(e.target.checked)}
                         label={
                           <span className="font-bold text-ink-950 text-sm">
@@ -1284,13 +1354,20 @@ export function NewRequestPage() {
                       />
                     </div>
 
+                    {submissionError && (
+                      <p ref={submitAlert} role="alert" tabIndex={-1} className="scroll-mt-20 rounded-lg bg-danger-50 p-3 text-sm font-medium text-danger-800">
+                        {submissionError}
+                      </p>
+                    )}
+
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                       <Button
                         type="button"
                         variant="secondary"
                         size="lg"
                         icon={ArrowLeft}
-                        onClick={() => setSubmissionStep('fill')}
+                        onClick={editDetails}
+                        disabled={isSubmitting}
                       >
                         Back to Edit Details
                       </Button>
@@ -1298,7 +1375,7 @@ export function NewRequestPage() {
                         type="button"
                         size="lg"
                         iconRight={Send}
-                        disabled={!isCertified || !title.trim() || !description.trim()}
+                        disabled={!isCertified || !!submittedDoc}
                         loading={isSubmitting}
                         loadingText="Submitting Request…"
                         onClick={handleConfirmedSubmit}
@@ -1400,7 +1477,7 @@ export function NewRequestPage() {
                       type="button"
                       size="lg"
                       iconRight={Send}
-                      disabled={!isCertified || !title.trim() || !description.trim()}
+                      disabled={!isCertified || !!submittedDoc}
                       loading={isSubmitting}
                       loadingText="Submitting Request…"
                       onClick={handleConfirmedSubmit}
@@ -1411,7 +1488,8 @@ export function NewRequestPage() {
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => setSubmissionStep('fill')}
+                      onClick={editDetails}
+                      disabled={isSubmitting}
                       className="w-full justify-center"
                     >
                       Back to Edit Details
@@ -1477,18 +1555,20 @@ export function NewRequestPage() {
               >
                 Go to Document Repository
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="ghost"
                   onClick={() => {
                     setIsConfirmModalOpen(false)
                     setTitle('')
                     setDescription('')
+                    setCustomTypeName('')
                     setAttachedFiles([])
                     setErrors({})
                     setFileErrors({})
                     setHasAttemptedSubmit(false)
                     setSubmittedDoc(null)
+                    editDetails()
                   }}
                 >
                   Submit Another Request

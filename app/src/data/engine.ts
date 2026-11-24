@@ -13,6 +13,7 @@
  */
 import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel, isRequester } from '../content/language'
 import { daysSince, formatDate, plural } from '../lib/time'
+import { customDocumentTypeError, isCustomDocumentType } from './customDocumentTypes'
 export { daysSince }
 import { EXTERNAL_RETURN_OUTCOMES } from './types'
 import type {
@@ -220,6 +221,7 @@ export function submitRequest(
     typeId: string
     title: string
     description: string
+    customTypeName?: string
     files: NewFile[]
     encodedBySecretary?: boolean
     encodedByName?: string
@@ -238,6 +240,12 @@ export function submitRequest(
   if (!input.description || !input.description.trim()) {
     throw new FriendlyError('Please enter a description or purpose for your document request.')
   }
+  const isCustom = isCustomDocumentType(type.id)
+  const customName = isCustom ? input.customTypeName?.trim() : undefined
+  if (isCustom) {
+    const error = customDocumentTypeError(customName)
+    if (error) throw new FriendlyError(error)
+  }
   validateFiles(type, input.files)
   const origin = user.origin ?? (user.role === 'ids_principal' || user.department.includes('Integrated Developmental School') ? 'IDS' : 'CESS')
   const id = nextId(db, 'd')
@@ -248,6 +256,7 @@ export function submitRequest(
     controlBase,
     revision: 0,
     typeId: type.id,
+    customTypeName: customName,
     title: input.title.trim(),
     description: input.description.trim(),
     origin,
@@ -276,20 +285,25 @@ export function submitRequest(
       action: 'submitted',
       remarks: input.encodedBySecretary
         ? `Received in person from ${user.name} and encoded by the College Secretary.`
-        : 'All required attachments verified present by automatic completeness check.',
+        : isCustom
+          ? 'Custom document type and purpose sent to the College Secretary for review.'
+          : 'All required attachments verified present by automatic completeness check.',
     },
     db,
   )
   db.documents.push(doc)
 
+  const receiptDetails = isCustom
+    ? 'was received. The College Secretary will review your request details and any attachments, then route it for review.'
+    : 'was received and passed the automatic completeness check. The College Secretary will verify the content of your documents, then route them for review.'
   notify(db, {
     kind: 'submitted',
     recipientId: user.id,
     recipientLabel: user.name,
     recipientEmail: user.email,
     doc,
-    subject: `We received your ${type.name} request`,
-    body: `Hello ${firstName(user)},\n\nYour ${type.name} request (${controlNumber(doc)}) was received and passed the automatic completeness check. The College Secretary will verify the content of your documents, then route them for review.\n\nYou can follow its progress here: ${requesterLink(doc)}${SIGNOFF}`,
+    subject: `We received your ${customName ?? type.name} request`,
+    body: `Hello ${firstName(user)},\n\nYour ${customName ?? type.name} request (${controlNumber(doc)}) ${receiptDetails}\n\nYou can follow its progress here: ${requesterLink(doc)}${SIGNOFF}`,
     at,
   })
   return doc
@@ -299,7 +313,7 @@ export function resubmit(
   db: Database,
   user: User,
   docId: string,
-  input: { title: string; description: string; files: NewFile[]; note: string },
+  input: { title: string; description: string; customTypeName?: string; files: NewFile[]; note: string },
   at: string,
 ): DocRecord {
   const doc = getDoc(db, docId)
@@ -308,6 +322,14 @@ export function resubmit(
     throw new FriendlyError('This request isn’t waiting for corrections, so it can’t be resubmitted right now.')
   if (input.files.length === 0 && !input.note.trim())
     throw new FriendlyError('Please attach at least one corrected file or explain what you changed.')
+
+  if (isCustomDocumentType(doc.typeId)) {
+    const customName = input.customTypeName?.trim() ?? doc.customTypeName
+    const error = customDocumentTypeError(customName)
+    if (error) throw new FriendlyError(error)
+    if (!input.description.trim()) throw new FriendlyError('Enter a description or purpose for your document request.')
+    doc.customTypeName = customName
+  }
 
   // REQ-SUB-8: same Control Number, new Revision Number, earlier files and history kept.
   doc.revision += 1

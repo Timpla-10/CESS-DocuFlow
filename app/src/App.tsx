@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast'
 import type { Role } from './data/types'
 import { AccessDeniedPage, NotFoundPage } from './pages/StatusPages'
 import { AccountPage } from './pages/account/AccountPage'
+import { ConsultationsPage } from './pages/consultations/ConsultationsPage'
 import { DocumentDetailPage } from './pages/documents/DocumentDetailPage'
 import { FacultyDirectoryPage } from './pages/info/FacultyDirectoryPage'
 import { NoticesPage } from './pages/info/NoticesPage'
@@ -106,6 +107,7 @@ export default function App() {
 
               {/* Document Details (Available to all authorized roles) */}
               <Route path="documents/:id" element={<DocumentDetailPage />} />
+              <Route path="consultations/:requestId?" element={<ConsultationsPage />} />
 
               {/* College Secretary */}
               <Route

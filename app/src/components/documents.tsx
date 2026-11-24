@@ -38,6 +38,7 @@ import {
 } from '../content/language'
 import { buildRoute, lastSubmittedAt } from '../data/engine'
 import { byNewest, byOldest, daysWaiting, isDelayed, typeOf, userById } from '../data/selectors'
+import { isCustomDocumentType } from '../data/customDocumentTypes'
 import type { Attachment, Database, DocRecord, HistoryEntry, OfficeId, RouteStep, Status } from '../data/types'
 import { formatDate, formatDateTime, plural, timeAgo } from '../lib/time'
 import { Input, Select } from './form'
@@ -227,7 +228,7 @@ export function FilterBar({
           <option value="">All document types</option>
           {types.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.name}
+              {audience === 'all' && isCustomDocumentType(t.id) ? `Others (${t.audience === 'student' ? 'Students' : 'Faculty'})` : t.name}
             </option>
           ))}
         </FilterSelect>

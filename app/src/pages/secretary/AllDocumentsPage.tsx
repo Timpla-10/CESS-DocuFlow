@@ -41,6 +41,7 @@ import {
   downloadGeneratedPdf,
   revisionLabel,
 } from '../../content/language'
+import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
 import { isDelayed, userById, visibleDocuments } from '../../data/selectors'
 import { api, useDb } from '../../data/store'
@@ -252,14 +253,16 @@ export function AllDocumentsPage() {
   )
   const [typeId, setTypeId] = useState(availableTypes[0]?.id ?? '')
   const selectedType = availableTypes.find((t) => t.id === typeId) ?? availableTypes[0]
+  const isCustom = selectedType !== undefined && isCustomDocumentType(selectedType.id)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [customTypeName, setCustomTypeName] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<
     { requirementId?: string; name: string; sizeKb: number; fileObj?: File }[]
   >([])
   const [walkInBusy, setWalkInBusy] = useState(false)
-  const [walkInErrors, setWalkInErrors] = useState<{ title?: string; files?: string }>({})
+  const [walkInErrors, setWalkInErrors] = useState<{ title?: string; files?: string; customTypeName?: string; description?: string }>({})
 
   const handleOpenWalkIn = (preselectedTypeId?: string) => {
     const firstReq = requesters[0]
@@ -269,6 +272,7 @@ export function AllDocumentsPage() {
     setTypeId(preselectedTypeId ?? firstTypes[0]?.id ?? '')
     setTitle('')
     setDescription('')
+    setCustomTypeName('')
     setAttachedFiles([])
     setWalkInErrors({})
     setIsWalkInOpen(true)
@@ -312,9 +316,14 @@ export function AllDocumentsPage() {
     e.preventDefault()
     if (!selectedType || !selectedRequester) return
 
-    const errs: { title?: string; files?: string } = {}
+    const errs: typeof walkInErrors = {}
     if (!title.trim()) {
       errs.title = 'Please enter a title or subject for this walk-in document.'
+    }
+    if (isCustom) {
+      const typeError = customDocumentTypeError(customTypeName)
+      if (typeError) errs.customTypeName = typeError
+      if (!description.trim()) errs.description = 'Enter the purpose or description of the custom document.'
     }
     const missingReqs = (selectedType.requirements ?? []).filter(
       (r) => r.required && !attachedFiles.some((f) => f.requirementId === r.id),
@@ -323,7 +332,7 @@ export function AllDocumentsPage() {
       errs.files = `Missing required attachment: ${missingReqs.map((r) => r.label).join(', ')}`
     }
 
-    if (errs.title || errs.files) {
+    if (Object.keys(errs).length > 0) {
       setWalkInErrors(errs)
       toast.error(
         'Submission Incomplete',
@@ -344,6 +353,7 @@ export function AllDocumentsPage() {
       const doc = await api.encodeWalkInRequest(user, {
         requesterId: selectedRequester.id,
         typeId: selectedType.id,
+        customTypeName: isCustom ? customTypeName : undefined,
         title: title.trim(),
         description: description.trim() || 'Walk-in physical document packet encoded by the College Secretary.',
         files: payloadFiles,
@@ -1395,6 +1405,19 @@ export function AllDocumentsPage() {
             </Field>
           </div>
 
+          {isCustom && (
+            <Field label="Custom document type" required error={walkInErrors.customTypeName}>
+              <Input
+                value={customTypeName}
+                maxLength={CUSTOM_DOCUMENT_TYPE_LIMIT}
+                onChange={(event) => {
+                  setCustomTypeName(event.target.value)
+                  if (walkInErrors.customTypeName) setWalkInErrors((previous) => ({ ...previous, customTypeName: undefined }))
+                }}
+              />
+            </Field>
+          )}
+
           <Field
             label="Title or Subject"
             required
@@ -1412,11 +1435,14 @@ export function AllDocumentsPage() {
             />
           </Field>
 
-          <Field label="Description or Purpose" optional>
+          <Field label="Description or Purpose" required={isCustom} optional={!isCustom} error={isCustom ? walkInErrors.description : undefined}>
             <Textarea
               rows={2}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value)
+                if (walkInErrors.description) setWalkInErrors((previous) => ({ ...previous, description: undefined }))
+              }}
               placeholder="Notes on the submitted packet..."
             />
           </Field>

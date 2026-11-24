@@ -24,6 +24,8 @@ import {
 } from './engine'
 import type { Database, DocumentType, ExternalOfficeItem, User } from './types'
 
+import { createCustomDocumentTypes } from './customDocumentTypes'
+
 export const DB_VERSION = 16
 export const DEMO_PASSWORD = 'cess2026'
 
@@ -226,11 +228,12 @@ export function createSeed(): Database {
   const db: Database = {
     version: DB_VERSION,
     users: structuredClone(users),
-    documentTypes: structuredClone(documentTypes),
+    documentTypes: [...structuredClone(documentTypes), ...createCustomDocumentTypes()],
     externalOffices: structuredClone(externalOffices),
     documents: [],
     notifications: [],
     notices: [],
+    consultations: [],
     faculty: [
       { id: 'fac-1', userId: 'u-faculty-1', name: 'Prof. Ana Lim', department: 'Department of Secondary and Elementary Education', subjects: [
         { code: 'EDUC 101', title: 'The Child and Adolescent Learner', syllabusFile: 'EDUC101_Syllabus_2026.pdf' },

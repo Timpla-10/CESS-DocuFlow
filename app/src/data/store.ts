@@ -9,6 +9,8 @@
  */
 import { useSyncExternalStore } from 'react'
 import { FriendlyError, MESSAGES } from '../content/language'
+import { respondToConsultation, submitConsultation } from './consultations'
+import { createCustomDocumentTypes, isCustomDocumentType } from './customDocumentTypes'
 import * as engine from './engine'
 import { DB_VERSION, DEMO_PASSWORD, createSeed } from './seed'
 import type {
@@ -58,6 +60,9 @@ function load(): Database {
           const vcafUser = fresh.users.find((u) => u.role === 'vcaf')
           if (vcafUser) parsed.users.push(vcafUser)
         }
+        for (const type of createCustomDocumentTypes()) {
+          if (!parsed.documentTypes.some((item) => item.id === type.id)) parsed.documentTypes.push(type)
+        }
         return parsed
       }
     }
@@ -78,9 +83,10 @@ function persist() {
   }
 }
 
-function commit(next: Database) {
+function commit(next: Database, requirePersistence = false) {
+  if (requirePersistence) localStorage.setItem(KEY, JSON.stringify(next))
   db = next
-  persist()
+  if (!requirePersistence) persist()
   listeners.forEach((l) => l())
 }
 
@@ -101,12 +107,12 @@ export function useDb(): Database {
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** Runs an engine action on a copy of the data, then saves it. */
-async function mutate<T>(fn: (draft: Database, at: string) => T): Promise<T> {
+async function mutate<T>(fn: (draft: Database, at: string) => T, requirePersistence = false): Promise<T> {
   await wait(350 + Math.random() * 350)
   const draft = structuredClone(db)
   try {
     const result = fn(draft, new Date().toISOString())
-    commit(draft)
+    commit(draft, requirePersistence)
     return result
   } catch (err) {
     if (err instanceof FriendlyError) throw err
@@ -165,7 +171,7 @@ export const api = {
               if (Array.isArray(dtData.documentTypes) && dtData.documentTypes.length > 0) {
                 for (const lt of dtData.documentTypes) {
                   const existingIdx = db.documentTypes.findIndex(
-                    (t) => t.name.toLowerCase() === lt.name.toLowerCase() || t.id === String(lt.id)
+                    (t) => !isCustomDocumentType(t.id) && (t.name.toLowerCase() === lt.name.toLowerCase() || t.id === String(lt.id))
                   )
                   const mappedReqs = (lt.requirements || []).map((r: any) => ({
                     id: String(r.id || r.form_id),
@@ -324,34 +330,37 @@ export const api = {
       throw new FriendlyError('Please enter your official university Gmail address (ending with @msunaawan.edu.ph).')
   },
 
-  submitRequest: (user: User, input: { typeId: string; title: string; description: string; files: engine.NewFile[] }) =>
-    mutate((d, at) => engine.submitRequest(d, user, input, at)),
+  submitConsultation: (user: User, input: Parameters<typeof submitConsultation>[2]) =>
+    mutate((d, at) => submitConsultation(d, user, input, at), true),
+
+  respondToConsultation: (user: User, requestId: string, input: Parameters<typeof respondToConsultation>[3]) =>
+    mutate((d, at) => respondToConsultation(d, user, requestId, input, at), true),
+
+  submitRequest: (user: User, input: { typeId: string; title: string; description: string; customTypeName?: string; files: engine.NewFile[] }) =>
+    mutate((d, at) => engine.submitRequest(d, user, input, at), isCustomDocumentType(input.typeId)),
 
   /** REQ-REC-8: College Secretary creates a record for a document received in person. */
   encodeWalkInRequest: (
     actor: User,
-    input: { requesterId: string; typeId: string; title: string; description: string; files: engine.NewFile[] },
+    { requesterId, ...input }: { requesterId: string; typeId: string; title: string; description: string; customTypeName?: string; files: engine.NewFile[] },
   ) =>
     mutate((d, at) => {
       if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can encode walk-in documents.')
-      const requester = d.users.find((u) => u.id === input.requesterId)
+      const requester = d.users.find((u) => u.id === requesterId)
       if (!requester) throw new FriendlyError('Please select a valid requester account.')
       return engine.submitRequest(
         d,
         requester,
         {
-          typeId: input.typeId,
-          title: input.title,
-          description: input.description,
-          files: input.files,
+          ...input,
           encodedBySecretary: true,
           encodedByName: actor.name,
         },
         at,
       )
-    }),
+    }, isCustomDocumentType(input.typeId)),
 
-  resubmit: async (user: User, docId: string, input: { title: string; description: string; files: engine.NewFile[]; note: string }) => {
+  resubmit: async (user: User, docId: string, input: Parameters<typeof engine.resubmit>[3]) => {
     // PB-18 / PB-19: Sync live backend if connected
     try {
       await fetch(`/api/documents/${docId}/resubmit`, {

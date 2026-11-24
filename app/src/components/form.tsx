@@ -3,7 +3,7 @@
  * optional helper text, and an error message shown right beside the field.
  */
 import { AlertCircle, ChevronDown } from 'lucide-react'
-import { cloneElement, forwardRef, isValidElement, useId, useState, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+import { cloneElement, forwardRef, isValidElement, useId, useState, type ComponentPropsWithRef, type InputHTMLAttributes, type ReactElement, type ReactNode, type SelectHTMLAttributes } from 'react'
 import { cn, InfoTooltip, TextTooltip, Tooltip, type TextTooltipProps, type TooltipProps } from './ui'
 
 export { InfoTooltip, TextTooltip, Tooltip, type TextTooltipProps, type TooltipProps }
@@ -63,7 +63,7 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
   return <input className={cn(controlBase, 'h-10 px-3.5', className)} {...rest} />
 }
 
-export function Textarea({ className, rows = 4, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({ className, rows = 4, ...rest }: ComponentPropsWithRef<'textarea'>) {
   return <textarea rows={rows} className={cn(controlBase, 'px-3.5 py-2.5 leading-relaxed', className)} {...rest} />
 }
 
@@ -101,11 +101,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
             setIsFocused(false)
             onBlur?.(e)
           }}
-          onChange={(e) => {
-            setIsFocused(false)
-            e.currentTarget.blur()
-            onChange?.(e)
-          }}
+          onChange={onChange}
           className={cn(
             controlBase,
             'h-10 appearance-none pl-3.5 pr-10 text-sm font-medium cursor-pointer',

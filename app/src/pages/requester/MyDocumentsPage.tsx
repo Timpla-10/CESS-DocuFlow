@@ -58,6 +58,7 @@ import {
   revisionLabel,
 } from '../../content/language'
 import { lastSubmittedAt } from '../../data/engine'
+import { isCustomDocumentType } from '../../data/customDocumentTypes'
 import { isDelayed, typeOf, visibleDocuments } from '../../data/selectors'
 import { api, useDb } from '../../data/store'
 import type { DocRecord, DocumentFolder, DocumentType, FolderCategory } from '../../data/types'
@@ -143,6 +144,8 @@ export function MyDocumentsPage() {
   // Folder drill-down
   const folderParam = searchParams.get('folder')
   const selectedType = allowedTypes.find((t) => t.id === folderParam)
+  const isOthersFolder = selectedType !== undefined && isCustomDocumentType(selectedType.id)
+  const hasFolderTemplate = selectedType && (!isOthersFolder || selectedType.templateName)
 
   // Custom folder drill-down (PB-58)
   const [folderSubTab, setFolderSubTab] = useState<'categories' | 'custom'>('categories')
@@ -458,7 +461,7 @@ export function MyDocumentsPage() {
                     </div>
                     <div>
                       <span className="text-2xs font-bold uppercase tracking-wider text-brand-700">
-                        Official Document Type
+                        {isOthersFolder ? `Custom Requests${isRequesterUser ? '' : selectedType.audience === 'student' ? ' · Students' : ' · Faculty'}` : 'Official Document Type'}
                       </span>
                       <h2 className="text-xl font-extrabold text-brand-950 sm:text-2xl">
                         {selectedType.name}
@@ -488,19 +491,19 @@ export function MyDocumentsPage() {
 
                 {/* Actions inside Folder Banner */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button
+                  {hasFolderTemplate && <Button
                     variant="secondary"
                     icon={Download}
                     onClick={() => handleDownloadTemplate(selectedType)}
                   >
                     Blank Form Template
-                  </Button>
+                  </Button>}
                   {canSubmit && (
                     <ButtonLink
                       to={`/app/requests/new?type=${selectedType.id}`}
                       icon={FilePlus2}
                     >
-                      Submit {selectedType.name.split('(')[0]?.trim() || selectedType.name}
+                      {isOthersFolder ? 'Request a custom document' : `Submit ${selectedType.name.split('(')[0]?.trim() || selectedType.name}`}
                     </ButtonLink>
                   )}
                 </div>
@@ -531,7 +534,7 @@ export function MyDocumentsPage() {
                   <Card className="p-8">
                     <EmptyState
                       icon={FolderOpen}
-                      title={`No ${selectedType.name} requests yet`}
+                      title={isOthersFolder ? 'No custom document requests yet' : `No ${selectedType.name} requests yet`}
                       action={
                         <div className="flex flex-wrap justify-center gap-2">
                           {canSubmit && (
@@ -539,16 +542,16 @@ export function MyDocumentsPage() {
                               to={`/app/requests/new?type=${selectedType.id}`}
                               icon={FilePlus2}
                             >
-                              Submit your first {selectedType.name} request
+                              {isOthersFolder ? 'Request a custom document' : `Submit your first ${selectedType.name} request`}
                             </ButtonLink>
                           )}
-                          <Button
+                          {hasFolderTemplate && <Button
                             variant="secondary"
                             icon={Download}
                             onClick={() => handleDownloadTemplate(selectedType)}
                           >
                             Download Blank Form Template
-                          </Button>
+                          </Button>}
                         </div>
                       }
                     >
@@ -994,7 +997,7 @@ export function MyDocumentsPage() {
                                 onClick={() => openFolder(t.id)}
                                 className="cursor-pointer text-base font-bold text-ink-950 transition-colors group-hover:text-brand-800"
                               >
-                                {t.name}
+                                {!isRequesterUser && isCustomDocumentType(t.id) ? `Others (${t.audience === 'student' ? 'Students' : 'Faculty'})` : t.name}
                               </h3>
                               <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-600">
                                 {t.summary}

@@ -58,6 +58,7 @@ import {
   requesterMessage,
   revisionLabel,
 } from '../../content/language'
+import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
 import { ACCEPTED_EXT, MAX_FILE_MB, reviewOptions, type NewFile, type ReviewKind } from '../../data/engine'
 import { daysWaiting, isDelayed, typeOf, userById } from '../../data/selectors'
 import { api, useDb } from '../../data/store'
@@ -88,10 +89,11 @@ export function DocumentDetailPage() {
   // Resubmit form state
   const [resubmitTitle, setResubmitTitle] = useState('')
   const [resubmitDesc, setResubmitDesc] = useState('')
+  const [resubmitCustomType, setResubmitCustomType] = useState('')
   const [resubmitNote, setResubmitNote] = useState('')
   const [resubmitFiles, setResubmitFiles] = useState<{ name: string; sizeKb: number; fileObj?: File }[]>([])
   const [resubmitBusy, setResubmitBusy] = useState(false)
-  const [resubmitErrors, setResubmitErrors] = useState<{ title?: string; general?: string }>({})
+  const [resubmitErrors, setResubmitErrors] = useState<{ title?: string; general?: string; customType?: string; description?: string }>({})
 
   // Secretary Content Verification form state (REQ-REQT-4, REQ-REQT-5)
   const [checkDecision, setCheckDecision] = useState<'complete' | 'return' | 'reject'>('complete')
@@ -185,6 +187,7 @@ export function DocumentDetailPage() {
   }
 
   const docType = typeOf(db, doc)
+  const isCustom = isCustomDocumentType(doc.typeId)
   const requester = userById(db, doc.requesterId)
   const delayed = isDelayed(db, doc)
   const isDocRequester = doc.requesterId === user.id
@@ -257,6 +260,7 @@ export function DocumentDetailPage() {
     if (!canResubmit) return
     setResubmitTitle(doc.title)
     setResubmitDesc(doc.description)
+    setResubmitCustomType(doc.customTypeName ?? '')
     setResubmitNote('')
     setResubmitFiles([])
     setResubmitErrors({})
@@ -329,12 +333,17 @@ export function DocumentDetailPage() {
   const handleResubmitSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setResubmitErrors({})
-    const errs: { title?: string; general?: string } = {}
+    const errs: typeof resubmitErrors = {}
     if (!resubmitTitle.trim()) {
       errs.title = 'Please enter a document title.'
     }
     if (resubmitFiles.length === 0 && !resubmitNote.trim()) {
       errs.general = 'Please attach at least one corrected file or explain what you revised.'
+    }
+    if (isCustom) {
+      const typeError = customDocumentTypeError(resubmitCustomType)
+      if (typeError) errs.customType = typeError
+      if (!resubmitDesc.trim()) errs.description = 'Enter the purpose or description of the custom document.'
     }
     if (Object.keys(errs).length > 0) {
       setResubmitErrors(errs)
@@ -350,6 +359,7 @@ export function DocumentDetailPage() {
       const updated = await api.resubmit(user, doc.id, {
         title: resubmitTitle.trim(),
         description: resubmitDesc.trim(),
+        customTypeName: isCustom ? resubmitCustomType : undefined,
         note: resubmitNote.trim(),
         files: payloadFiles,
       })
@@ -794,8 +804,8 @@ export function DocumentDetailPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 max-w-2xl">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="brand" dot={false}>
-                  {docType?.name}
+                <Badge tone="brand" dot={false} className="max-w-full">
+                  <span className="whitespace-normal wrap-anywhere">{docType?.name}</span>
                 </Badge>
                 <Badge tone="neutral" dot={false}>
                   {revisionLabel(doc.revision)}
@@ -835,7 +845,7 @@ export function DocumentDetailPage() {
               </h1>
 
               {doc.description && (
-                <p className="mt-2 text-sm leading-relaxed text-ink-700">{doc.description}</p>
+                <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-ink-700">{doc.description}</p>
               )}
             </div>
 
@@ -1244,7 +1254,7 @@ export function DocumentDetailPage() {
                 },
                 {
                   label: 'Document Type',
-                  value: docType?.name ?? '—',
+                  value: <span className="wrap-anywhere">{docType?.name ?? '—'}</span>,
                   hint: `Audience: ${docType?.audience === 'student' ? 'Students' : 'Faculty'}`,
                 },
                 {
@@ -1319,7 +1329,7 @@ export function DocumentDetailPage() {
         </div>
 
         {/* Automated Checklist Verification Result (REQ-REQT-2, REQ-REQT-3) */}
-        {docType && (
+        {docType && docType.requirements.length > 0 && (
           <div className="mb-5 rounded-xl border border-brand-200 bg-brand-50/30 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 pb-2.5">
               <div className="flex items-center gap-2">
@@ -1462,6 +1472,30 @@ export function DocumentDetailPage() {
             />
           </Field>
 
+          {isCustom && (
+            <>
+              <Field label="Custom document type" required error={resubmitErrors.customType}>
+                <Input
+                  maxLength={CUSTOM_DOCUMENT_TYPE_LIMIT}
+                  value={resubmitCustomType}
+                  onChange={(event) => {
+                    setResubmitCustomType(event.target.value)
+                    if (resubmitErrors.customType) setResubmitErrors((previous) => ({ ...previous, customType: undefined }))
+                  }}
+                />
+              </Field>
+              <Field label="Description or purpose" required error={resubmitErrors.description}>
+                <Textarea
+                  value={resubmitDesc}
+                  onChange={(event) => {
+                    setResubmitDesc(event.target.value)
+                    if (resubmitErrors.description) setResubmitErrors((previous) => ({ ...previous, description: undefined }))
+                  }}
+                />
+              </Field>
+            </>
+          )}
+
           <Field
             label="What changes did you make?"
             required
@@ -1561,7 +1595,7 @@ export function DocumentDetailPage() {
           <div className="flex items-center justify-between rounded-xl bg-success-50 p-4 text-xs text-success-700 ring-1 ring-inset ring-success-100">
             <div className="flex items-center gap-2 font-semibold">
               <FileCheck2 className="size-4 shrink-0" />
-              <span>Automatic Completeness Check Result: All required attachments are present</span>
+              <span>{isCustom ? 'Review the custom document type, purpose, and any supporting files.' : 'Automatic Completeness Check Result: All required attachments are present'}</span>
             </div>
             <Badge tone="success" dot={false}>
               Auto-Check Passed
@@ -1651,7 +1685,7 @@ export function DocumentDetailPage() {
             </p>
           </div>
 
-          {checkDecision === 'return' && docType && (
+          {checkDecision === 'return' && docType && docType.requirements.length > 0 && (
             <div className="space-y-2 rounded-xl bg-danger-50/40 p-3.5 ring-1 ring-inset ring-danger-100">
               <p className="text-xs font-bold text-danger-800">
                 Optional: Flag specific attachments that contain incorrect or incomplete information

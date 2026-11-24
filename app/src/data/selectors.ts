@@ -20,7 +20,8 @@ export function visibleDocuments(db: Database, user: User): DocRecord[] {
 }
 
 export function typeOf(db: Database, doc: DocRecord): DocumentType | undefined {
-  return db.documentTypes.find((t) => t.id === doc.typeId)
+  const type = db.documentTypes.find((t) => t.id === doc.typeId)
+  return type && doc.customTypeName ? { ...type, name: doc.customTypeName } : type
 }
 
 export function userById(db: Database, id: string): User | undefined {

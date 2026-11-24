@@ -193,6 +193,7 @@ function Sidebar({
                     <Tooltip content={it.label} placement="right" disabled={isExpanded} delayMs={50} className="w-full">
                       <NavLink
                         to={it.to}
+                        aria-label={it.label}
                         end={it.to === '/app/documents'}
                         className={({ isActive }) =>
                           cn(
@@ -471,6 +472,7 @@ function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-label={`Account menu for ${user.name}`}
         aria-expanded={open}
         className="flex items-center gap-1.5 sm:gap-2.5 rounded-xl p-0.5 sm:py-1 sm:pl-1 sm:pr-2 transition-colors hover:bg-brand-50"
       >
