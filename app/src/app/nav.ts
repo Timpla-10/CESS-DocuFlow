@@ -1,5 +1,6 @@
 import {
   Archive,
+  BarChart3,
   BookOpen,
   Building2,
   ClipboardCheck,
@@ -11,9 +12,11 @@ import {
   LayoutDashboard,
   Mail,
   Megaphone,
+  MessageSquare,
   MessagesSquare,
   PackageCheck,
   Settings,
+  UserRound,
   Users,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
@@ -68,6 +71,10 @@ const consultations: NavItem = {
 const syllabiNav: NavItem = { to: '/app/syllabi', label: 'Course Syllabi', icon: BookOpen }
 const tosNav: NavItem = { to: '/app/tos', label: 'Table of Specifications', icon: FileSpreadsheet }
 const classRecords: NavItem = { to: '/app/class-records', label: 'Faculty Class Records', icon: ClipboardList }
+const facultyProfile: NavItem = { to: '/app/faculty-profile', label: 'My Faculty Profile', icon: UserRound }
+const profileOverview: NavItem = { to: '/app/faculty-profiles', label: 'Faculty Profile Overview', icon: Users }
+const serviceFeedback: NavItem = { to: '/app/service-feedback', label: 'Service Feedback', icon: MessageSquare }
+const feedbackResults: NavItem = { to: '/app/feedback-results', label: 'Service Feedback Results', icon: BarChart3 }
 const notices: NavItem = {
   to: '/app/notices',
   label: 'Notices & Announcements',
@@ -100,7 +107,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [notices, directory],
+          items: [notices, directory, serviceFeedback],
         },
       ]
     case 'faculty':
@@ -143,7 +150,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [notices, directory],
+          items: [notices, directory, facultyProfile, serviceFeedback],
         },
       ]
     case 'secretary':
@@ -171,7 +178,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [notices, directory],
+          items: [notices, directory, profileOverview, feedbackResults],
         },
         {
           heading: 'Administration',
@@ -208,7 +215,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [notices, syllabiNav, tosNav, classRecords, directory],
+          items: [notices, syllabiNav, tosNav, classRecords, directory, profileOverview, feedbackResults],
         },
       ]
     case 'dean':
@@ -232,7 +239,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [notices, syllabiNav, tosNav, classRecords, directory],
+          items: [notices, syllabiNav, tosNav, classRecords, directory, profileOverview, feedbackResults],
         },
       ]
     case 'chairperson':

@@ -1,4 +1,5 @@
 import { FriendlyError } from '../content/language'
+import { browserRequest } from '../lib/browserStorage'
 import { getDb } from './store'
 import type { Origin, Role, User } from './types'
 
@@ -68,33 +69,11 @@ function activeViewer(userId: string): User {
   return user
 }
 
-function openRecords(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('docuflow.class-records', 1)
-    request.onupgradeneeded = () => request.result.createObjectStore('records', { keyPath: 'id' })
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-    request.onblocked = () => reject(new FriendlyError('Class record storage is busy. Close other DocuFlow tabs and try again.'))
-  })
-}
-
-async function transactRecords<T>(mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const database = await openRecords()
-  try {
-    return await new Promise((resolve, reject) => {
-      const transaction = database.transaction('records', mode)
-      const request = operation(transaction.objectStore('records'))
-      transaction.oncomplete = () => resolve(request.result)
-      transaction.onabort = () => reject(transaction.error ?? request.error)
-    })
-  } finally {
-    database.close()
-  }
-}
+const recordsStore = { database: 'docuflow.class-records', collection: 'records', keyPath: 'id' }
 
 export async function listClassRecords(user: User): Promise<ClassRecord[]> {
   activeViewer(user.id)
-  const records = await transactRecords<StoredClassRecord[]>('readonly', (store) => store.getAll())
+  const records = await browserRequest<StoredClassRecord[]>(recordsStore, 'readonly', (store) => store.getAll())
   const viewer = activeViewer(user.id)
   return records.filter((record) => canViewClassRecord(viewer, record))
     .map(({ file: _file, ...record }) => record)
@@ -127,13 +106,13 @@ export async function uploadClassRecord(user: User, fields: ClassRecordFields, f
     size: file.size,
     format,
   }
-  await transactRecords('readwrite', (store) => store.add({ ...record, file }))
+  await browserRequest(recordsStore, 'readwrite', (store) => store.add({ ...record, file }))
   return record
 }
 
 export async function retrieveClassRecord(user: User, id: string): Promise<File> {
   activeViewer(user.id)
-  const record = await transactRecords<StoredClassRecord | undefined>('readonly', (store) => store.get(id))
+  const record = await browserRequest<StoredClassRecord | undefined>(recordsStore, 'readonly', (store) => store.get(id))
   if (!record || !canViewClassRecord(activeViewer(user.id), record)) {
     throw new FriendlyError('This class record is unavailable to your account.')
   }

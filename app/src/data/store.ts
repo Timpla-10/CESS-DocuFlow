@@ -13,6 +13,7 @@ import { respondToConsultation, submitConsultation } from './consultations'
 import { createCustomDocumentTypes, isCustomDocumentType } from './customDocumentTypes'
 import * as engine from './engine'
 import { DB_VERSION, DEMO_PASSWORD, createSeed } from './seed'
+import { submitServiceFeedback } from './serviceFeedback'
 import type {
   Database,
   DocumentFolder,
@@ -130,6 +131,9 @@ async function mutate<T>(fn: (draft: Database, at: string) => T, requirePersiste
 }
 
 export const api = {
+  submitServiceFeedback: (user: User, input: Parameters<typeof submitServiceFeedback>[2]) =>
+    mutate((d, at) => submitServiceFeedback(d, user, input, at), true),
+
   async signIn(email: string, password: string): Promise<User> {
     const cleanEmail = email.trim().toLowerCase()
     if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {

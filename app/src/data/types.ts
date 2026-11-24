@@ -2,6 +2,7 @@
  * Domain types for CESS DocuFlow.
  * Field names follow the SRS v1.3 (see REQ-REC-1, REQ-TRK-1, REQ-ROUTE-*, REQ-EXT-*, REQ-NOT-7).
  */
+import type { ServiceFeedback } from './serviceFeedback'
 
 export type Role =
   | 'student'
@@ -468,6 +469,7 @@ export interface Database {
   notifications: NotificationLog[]
   notices: Notice[]
   consultations?: Consultation[]
+  serviceFeedback?: ServiceFeedback[]
   faculty: FacultyEntry[]
   syllabusTemplate?: SyllabusTemplate
   syllabi?: SyllabusRecord[]

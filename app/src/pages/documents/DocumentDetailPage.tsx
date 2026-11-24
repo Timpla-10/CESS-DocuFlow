@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Link2,
   Lock,
+  MessageSquare,
   PackageCheck,
   Paperclip,
   PenLine,
@@ -66,6 +67,7 @@ import { documentNumberError } from '../../data/documentNumbers'
 import { canSignDocument } from '../../data/documentSignatures'
 import { ACCEPTED_EXT, MAX_FILE_MB, reviewOptions, type NewFile, type ReviewKind } from '../../data/engine'
 import { daysWaiting, isDelayed, typeOf, userById } from '../../data/selectors'
+import { feedbackForDocument } from '../../data/serviceFeedback'
 import { api, useDb } from '../../data/store'
 import { EXTERNAL_RETURN_OUTCOMES, type ExternalOfficeId, type ExternalReturnOutcome } from '../../data/types'
 import { formatDate, formatDateTime, plural } from '../../lib/time'
@@ -582,6 +584,11 @@ export function DocumentDetailPage() {
           <ArrowLeft className="size-4" aria-hidden /> Back to Documents
         </button>
         <div className="flex flex-wrap items-center gap-2">
+          {isDocRequester && isRequester(user.role) && doc.status === 'released' && (
+            <ButtonLink size="sm" variant="secondary" icon={MessageSquare} to={`/app/service-feedback?document=${encodeURIComponent(doc.id)}`}>
+              {feedbackForDocument(db, user.id, doc.id) ? 'View evaluation receipt' : 'Evaluate this service'}
+            </ButtonLink>
+          )}
           <Button
             size="sm"
             variant="secondary"
