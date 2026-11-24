@@ -1012,6 +1012,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
               type="submit"
               size="lg"
               iconRight={ArrowRight}
+              className="lg:hidden"
             >
               Proceed to Pre-Submission Review
             </Button>
