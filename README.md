@@ -24,8 +24,8 @@
 ## 📦 Getting Started
 
 ### Prerequisites
-- Node.js (v18 or higher recommended)
-- npm or yarn
+- Node.js 24 LTS
+- npm
 
 ### Installation
 
@@ -38,7 +38,7 @@
 2. Install dependencies:
    ```bash
    cd app
-   npm install
+   npm ci
    ```
 
 3. Run the development server:
@@ -52,6 +52,17 @@
    ```
 
 4. Open your browser and navigate to `http://localhost:5173`.
+
+### Verify the frontend build
+
+From the repository root, run the same install and build commands used for Vercel and the GitHub frontend build check.
+
+```bash
+npm --prefix app ci --include=dev
+npm run build
+```
+
+The build runs TypeScript before Vite. If GitHub shows a failed frontend check, open the **Type-check and build** job to see the file and line that stopped the build.
 
 ---
 
