@@ -19,9 +19,11 @@ router.get('/me', verifyUser, AuthController.me);
 router.post('/change-password', verifyUser, AuthController.changePassword);
 router.put('/password', verifyUser, AuthController.changePassword);
 
-// Secretary (System Admin) restricted endpoints for Whitelist, Admin Verification & Security Logs
+// Secretary (System Admin) restricted endpoints for Whitelist, Admin Verification, User/Role Management & Audit Logs
 router.get('/security-logs', verifyUser, requireRole(ROLES.SECRETARY), AuthController.getSecurityLogs);
+router.get('/audit-logs', verifyUser, requireRole(ROLES.SECRETARY), AuthController.getUserManagementAuditLogs);
 router.get('/whitelist', verifyUser, requireRole(ROLES.SECRETARY), AuthController.getWhitelist);
+router.post('/whitelist', verifyUser, requireRole(ROLES.SECRETARY), AuthController.addWhitelistEntry);
 router.post('/whitelist/import', verifyUser, requireRole(ROLES.SECRETARY), AuthController.importWhitelist);
 router.delete('/whitelist/:id', verifyUser, requireRole(ROLES.SECRETARY), AuthController.deleteWhitelist);
 
@@ -29,7 +31,13 @@ router.get('/pending', verifyUser, requireRole(ROLES.SECRETARY), AuthController.
 router.post('/pending/:id/approve', verifyUser, requireRole(ROLES.SECRETARY), AuthController.approveRegistration);
 router.post('/pending/:id/reject', verifyUser, requireRole(ROLES.SECRETARY), AuthController.rejectRegistration);
 
+router.get('/users/audit-logs', verifyUser, requireRole(ROLES.SECRETARY), AuthController.getUserManagementAuditLogs);
 router.get('/users', verifyUser, requireRole(ROLES.SECRETARY), AuthController.getAllUsers);
+router.get('/users/:id', verifyUser, requireRole(ROLES.SECRETARY), AuthController.getUserById);
 router.post('/users', verifyUser, requireRole(ROLES.SECRETARY), AuthController.saveUser);
+router.put('/users/:id', verifyUser, requireRole(ROLES.SECRETARY), AuthController.updateUser);
+router.patch('/users/:id', verifyUser, requireRole(ROLES.SECRETARY), AuthController.updateUser);
+router.patch('/users/:id/role', verifyUser, requireRole(ROLES.SECRETARY), AuthController.updateUserRole);
+router.patch('/users/:id/status', verifyUser, requireRole(ROLES.SECRETARY), AuthController.updateUserStatus);
 
 module.exports = router;

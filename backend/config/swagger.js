@@ -211,6 +211,190 @@ Mindanao State University at Naawan
           reason: { type: 'string', example: 'Institutional procedural update approved by College Council.' },
         },
       },
+      NotificationAuditLogEntry: {
+        type: 'object',
+        properties: {
+          notification_id: { type: 'string', format: 'uuid' },
+          event: { type: 'string', example: 'Document Returned Notice' },
+          category: { type: 'string', enum: ['workflow', 'system_email'] },
+          notification_type: {
+            type: 'string',
+            enum: ['Status_Update', 'Reminder_3_Days', 'Return_Alert', 'Reject_Alert', 'Release_Alert', 'Notice_Minutes_Alert'],
+          },
+          delivery_method: { type: 'string', enum: ['Email', 'In_System', 'Both'] },
+          result: { type: 'string', enum: ['Pending', 'Sent', 'Failed'] },
+          timestamp: { type: 'string', format: 'date-time' },
+          safeError: { type: 'string', nullable: true, example: 'SMTP server rejected recipient address.' },
+          retryable: { type: 'boolean' },
+          retryCount: { type: 'integer' },
+          recipientSummary: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string', format: 'uuid' },
+              name: { type: 'string' },
+              email: { type: 'string' },
+              department: { type: 'string' },
+            },
+          },
+        },
+      },
+      OfficialTemplateUpdateRequest: {
+        type: 'object',
+        required: ['fileName'],
+        properties: {
+          fileName: { type: 'string', example: 'CESS_Official_Course_Syllabus_Template_v2.docx' },
+          fileUrl: { type: 'string', example: '/templates/CESS_Official_Course_Syllabus_Template_v2.docx' },
+          fileSize: { type: 'string', example: '158 KB' },
+          description: { type: 'string', example: 'Updated OBE syllabus template with revised assessment rubrics.' },
+          academicTerm: { type: 'string', example: '2026-2027 (2nd Semester)' },
+          effectiveDate: { type: 'string', format: 'date', example: '2026-11-15' },
+          changeNotes: { type: 'string', example: 'Added CHED OBE alignment section.' },
+          announcementTitle: { type: 'string', example: 'Official Syllabus Template Updated to v2' },
+          announcementContent: { type: 'string', example: 'All faculty are advised to download the new OBE template.' },
+          targetAudience: { type: 'string', enum: ['Faculty', 'All', 'Student'], example: 'Faculty' },
+        },
+      },
+      FacultyListingUpsertRequest: {
+        type: 'object',
+        required: ['name'],
+        properties: {
+          userId: { type: 'string', format: 'uuid', nullable: true },
+          name: { type: 'string', example: 'Dr. Elena Magno' },
+          email: { type: 'string', example: 'elena.magno@msunaawan.edu.ph' },
+          department: { type: 'string', example: 'Department of Secondary and Elementary Education' },
+          unit: { type: 'string', enum: ['CESS', 'IDS'], example: 'CESS' },
+          position: { type: 'string', example: 'Associate Professor III' },
+          biography: { type: 'string', example: 'Specializes in Curriculum Development and Assessment.' },
+          consultationHours: { type: 'string', example: 'Tue/Thu 10:00 AM - 12:00 PM' },
+        },
+      },
+      SubjectListingCreateRequest: {
+        type: 'object',
+        required: ['subjectCode', 'subjectName'],
+        properties: {
+          subjectCode: { type: 'string', example: 'EDUC 115' },
+          subjectName: { type: 'string', example: 'Curriculum Innovation and Pedagogy' },
+          description: { type: 'string', example: 'Core teacher education course.' },
+          department: { type: 'string', example: 'Department of Secondary and Elementary Education' },
+          unit: { type: 'string', enum: ['CESS', 'IDS'], example: 'CESS' },
+          assignedFacultyId: { type: 'string', nullable: true },
+        },
+      },
+      SyllabusUpdateRequest: {
+        type: 'object',
+        properties: {
+          fileName: { type: 'string', example: 'EDUC101_Syllabus_Revised.pdf' },
+          fileUrl: { type: 'string', example: '/syllabi/EDUC101_Syllabus_Revised.pdf' },
+          academicYear: { type: 'string', example: '2026-2027' },
+          semester: { type: 'string', example: '2nd Semester' },
+          changeNotes: { type: 'string', example: 'Aligned with updated syllabus template.' },
+        },
+      },
+      HomepageInfoUpdateRequest: {
+        type: 'object',
+        properties: {
+          collegeName: { type: 'string', example: 'College of Education and Social Sciences (CESS)' },
+          universityName: { type: 'string', example: 'Mindanao State University at Naawan' },
+          tagline: { type: 'string', example: 'Excellence in Education and Social Inquiry' },
+          heroTitle: { type: 'string', example: 'CESS DocuFlow — Institutional Document Portal' },
+          heroSubtitle: { type: 'string' },
+          heroBannerUrl: { type: 'string', example: '/assets/banners/cess-campus-hero.jpg' },
+          about: { type: 'string' },
+          mission: { type: 'string' },
+          vision: { type: 'string' },
+          coreValues: { type: 'array', items: { type: 'string' } },
+          programsOffered: { type: 'array', items: { type: 'string' } },
+          officeInfo: {
+            type: 'object',
+            properties: {
+              officeName: { type: 'string' },
+              location: { type: 'string' },
+              publicEmail: { type: 'string' },
+              contactNumber: { type: 'string' },
+              officeHours: { type: 'string' },
+            },
+          },
+          publish: { type: 'boolean', default: true, description: 'If false, stages changes as draft without altering live approved homepage.' },
+          reason: { type: 'string', example: 'Updated AY 2026-2027 office hours and mission copy.' },
+        },
+      },
+      HomepageLogosUpdateRequest: {
+        type: 'object',
+        properties: {
+          universityLogo: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string', example: 'MSU at Naawan Official Seal' },
+              url: { type: 'string', example: '/assets/logos/msu-naawan-seal-v2.png' },
+              altText: { type: 'string' },
+              isApproved: { type: 'boolean', default: true },
+              isActive: { type: 'boolean', default: true },
+            },
+          },
+          collegeLogo: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string', example: 'CESS Official College Emblem' },
+              url: { type: 'string', example: '/assets/logos/cess-emblem-v2.png' },
+              altText: { type: 'string' },
+              isApproved: { type: 'boolean', default: true },
+              isActive: { type: 'boolean', default: true },
+            },
+          },
+          additionalLogos: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                name: { type: 'string' },
+                url: { type: 'string' },
+                altText: { type: 'string' },
+                isApproved: { type: 'boolean' },
+                isActive: { type: 'boolean' },
+              },
+            },
+          },
+          publish: { type: 'boolean', default: true },
+          reason: { type: 'string' },
+        },
+      },
+      FollowUpRuleUpdateRequest: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', example: 'Standard 3-Day Pending Document Reminder' },
+          enabled: { type: 'boolean', example: true },
+          reminderIntervalDays: { type: 'number', minimum: 1, maximum: 30, example: 3 },
+          cooldownHours: { type: 'number', minimum: 1, maximum: 720, example: 72 },
+          maxRemindersPerStage: { type: 'integer', minimum: 1, maximum: 20, example: 3 },
+          eligibleStatuses: {
+            type: 'array',
+            items: { type: 'string', enum: ['Submitted', 'Under_Review', 'With_External_Office', 'Returned_for_Revision'] },
+            example: ['Submitted', 'Under_Review', 'With_External_Office'],
+          },
+          eligibleOrigins: {
+            type: 'array',
+            items: { type: 'string', enum: ['CESS', 'IDS'] },
+            example: ['CESS', 'IDS'],
+          },
+          includeExpeditedOnly: { type: 'boolean', example: false },
+          notifyHoldingOffice: { type: 'boolean', example: true },
+          notifyRequester: { type: 'boolean', example: false },
+          notifySecretaryOnOverdue: { type: 'boolean', example: true },
+          escalationDays: { type: 'number', minimum: 1, maximum: 60, example: 5 },
+          reason: { type: 'string', example: 'Adjusted reminder interval and cooldown policy per College Council.' },
+        },
+      },
+      FollowUpRunRequest: {
+        type: 'object',
+        properties: {
+          dryRun: { type: 'boolean', default: false },
+          documentIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+          asOf: { type: 'string', format: 'date-time' },
+        },
+      },
     },
   },
   tags: [
@@ -220,6 +404,11 @@ Mindanao State University at Naawan
     { name: 'Reviewer Decisions', description: 'Office endorsement, final approval, returning & rejection' },
     { name: 'Document Types', description: 'Administrative document types, requirements checklist & templates (PB-44)' },
     { name: 'Workflow Routes', description: 'Office sequence configuration, CESS vs IDS routing & audit logs (PB-45)' },
+    { name: 'Notifications', description: 'In-system alerts, user preferences & Secretary email audit log (PB-05, PB-06, PB-42)' },
+    { name: 'Faculty & Syllabus Directory', description: 'Directory browsing, Secretary-managed templates, announcements & listings (PB-38, PB-40)' },
+    { name: 'Homepage & College Info', description: 'Public approved college homepage, logos & Secretary maintenance (PB-47)' },
+    { name: 'Automated Follow-Up Rules', description: 'Configurable pending reminder rules, duplicate guard & dispatch engine (PB-46)' },
+    { name: 'User & Role Management', description: 'User account inspection, role assignment, whitelist & audit logs (PB-43)' },
   ],
   paths: {
     '/api/health': {
@@ -358,6 +547,13 @@ Mindanao State University at Naawan
           { name: 'sort', in: 'query', schema: { type: 'string', enum: ['oldest', 'newest', 'waiting_longest'], default: 'oldest' }, description: 'PB-29: Queue ordering (default oldest eligible first / FIFO per SRS 3.9)' },
           { name: 'priority', in: 'query', schema: { type: 'string', enum: ['Urgent', 'Standard'] }, description: 'PB-29: Filter by priority' },
           { name: 'is_expedited', in: 'query', schema: { type: 'boolean' }, description: 'PB-29: Filter approved expedited exception requests only' },
+          { name: 'view', in: 'query', schema: { type: 'string', enum: ['active', 'archived', 'all'] }, description: 'PB-35: Filter by active vs archived lifecycle view' },
+          { name: 'archived', in: 'query', schema: { type: 'boolean' }, description: 'PB-35: Boolean shorthand for archived (true) vs active (false) records' },
+          { name: 'docTypeId', in: 'query', schema: { type: 'integer' }, description: 'PB-35: Filter by document type ID' },
+          { name: 'category', in: 'query', schema: { type: 'string' }, description: 'PB-35: Filter by document type / category name' },
+          { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['type', 'category', 'origin', 'audience', 'status'] }, description: 'PB-35: Group records into repository groups' },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date' }, description: 'PB-35: Filter records submitted on or after this date' },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date' }, description: 'PB-35: Filter records submitted on or before this date' },
         ],
         responses: {
           200: { description: 'List of accessible document requests' },
@@ -528,6 +724,77 @@ Mindanao State University at Naawan
         responses: {
           200: { description: 'Queues: intake, routed, returned, external, release, archived with counts' },
           403: { description: 'Forbidden: Secretary access only' },
+        },
+      },
+    },
+    '/api/documents/repository': {
+      get: {
+        summary: 'Browse Central Repository grouped by type/category with distinct Active and Archived views (PB-35)',
+        tags: ['Documents'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'view', in: 'query', schema: { type: 'string', enum: ['active', 'archived', 'all'], default: 'active' }, description: 'PB-35: Distinct active vs archived lifecycle view' },
+          { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['type', 'category', 'origin', 'audience', 'status'], default: 'type' }, description: 'PB-35: Repository grouping dimension' },
+          { name: 'docTypeId', in: 'query', schema: { type: 'integer' }, description: 'Filter by document type ID' },
+          { name: 'category', in: 'query', schema: { type: 'string' }, description: 'Filter by document type/category name' },
+          { name: 'origin', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS'] } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'includeEmpty', in: 'query', schema: { type: 'boolean', default: false }, description: 'Include empty eligible document type folders' },
+        ],
+        responses: {
+          200: { description: 'Grouped central repository records, category counts, and summary' },
+          400: { description: 'Invalid view or groupBy parameter' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/documents/archive': {
+      get: {
+        summary: 'Browse distinct Archived Records vault (Released, Rejected, Archived) grouped by type/category (PB-35)',
+        tags: ['Documents'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'groupBy', in: 'query', schema: { type: 'string', enum: ['type', 'category', 'origin', 'audience', 'status'], default: 'type' } },
+          { name: 'docTypeId', in: 'query', schema: { type: 'integer' } },
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+          { name: 'origin', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS'] } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'includeEmpty', in: 'query', schema: { type: 'boolean', default: false } },
+        ],
+        responses: {
+          200: { description: 'Grouped archived records vault strictly separated from active records' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
+    '/api/documents/{id}/archive': {
+      post: {
+        summary: 'Archive a document record into the central archive vault (PB-35 - CESS Secretary only)',
+        tags: ['Secretary Workstation'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  remarks: { type: 'string', example: 'Archived after completion.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Document archived and moved strictly to Archived view' },
+          400: { description: 'Document is already archived' },
+          403: { description: 'Forbidden: Only CESS Secretary may archive documents' },
+          404: { description: 'Document not found' },
         },
       },
     },
@@ -837,6 +1104,61 @@ Mindanao State University at Naawan
         },
       },
     },
+    '/api/notifications/logs': {
+      get: {
+        summary: 'List all system emails and workflow notification audit logs (PB-42, PB-49 - Secretary only)',
+        description: 'Secretary sees all system emails and only workflow notifications. Passwords, OTP codes, recovery tokens, and SMTP secrets are automatically redacted.',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['Sent', 'Failed', 'Pending'] } },
+          { name: 'deliveryMethod', in: 'query', schema: { type: 'string', enum: ['Email', 'In_System', 'Both'] } },
+          { name: 'notificationType', in: 'query', schema: { type: 'string', enum: ['Status_Update', 'Reminder_3_Days', 'Return_Alert', 'Reject_Alert', 'Release_Alert', 'Notice_Minutes_Alert'] } },
+          { name: 'category', in: 'query', schema: { type: 'string', enum: ['all', 'workflow', 'system_email'] }, description: 'Filter by workflow notifications or system emails' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Search sanitized title, event, recipient, control number, or safe error details' },
+          { name: 'documentId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'recipientId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } },
+          { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } },
+        ],
+        responses: {
+          200: { description: 'Sanitized system email and workflow notification logs with full totals (total, sent, failed, pending)' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Only College Secretary may access notification audit logs' },
+        },
+      },
+    },
+    '/api/notifications/logs/{id}': {
+      get: {
+        summary: 'Inspect a single notification audit log entry with sanitized error details (PB-42 - Secretary only)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Single sanitized notification audit log entry' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden' },
+          404: { description: 'Notification log entry not found' },
+        },
+      },
+    },
+    '/api/notifications/logs/{id}/retry': {
+      post: {
+        summary: 'Retry a failed email notification without corrupting request state (PB-42 / REQ-NOT-4 - Secretary only)',
+        tags: ['Notifications'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Retry executed; returns updated log state, retryAudit metadata, and safeError if delivery failed again' },
+          400: { description: 'Cannot retry (already sent, in-system-only, or sensitive OTP email)' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Notification log entry not found' },
+        },
+      },
+    },
     '/api/workflow/routes/history': {
       get: {
         summary: 'Get chronological audit log of route sequence modifications (PB-45)',
@@ -844,6 +1166,613 @@ Mindanao State University at Naawan
         security: [{ bearerAuth: [] }],
         responses: {
           200: { description: 'Full history of route changes with reasons and actor details' },
+        },
+      },
+    },
+    '/api/directory': {
+      get: {
+        summary: 'Browse faculty, assigned subjects, and CESS/IDS directory (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'unit', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS', 'all'] } },
+          { name: 'department', in: 'query', schema: { type: 'string' } },
+          { name: 'subjectCode', in: 'query', schema: { type: 'string' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'Role-scoped directory distinguishing CESS and IDS units and permitted syllabi' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Unit filter outside role permissions' },
+        },
+      },
+    },
+    '/api/directory/faculty': {
+      post: {
+        summary: 'Create an approved faculty directory listing (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/FacultyListingUpsertRequest' } } },
+        },
+        responses: {
+          201: { description: 'Approved faculty directory listing created with audit record' },
+          400: { description: 'Validation error' },
+          403: { description: 'Forbidden: Only College Secretary may manage approved directory listings' },
+        },
+      },
+    },
+    '/api/directory/faculty/{id}': {
+      get: {
+        summary: 'Get faculty member profile, assigned subjects, and permitted syllabi (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Faculty entry with role-verified syllabus visibility' },
+          403: { description: 'Forbidden: Faculty belongs to an unauthorized unit' },
+          404: { description: 'Faculty not found' },
+        },
+      },
+      put: {
+        summary: 'Update an approved faculty directory listing (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/FacultyListingUpsertRequest' } } },
+        },
+        responses: {
+          200: { description: 'Approved faculty directory listing updated' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Faculty directory listing not found' },
+        },
+      },
+      delete: {
+        summary: 'Remove a faculty listing from the approved directory (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Faculty listing removed from approved directory' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Faculty directory listing not found' },
+        },
+      },
+    },
+    '/api/directory/subjects': {
+      get: {
+        summary: 'Browse subjects with CESS/IDS distinction and assigned faculty (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'unit', in: 'query', schema: { type: 'string', enum: ['CESS', 'IDS', 'all'] } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'List of subjects with assigned faculty and role-scoped syllabus status' },
+          403: { description: 'Forbidden' },
+        },
+      },
+      post: {
+        summary: 'Create an approved subject directory listing (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/SubjectListingCreateRequest' } } },
+        },
+        responses: {
+          201: { description: 'Approved subject listing created' },
+          403: { description: 'Forbidden: Secretary only' },
+          409: { description: 'Subject already exists' },
+        },
+      },
+    },
+    '/api/directory/subjects/{code}': {
+      get: {
+        summary: 'Get subject details and assigned faculty (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Subject details with assigned faculty' },
+          403: { description: 'Forbidden' },
+          404: { description: 'Subject not found' },
+        },
+      },
+      put: {
+        summary: 'Update an approved subject listing or faculty assignment (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/SubjectListingCreateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Approved subject listing updated' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Subject listing not found' },
+        },
+      },
+      delete: {
+        summary: 'Remove a subject listing from the approved directory (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Subject listing removed' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'Subject listing not found' },
+        },
+      },
+    },
+    '/api/directory/syllabi': {
+      get: {
+        summary: 'List permitted syllabi for authenticated user (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Filtered list of syllabi visible to the caller' },
+        },
+      },
+      post: {
+        summary: 'Upload or replace syllabus with optional non-silent-overwrite guard and version archival (PB-38, PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['subjectCode'],
+                properties: {
+                  facultyId: { type: 'string' },
+                  subjectCode: { type: 'string', example: 'EDUC 101' },
+                  subjectName: { type: 'string' },
+                  academicYear: { type: 'string', default: '2026-2027' },
+                  semester: { type: 'string', default: '1st Semester' },
+                  fileName: { type: 'string' },
+                  fileUrl: { type: 'string' },
+                  overwrite: { type: 'boolean', default: true, description: 'Set false to prevent overwriting an existing term syllabus (returns 409 Conflict).' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Syllabus saved (previous version archived when replaced)' },
+          403: { description: 'Forbidden: Faculty may only manage own syllabi' },
+          409: { description: 'Conflict: Existing syllabus protected when overwrite=false' },
+        },
+      },
+    },
+    '/api/directory/syllabi/{syllabusId}': {
+      get: {
+        summary: 'Open syllabus details with strict permission enforcement (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'syllabusId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Syllabus metadata and file URL' },
+          403: { description: 'Forbidden: Syllabus access denied for current role/unit/program' },
+          404: { description: 'Syllabus not found' },
+        },
+      },
+      put: {
+        summary: 'Explicitly update an existing syllabus and archive previous version (PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'syllabusId', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/SyllabusUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Syllabus updated with version history preserved' },
+          403: { description: 'Forbidden' },
+          404: { description: 'Syllabus not found' },
+        },
+      },
+      delete: {
+        summary: 'Remove a syllabus (own faculty load or Secretary) (PB-38)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'syllabusId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Syllabus removed' },
+          403: { description: 'Forbidden' },
+        },
+      },
+    },
+    '/api/directory/syllabi/{syllabusId}/history': {
+      get: {
+        summary: 'Get traceable version history for a specific syllabus (PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'syllabusId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Previous archived versions of the syllabus' },
+          403: { description: 'Forbidden' },
+          404: { description: 'Syllabus not found' },
+        },
+      },
+    },
+    '/api/directory/template': {
+      get: {
+        summary: 'Get current official CESS course syllabus template (PB-38, PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Current official syllabus template metadata and downloadUrl' } },
+      },
+      put: {
+        summary: 'Replace official CESS course syllabus template and auto-publish faculty announcement (PB-40 - Secretary only)',
+        description: 'Replaces the official syllabus template, increments template version history, leaves existing faculty syllabi untouched, and publishes an announcement.',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/OfficialTemplateUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Official template updated, traceable history recorded, and announcement published' },
+          400: { description: 'Validation error (fileName required)' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+      post: {
+        summary: 'Upload/replace official CESS course syllabus template (alias of PUT /api/directory/template, PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/OfficialTemplateUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Official template updated and announcement published' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/directory/template/download': {
+      get: {
+        summary: 'Download or resolve the current official syllabus template (PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'download', in: 'query', schema: { type: 'boolean', default: false }, description: 'Set true to stream file attachment response' },
+        ],
+        responses: {
+          200: { description: 'Always resolves to the latest active official syllabus template' },
+        },
+      },
+    },
+    '/api/directory/template/history': {
+      get: {
+        summary: 'Get traceable version history of official syllabus template changes (PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Versioned history of official syllabus template updates' },
+        },
+      },
+    },
+    '/api/directory/announcements': {
+      get: {
+        summary: 'List published college/template announcements for directory users (PB-40)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'audience', in: 'query', schema: { type: 'string', enum: ['All', 'Faculty', 'Student'] } },
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'List of published announcements (including automatic syllabus-template change notices)' },
+        },
+      },
+      post: {
+        summary: 'Publish a directory or syllabus announcement (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['title', 'content'],
+                properties: {
+                  title: { type: 'string' },
+                  content: { type: 'string' },
+                  targetAudience: { type: 'string', enum: ['All', 'Faculty', 'Student'], default: 'Faculty' },
+                  category: { type: 'string', default: 'directory' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Announcement published' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/directory/announcements/{id}': {
+      delete: {
+        summary: 'Delete an announcement (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Announcement removed' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/directory/audit-logs': {
+      get: {
+        summary: 'Inspect traceable audit logs for template & approved directory listing changes (PB-40 - Secretary only)',
+        tags: ['Faculty & Syllabus Directory'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 100 } }],
+        responses: {
+          200: { description: 'Traceable directory and template change log' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/auth/users/{id}': {
+      get: {
+        summary: 'Inspect single user account, role, and whitelist verification state (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'User account and role details' },
+          403: { description: 'Forbidden: Secretary only' },
+          404: { description: 'User not found' },
+        },
+      },
+      put: {
+        summary: 'Update user profile, role, unit, or status with audit trail (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'User updated' },
+          403: { description: 'Forbidden: Secretary only' },
+          409: { description: 'Duplicate email conflict prevented' },
+        },
+      },
+    },
+    '/api/auth/users/{id}/role': {
+      patch: {
+        summary: 'Update verified role assignment with session invalidation & audit log (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Role updated' },
+          400: { description: 'Invalid role or self-demotion denied' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/auth/users/{id}/status': {
+      patch: {
+        summary: 'Activate or deactivate user account with session/office revocation & audit log (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Status updated' },
+          400: { description: 'Invalid status or self-deactivation denied' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/auth/whitelist': {
+      get: {
+        summary: 'List approved institutional whitelist entries (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Approved whitelist list' }, 403: { description: 'Forbidden' } },
+      },
+      post: {
+        summary: 'Add single entry to approved whitelist with duplicate check (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        responses: { 201: { description: 'Whitelist entry created' }, 409: { description: 'Duplicate entry prevented' } },
+      },
+    },
+    '/api/auth/audit-logs': {
+      get: {
+        summary: 'Inspect traceable user, role, and whitelist audit logs (PB-43)',
+        tags: ['User & Role Management'],
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Chronological user/role/whitelist audit log' }, 403: { description: 'Forbidden' } },
+      },
+    },
+
+    // --- HOMEPAGE & COLLEGE INFO (PB-47) ---
+    '/api/homepage': {
+      get: {
+        summary: 'Get approved public homepage and college information & logos (PB-47 - Public)',
+        description: 'Publicly accessible endpoint (SRS 3.13.2). Returns strictly approved college copy, active institutional logos, and public-audience announcements without exposing drafts or restricted data.',
+        tags: ['Homepage & College Info'],
+        responses: {
+          200: { description: 'Approved institutional homepage information and active official logos' },
+        },
+      },
+      put: {
+        summary: 'Update homepage and college information (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/HomepageInfoUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Homepage info updated (published or staged draft)' },
+          400: { description: 'Validation error or unsafe URL rejected' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Only College Secretary may update homepage info' },
+        },
+      },
+    },
+    '/api/homepage/public': {
+      get: {
+        summary: 'Public alias for approved homepage and college information (PB-47)',
+        tags: ['Homepage & College Info'],
+        responses: {
+          200: { description: 'Approved public homepage information' },
+        },
+      },
+    },
+    '/api/homepage/logos': {
+      get: {
+        summary: 'Get approved active institutional and college logos (PB-47 - Public)',
+        tags: ['Homepage & College Info'],
+        responses: {
+          200: { description: 'Approved active university, college, and additional logos' },
+        },
+      },
+      put: {
+        summary: 'Update approved university and college logos (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/HomepageLogosUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Institutional logos updated' },
+          400: { description: 'Invalid or unsafe logo URL' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/homepage/manage': {
+      get: {
+        summary: 'View both approved homepage state and pending draft edits (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Approved content, draft state, and change summary' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/homepage/publish': {
+      post: {
+        summary: 'Approve and publish staged homepage/logo draft to live public view (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  reason: { type: 'string', example: 'Approved by Dean and College Secretary.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Staged draft approved and published live' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/homepage/history': {
+      get: {
+        summary: 'Inspect traceable homepage and logo revision history (PB-47 - Secretary only)',
+        tags: ['Homepage & College Info'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } }],
+        responses: {
+          200: { description: 'Chronological list of homepage updates and publications' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+
+    // --- AUTOMATED FOLLOW-UP RULES (PB-46) ---
+    '/api/follow-up-rules': {
+      get: {
+        summary: 'Get active automated follow-up and pending reminder rule configuration (PB-46 - Secretary only)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Active follow-up configuration rule with allowed statuses and origins' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Only College Secretary may configure automated follow-up rules' },
+        },
+      },
+      put: {
+        summary: 'Update reminder interval, cooldown, conditions, and notification targets (PB-46 - Secretary only)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/FollowUpRuleUpdateRequest' } } },
+        },
+        responses: {
+          200: { description: 'Follow-up rules updated and recorded in admin change history' },
+          400: { description: 'Validation error (invalid interval, cooldown, statuses, or target settings)' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/follow-up-rules/history': {
+      get: {
+        summary: 'View automated follow-up rule configuration change history and run executions (PB-46 - Secretary only)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } }],
+        responses: {
+          200: { description: 'Chronological rule configuration changes and recent evaluation runs' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/follow-up-rules/candidates': {
+      get: {
+        summary: 'Preview pending documents matching follow-up rule conditions (dry run) (PB-46 - Secretary only)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'documentId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'asOf', in: 'query', schema: { type: 'string', format: 'date-time' } },
+        ],
+        responses: {
+          200: { description: 'Dry-run evaluation showing eligible documents, targets, preferences, and duplicate blocks' },
+          403: { description: 'Forbidden: Secretary only' },
+        },
+      },
+    },
+    '/api/follow-up-rules/run': {
+      post: {
+        summary: 'Evaluate overdue pending documents and dispatch reminders respecting preferences & duplicate cooldown (PB-46)',
+        tags: ['Automated Follow-Up Rules'],
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/FollowUpRunRequest' } } },
+        },
+        responses: {
+          200: { description: 'Evaluation summary with dispatched, duplicate-skipped, preference-routed, and failure counts' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden: Secretary only' },
         },
       },
     },

@@ -125,6 +125,7 @@ const NotificationController = {
 
   /**
    * PB-42 & PB-49: System-wide Email & Notification Logs (College Secretary / Admin only)
+   * PO Note: Secretary sees all system emails and only workflow notifications.
    */
   async getNotificationLogs(req, res, next) {
     try {
@@ -132,11 +133,125 @@ const NotificationController = {
         status: req.query.status,
         deliveryMethod: req.query.deliveryMethod,
         notificationType: req.query.notificationType,
+        category: req.query.category,
+        scope: req.query.scope,
+        search: req.query.search,
+        documentId: req.query.documentId,
+        recipientId: req.query.recipientId,
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo,
         limit: req.query.limit,
         offset: req.query.offset,
       });
 
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * PB-42: Inspect single email / workflow notification log detail (Secretary only)
+   */
+  async getNotificationLogById(req, res, next) {
+    try {
+      const log = await NotificationModel.getLogById(req.params.id);
+      if (!log) {
+        return res.status(404).json({ error: 'Notification log entry not found.' });
+      }
+      if (!log.visibleToSecretary) {
+        return res.status(403).json({
+          error: 'Forbidden: Only system emails and workflow notifications are visible in this log.',
+        });
+      }
+      res.json({ log });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * PB-42 / SRS REQ-NOT-4: Retry failed email delivery safely (Secretary only)
+   */
+  async retryNotificationLog(req, res, next) {
+    try {
+      const log = await NotificationModel.getLogById(req.params.id);
+      if (!log) {
+        return res.status(404).json({ error: 'Notification log entry not found.' });
+      }
+      if (!log.visibleToSecretary) {
+        return res.status(403).json({
+          error: 'Forbidden: Only system emails and workflow notifications can be managed here.',
+        });
+      }
+      if (log.delivery_method === 'In_System') {
+        return res.status(400).json({
+          error: 'Cannot retry email delivery for an in-system-only notification.',
+        });
+      }
+      if (log.status === 'Sent') {
+        return res.status(400).json({
+          error: 'Notification has already been delivered successfully.',
+        });
+      }
+      if (!log.retryable) {
+        return res.status(400).json({
+          error: 'Sensitive authentication/OTP emails cannot be automatically retried from audit logs.',
+        });
+      }
+
+      const retryCtx = NotificationModel.getEmailRetryContext(log.notification_id);
+      const targetEmail = retryCtx?.to || log.recipientSummary?.email;
+      if (!targetEmail) {
+        return res.status(400).json({
+          error: 'Recipient email address is unavailable for retry.',
+        });
+      }
+
+      const cleanBodyText = String(retryCtx?.text || log.message || '')
+        .replace(/\n?\[Delivery Error:[^\]]+\]/gi, '')
+        .trim();
+      const subjectLine = retryCtx?.subject || log.title || '[CESS DocuFlow] Notification';
+
+      const dispatchResult = await EmailService.sendMail({
+        to: targetEmail,
+        subject: subjectLine,
+        text: cleanBodyText,
+        html:
+          retryCtx?.html ||
+          `<p>${cleanBodyText.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</p>`,
+        recipientId: log.recipient_id,
+        documentId: log.document_id,
+        notificationType: log.notification_type,
+        skipCreateLog: true,
+      });
+
+      const auditInfo = NotificationModel.recordRetryAttempt(log.notification_id, {
+        success: dispatchResult.success,
+        retriedBy: req.user?.name || req.user?.email || 'College Secretary',
+      });
+
+      const nowIso = new Date().toISOString();
+      const updatedMessage = dispatchResult.success
+        ? `${cleanBodyText}\n[Retried and delivered at ${nowIso}]`.trim()
+        : `${cleanBodyText}\n[Delivery Error: ${dispatchResult.error || 'Email delivery failed.'}]`.trim();
+
+      const updatedLog = await NotificationModel.updateLogStatus(log.notification_id, {
+        status: dispatchResult.success ? 'Sent' : 'Failed',
+        sentAt: nowIso,
+        message: updatedMessage,
+      });
+
+      return res.json({
+        retried: true,
+        delivered: Boolean(dispatchResult.success),
+        message: dispatchResult.success
+          ? 'Email delivery retry succeeded.'
+          : 'Email delivery retry failed; request state remains intact.',
+        safeError: dispatchResult.success ? null : dispatchResult.error || 'Email delivery failed.',
+        retryAudit: auditInfo,
+        log: updatedLog || (await NotificationModel.getLogById(log.notification_id)),
+      });
     } catch (err) {
       next(err);
     }

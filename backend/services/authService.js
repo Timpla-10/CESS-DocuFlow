@@ -24,6 +24,92 @@ const MIN_PASSWORD_LENGTH = 8;
 const passwordResetTokens = new Map(); // tokenHash -> { email, userId, expiresAt, used, createdAt }
 const customPasswordHashes = new Map(); // email -> sha256(password)
 const securityAuditLogs = []; // Sanitized security event log entries
+const userManagementAuditLogs = []; // PB-43: Traceable user, role, & whitelist audit log entries
+const pendingRequestedRoles = new Map(); // email -> requestedRole captured during unapproved registration
+
+const PRIVILEGED_ROLES = new Set([
+  ROLES.SECRETARY,
+  ROLES.CHAIRPERSON,
+  ROLES.IDS_PRINCIPAL,
+  ROLES.DEAN,
+  ROLES.OVCAA,
+  ROLES.VCAF,
+  ROLES.CHANCELLOR,
+]);
+
+function assertValidRole(role) {
+  const normalized = String(role || '').trim().toLowerCase();
+  if (!ALL_ROLES.includes(normalized)) {
+    const err = new Error(`Invalid role '${role}'. Permitted roles: ${ALL_ROLES.join(', ')}.`);
+    err.status = 400;
+    throw err;
+  }
+  return normalized;
+}
+
+function summarizeUserSnapshot(user) {
+  if (!user) return null;
+  return {
+    id: user.id || user.user_id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    origin: user.origin,
+    department: user.department,
+    account_status: user.account_status,
+    is_whitelisted: user.is_whitelisted,
+    active: Boolean(user.active),
+  };
+}
+
+function recordUserManagementEvent({
+  action,
+  actor = null,
+  targetUser = null,
+  targetEmail = null,
+  targetId = null,
+  before = null,
+  after = null,
+  reason = null,
+  metadata = {},
+}) {
+  const entry = {
+    id: crypto.randomUUID(),
+    timestamp: new Date().toISOString(),
+    action,
+    actorId: actor?.id || actor?.user_id || null,
+    actorEmail: actor?.email || null,
+    actorName: actor?.name || null,
+    actorRole: actor?.role || null,
+    targetUserId: targetId || targetUser?.id || targetUser?.user_id || null,
+    targetEmail: targetEmail || targetUser?.email || null,
+    before: before ? sanitizeForLog(before) : null,
+    after: after ? sanitizeForLog(after) : null,
+    reason: reason || null,
+    metadata: sanitizeForLog(metadata),
+  };
+
+  userManagementAuditLogs.unshift(entry);
+  if (userManagementAuditLogs.length > 1000) {
+    userManagementAuditLogs.length = 1000;
+  }
+
+  recordSecurityEvent({
+    event: `pb43_${action}`,
+    email: entry.targetEmail || entry.actorEmail,
+    userId: entry.targetUserId || entry.actorId,
+    status: action.includes('blocked') ? 'failure' : 'success',
+    message: `[PB-43] ${action}${entry.targetEmail ? ` for ${entry.targetEmail}` : ''}${entry.actorEmail ? ` by ${entry.actorEmail}` : ''}`,
+    metadata: {
+      before: entry.before,
+      after: entry.after,
+      reason: entry.reason,
+      ...entry.metadata,
+    },
+  });
+
+  return entry;
+}
 
 const SENSITIVE_KEYS = new Set([
   'password',
@@ -242,15 +328,17 @@ async function provisionVerifiedUser({
     if (urErr) throw new Error(`user_role insert failed: ${urErr.message}`);
   }
 
-  // 4. Assign office in `user_office` junction table (for reviewing & admin roles)
-  const officeName = ROLE_TO_OFFICE_NAME[safeRole];
-  if (officeName) {
-    const officeId = await UserModel.getOfficeIdByName(officeName);
-    if (officeId) {
-      await supabase.from('user_office').delete().eq('user_id', authUserId);
-      await supabase
-        .from('user_office')
-        .insert({ user_id: authUserId, office_id: officeId });
+  // 4. Assign office in `user_office` junction table ONLY when account is verified/active & whitelisted
+  await supabase.from('user_office').delete().eq('user_id', authUserId);
+  if (accountStatus === 'Active' && isWhitelisted === true) {
+    const officeName = ROLE_TO_OFFICE_NAME[safeRole];
+    if (officeName) {
+      const officeId = await UserModel.getOfficeIdByName(officeName);
+      if (officeId) {
+        await supabase
+          .from('user_office')
+          .insert({ user_id: authUserId, office_id: officeId });
+      }
     }
   }
 
@@ -915,13 +1003,19 @@ const AuthService = {
     const existingUser = await UserModel.findByEmail(cleanEmail);
 
     if (existingUser && existingUser.account_status === 'Active') {
+      recordUserManagementEvent({
+        action: 'duplicate_account_blocked',
+        targetUser: existingUser,
+        targetEmail: cleanEmail,
+        reason: 'Self-registration attempted for an already active account.',
+      });
       const err = new Error('An account with this institutional email already exists. Please proceed to Sign In.');
       err.status = 409;
       throw err;
     }
 
     // 1. If already pre-registered in "User" with is_whitelisted = true -> Auto-Verify & Activate!
-    if (existingUser && existingUser.is_whitelisted) {
+    if (existingUser && existingUser.is_whitelisted && existingUser.account_status !== 'Inactive') {
       const activated = await provisionVerifiedUser({
         email: cleanEmail,
         password: input.password,
@@ -931,6 +1025,14 @@ const AuthService = {
         department: existingUser.department || input.department || 'CESS',
         accountStatus: 'Active',
         isWhitelisted: true,
+      });
+
+      recordUserManagementEvent({
+        action: 'whitelist_auto_activated',
+        targetUser: activated,
+        before: summarizeUserSnapshot(existingUser),
+        after: summarizeUserSnapshot(activated),
+        reason: 'Verified against approved whitelist during self-registration.',
       });
 
       // Send real email notification via Nodemailer
@@ -952,6 +1054,12 @@ const AuthService = {
     }
 
     if (existingUser && existingUser.account_status === 'Pending_Verification') {
+      recordUserManagementEvent({
+        action: 'duplicate_account_blocked',
+        targetUser: existingUser,
+        targetEmail: cleanEmail,
+        reason: 'Duplicate registration attempted while already pending verification.',
+      });
       const err = new Error(
         'Your registration is already pending verification with the College Secretary.'
       );
@@ -959,27 +1067,61 @@ const AuthService = {
       throw err;
     }
 
-    // 2. Not on Whitelist -> Create in "User" with account_status = 'Pending_Verification', is_whitelisted = false
-    const requestedRole = ALL_ROLES.includes(input.requestedRole)
-      ? input.requestedRole
-      : ROLES.STUDENT;
+    if (existingUser && existingUser.account_status === 'Inactive') {
+      recordUserManagementEvent({
+        action: 'unapproved_access_blocked',
+        targetUser: existingUser,
+        targetEmail: cleanEmail,
+        reason: 'Deactivated or previously rejected account attempted self-registration.',
+      });
+      const err = new Error(
+        'This account is deactivated or was previously rejected by the College Secretary. Please contact the administrator.'
+      );
+      err.status = 403;
+      throw err;
+    }
+
+    // 2. Not on Whitelist -> Create in "User" with account_status = 'Pending_Verification', is_whitelisted = false.
+    // PB-43 Security Criterion: Unapproved users cannot self-assign privileged roles.
+    const claimedRole = String(input.requestedRole || ROLES.STUDENT).trim().toLowerCase();
+    const isPrivilegedClaim = PRIVILEGED_ROLES.has(claimedRole);
+    const safePendingRole = claimedRole === ROLES.FACULTY ? ROLES.FACULTY : ROLES.STUDENT;
+    pendingRequestedRoles.set(cleanEmail, claimedRole);
 
     const pendingUser = await provisionVerifiedUser({
       email: cleanEmail,
       password: input.password,
       name: cleanName,
-      role: requestedRole,
+      role: safePendingRole,
       origin: input.origin === 'IDS' ? 'IDS' : 'CESS',
       department: (input.department || 'General').trim(),
       accountStatus: 'Pending_Verification',
       isWhitelisted: false,
     });
 
+    if (isPrivilegedClaim) {
+      recordUserManagementEvent({
+        action: 'privilege_escalation_blocked',
+        targetUser: pendingUser,
+        targetEmail: cleanEmail,
+        after: summarizeUserSnapshot(pendingUser),
+        reason: `Unapproved self-registration claimed privileged role '${claimedRole}'; capped to '${safePendingRole}' pending Secretary verification.`,
+        metadata: { claimedRole },
+      });
+    } else {
+      recordUserManagementEvent({
+        action: 'registration_queued',
+        targetUser: pendingUser,
+        after: summarizeUserSnapshot(pendingUser),
+        reason: 'New unwhitelisted applicant queued for College Secretary verification.',
+      });
+    }
+
     // Send real email notification via Nodemailer
     EmailService.sendRegistrationQueuedEmail({
       to: cleanEmail,
       name: cleanName,
-      requestedRole,
+      requestedRole: safePendingRole,
       department: (input.department || 'General').trim(),
     }).catch((mailErr) => {
       console.warn(`[Nodemailer] Warning: Could not deliver queued registration email to ${cleanEmail}:`, mailErr.message);
@@ -989,12 +1131,15 @@ const AuthService = {
       status: 'pending',
       verificationSource: 'admin_verification_queue',
       message: 'Email not found in pre-loaded whitelist. Registration queued for College Secretary verification.',
-      pending: pendingUser,
+      pending: {
+        ...pendingUser,
+        claimedRole: isPrivilegedClaim ? claimedRole : safePendingRole,
+      },
     };
   },
 
   /**
-   * PB-02: Admin (College Secretary) approves a pending registration and assigns verified role
+   * PB-02 & PB-43: Admin (College Secretary) approves a pending registration and assigns verified role
    */
   async approvePendingRegistration(actor, registrationId, overrides = {}) {
     if (!canPerformAction(actor, 'verify_registration')) {
@@ -1010,9 +1155,15 @@ const AuthService = {
       throw err;
     }
 
-    const verifiedRole = overrides.role || reg.role;
+    if (reg.account_status !== 'Pending_Verification') {
+      const err = new Error(`Registration is already processed (current status: ${reg.account_status}).`);
+      err.status = 409;
+      throw err;
+    }
+
+    const verifiedRole = overrides.role ? assertValidRole(overrides.role) : reg.role;
     const verifiedDepartment = overrides.department || reg.department;
-    const verifiedOrigin = overrides.origin || reg.origin || 'CESS';
+    const verifiedOrigin = overrides.origin ? (String(overrides.origin).toUpperCase() === 'IDS' ? 'IDS' : 'CESS') : (reg.origin || 'CESS');
 
     const verifiedUser = await provisionVerifiedUser({
       email: reg.email,
@@ -1023,6 +1174,17 @@ const AuthService = {
       department: verifiedDepartment,
       accountStatus: 'Active',
       isWhitelisted: true,
+    });
+
+    pendingRequestedRoles.delete(String(reg.email || '').toLowerCase());
+
+    recordUserManagementEvent({
+      action: 'registration_approved',
+      actor,
+      targetUser: verifiedUser,
+      before: summarizeUserSnapshot(reg),
+      after: summarizeUserSnapshot(verifiedUser),
+      reason: overrides.reason || 'Verified and approved by College Secretary.',
     });
 
     // Send real activation email via Nodemailer
@@ -1043,7 +1205,7 @@ const AuthService = {
   },
 
   /**
-   * PB-02: Admin (College Secretary) rejects a pending registration
+   * PB-02 & PB-43: Admin (College Secretary) rejects a pending registration
    */
   async rejectPendingRegistration(actor, registrationId, reason) {
     if (!canPerformAction(actor, 'verify_registration')) {
@@ -1053,14 +1215,36 @@ const AuthService = {
     }
 
     const reg = await UserModel.findPendingById(registrationId);
+    if (!reg) {
+      const err = new Error('Pending registration record not found.');
+      err.status = 404;
+      throw err;
+    }
 
     const { error } = await supabase
       .from('User')
-      .update({ account_status: 'Inactive', is_whitelisted: false })
+      .update({
+        account_status: 'Inactive',
+        is_whitelisted: false,
+        updated_at: new Date().toISOString(),
+      })
       .eq('user_id', registrationId);
     if (error) throw error;
 
+    await UserModel.revokeUserOffices(registrationId);
+    SessionModel.revokeAllUserSessions(registrationId);
+    pendingRequestedRoles.delete(String(reg.email || '').toLowerCase());
+
     const updated = await UserModel.findById(registrationId);
+
+    recordUserManagementEvent({
+      action: 'registration_rejected',
+      actor,
+      targetUser: updated,
+      before: summarizeUserSnapshot(reg),
+      after: summarizeUserSnapshot(updated),
+      reason: reason || 'Application credentials could not be verified against institutional masterlists.',
+    });
 
     // PB-02: Notify student/faculty when Secretary rejects their account
     if (reg?.email) {
@@ -1077,9 +1261,10 @@ const AuthService = {
   },
 
   /**
-   * PB-02: Admin (College Secretary) imports/updates Whitelist Masterlist into `"User"` + `user_role`
+   * PB-02 & PB-43: Admin (College Secretary) imports/updates Whitelist Masterlist into `"User"` + `user_role`
+   * Deduplicates batch entries and updates existing records in place without creating duplicates.
    */
-  async importWhitelist(actor, entries) {
+  async importWhitelist(actor, entries, term = null) {
     if (!canPerformAction(actor, 'manage_whitelist')) {
       const err = new Error('Forbidden: Only the College Secretary can manage the whitelist.');
       err.status = 403;
@@ -1093,32 +1278,172 @@ const AuthService = {
     }
 
     const results = [];
+    const seenEmails = new Set();
+    const skippedDuplicates = [];
+    const invalidEntries = [];
+    let createdCount = 0;
+    let updatedCount = 0;
+
     for (const item of entries) {
       const cleanEmail = (item.email || '').trim().toLowerCase();
-      if (!isInstitutionalEmail(cleanEmail)) continue;
+      if (!isInstitutionalEmail(cleanEmail)) {
+        invalidEntries.push({ email: cleanEmail || null, reason: 'Invalid or non-institutional email.' });
+        continue;
+      }
 
+      if (seenEmails.has(cleanEmail)) {
+        skippedDuplicates.push({ email: cleanEmail, reason: 'Duplicate email within import batch.' });
+        continue;
+      }
+      seenEmails.add(cleanEmail);
+
+      const candidateRole = String(item.role || ROLES.STUDENT).trim().toLowerCase();
+      if (!ALL_ROLES.includes(candidateRole)) {
+        invalidEntries.push({ email: cleanEmail, reason: `Unsupported role '${item.role}'.` });
+        continue;
+      }
+
+      const existing = await UserModel.findByEmail(cleanEmail);
       const saved = await provisionVerifiedUser({
         email: cleanEmail,
-        name: (item.name || '').trim(),
-        role: item.role || ROLES.STUDENT,
+        name: (item.name || existing?.name || '').trim(),
+        role: candidateRole,
         origin: item.origin === 'IDS' ? 'IDS' : 'CESS',
-        department: (item.department || 'CESS').trim(),
+        department: (item.department || existing?.department || 'CESS').trim(),
         accountStatus: 'Active',
         isWhitelisted: true,
       });
+
+      if (existing) {
+        updatedCount += 1;
+      } else {
+        createdCount += 1;
+      }
       results.push(saved);
     }
 
+    recordUserManagementEvent({
+      action: 'whitelist_imported',
+      actor,
+      reason: `Masterlist whitelist import${term ? ` (${term})` : ''}: ${createdCount} created, ${updatedCount} synced, ${skippedDuplicates.length} duplicate(s) skipped.`,
+      metadata: {
+        term: term || null,
+        importedCount: results.length,
+        createdCount,
+        updatedCount,
+        duplicateCount: skippedDuplicates.length,
+        invalidCount: invalidEntries.length,
+      },
+    });
+
     return {
       importedCount: results.length,
+      createdCount,
+      updatedCount,
+      duplicateCount: skippedDuplicates.length,
+      skippedDuplicates,
+      invalidEntries,
       entries: results,
     };
   },
 
   /**
-   * PB-02: Admin (College Secretary) directly creates or updates a user account & role
+   * PB-43: Admin adds a single whitelist entry with duplicate prevention
    */
-  async saveUserAccount(actor, input) {
+  async addWhitelistEntry(actor, input = {}) {
+    if (!canPerformAction(actor, 'manage_whitelist')) {
+      const err = new Error('Forbidden: Only the College Secretary can manage the whitelist.');
+      err.status = 403;
+      throw err;
+    }
+
+    const cleanEmail = (input.email || '').trim().toLowerCase();
+    if (!isInstitutionalEmail(cleanEmail)) {
+      const err = new Error('Email must end with @msunaawan.edu.ph.');
+      err.status = 400;
+      throw err;
+    }
+
+    const safeRole = input.role ? assertValidRole(input.role) : ROLES.STUDENT;
+    const existing = await UserModel.findByEmail(cleanEmail);
+    if (existing && existing.is_whitelisted && existing.account_status === 'Active') {
+      recordUserManagementEvent({
+        action: 'duplicate_account_blocked',
+        actor,
+        targetUser: existing,
+        targetEmail: cleanEmail,
+        reason: 'Attempted to add an already whitelisted active email entry.',
+      });
+      const err = new Error(`Duplicate whitelist entry prevented: '${cleanEmail}' is already whitelisted.`);
+      err.status = 409;
+      throw err;
+    }
+
+    const saved = await provisionVerifiedUser({
+      email: cleanEmail,
+      name: (input.name || existing?.name || 'University User').trim(),
+      role: safeRole,
+      origin: input.origin === 'IDS' ? 'IDS' : 'CESS',
+      department: (input.department || existing?.department || 'CESS').trim(),
+      accountStatus: 'Active',
+      isWhitelisted: true,
+    });
+
+    recordUserManagementEvent({
+      action: 'whitelist_entry_added',
+      actor,
+      targetUser: saved,
+      before: summarizeUserSnapshot(existing),
+      after: summarizeUserSnapshot(saved),
+      reason: input.reason || 'Added to approved institutional whitelist.',
+    });
+
+    return saved;
+  },
+
+  /**
+   * PB-43: Admin removes a user from the approved whitelist and revokes active access
+   */
+  async removeWhitelistEntry(actor, userId, reason = null) {
+    if (!canPerformAction(actor, 'manage_whitelist')) {
+      const err = new Error('Forbidden: Only the College Secretary can manage the whitelist.');
+      err.status = 403;
+      throw err;
+    }
+
+    if (actor.id === userId) {
+      const err = new Error('You cannot remove your own active administrator account from the whitelist.');
+      err.status = 400;
+      throw err;
+    }
+
+    const before = await UserModel.findById(userId);
+    if (!before) {
+      const err = new Error('Whitelist user record not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    const updated = await UserModel.deleteWhitelistById(userId);
+    SessionModel.revokeAllUserSessions(userId);
+
+    recordUserManagementEvent({
+      action: 'whitelist_removed',
+      actor,
+      targetUser: updated,
+      before: summarizeUserSnapshot(before),
+      after: summarizeUserSnapshot(updated),
+      reason: reason || 'Removed from approved whitelist by College Secretary.',
+    });
+
+    return updated;
+  },
+
+  /**
+   * PB-02 & PB-43: Admin (College Secretary) creates a new user (duplicate-protected)
+   * or updates an explicit existing user by ID.
+   */
+  async saveUserAccount(actor, input = {}) {
     if (!canPerformAction(actor, 'manage_users')) {
       const err = new Error('Forbidden: Only the College Secretary can manage user accounts.');
       err.status = 403;
@@ -1132,19 +1457,254 @@ const AuthService = {
       throw err;
     }
 
+    const targetId = input.id || input.userId || null;
+    const verifiedRole = input.role ? assertValidRole(input.role) : ROLES.STUDENT;
+    const safeOrigin = String(input.origin || 'CESS').toUpperCase() === 'IDS' ? 'IDS' : 'CESS';
+
+    const existingByEmail = await UserModel.findByEmail(cleanEmail);
+    if (!targetId && existingByEmail) {
+      recordUserManagementEvent({
+        action: 'duplicate_account_blocked',
+        actor,
+        targetUser: existingByEmail,
+        targetEmail: cleanEmail,
+        reason: 'Attempted to create a duplicate user account with an existing institutional email.',
+      });
+      const err = new Error(`Duplicate account prevented: An account with email '${cleanEmail}' already exists.`);
+      err.status = 409;
+      throw err;
+    }
+
+    if (targetId && existingByEmail && existingByEmail.id !== targetId) {
+      const err = new Error(`Duplicate email conflict: '${cleanEmail}' belongs to another user.`);
+      err.status = 409;
+      throw err;
+    }
+
+    const before = targetId ? await UserModel.findById(targetId) : null;
+    if (targetId && !before) {
+      const err = new Error('Target user account not found.');
+      err.status = 404;
+      throw err;
+    }
+
     const accountStatus = input.accountStatus || (input.active === false ? 'Inactive' : 'Active');
     const isWhitelisted = input.isWhitelisted !== undefined ? input.isWhitelisted : (accountStatus === 'Active');
 
-    return provisionVerifiedUser({
+    if (before && before.id === actor.id && (accountStatus !== 'Active' || verifiedRole !== ROLES.SECRETARY)) {
+      const err = new Error('You cannot deactivate or demote your own active College Secretary account.');
+      err.status = 400;
+      throw err;
+    }
+
+    const saved = await provisionVerifiedUser({
       email: cleanEmail,
       password: input.password,
-      name: input.name,
-      role: input.role,
-      origin: input.origin,
-      department: input.department,
+      name: input.name || before?.name || 'University User',
+      role: verifiedRole,
+      origin: safeOrigin,
+      department: input.department || before?.department || 'CESS',
       accountStatus,
       isWhitelisted,
     });
+
+    if (accountStatus !== 'Active' || (before && before.role !== saved.role)) {
+      SessionModel.revokeAllUserSessions(saved.id);
+    }
+
+    recordUserManagementEvent({
+      action: before ? 'user_updated' : 'user_created',
+      actor,
+      targetUser: saved,
+      before: summarizeUserSnapshot(before),
+      after: summarizeUserSnapshot(saved),
+      reason: input.reason || (before ? 'Account updated by College Secretary.' : 'Account created by College Secretary.'),
+    });
+
+    return saved;
+  },
+
+  /**
+   * PB-43: Admin updates a specific user's profile, role, origin, or department
+   */
+  async updateUserAccount(actor, userId, input = {}) {
+    if (!canPerformAction(actor, 'manage_users')) {
+      const err = new Error('Forbidden: Only the College Secretary can update user accounts.');
+      err.status = 403;
+      throw err;
+    }
+
+    const existing = await UserModel.findById(userId);
+    if (!existing) {
+      const err = new Error('User account not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    const targetEmail = input.email ? String(input.email).trim().toLowerCase() : existing.email;
+    if (!isInstitutionalEmail(targetEmail)) {
+      const err = new Error('Email must end with @msunaawan.edu.ph.');
+      err.status = 400;
+      throw err;
+    }
+
+    if (targetEmail !== existing.email) {
+      const conflict = await UserModel.findByEmail(targetEmail);
+      if (conflict && conflict.id !== userId) {
+        recordUserManagementEvent({
+          action: 'duplicate_account_blocked',
+          actor,
+          targetUser: existing,
+          targetEmail,
+          reason: `Attempted to change user email to already-registered '${targetEmail}'.`,
+        });
+        const err = new Error(`Duplicate account prevented: Email '${targetEmail}' is already in use.`);
+        err.status = 409;
+        throw err;
+      }
+    }
+
+    const nextRole = input.role ? assertValidRole(input.role) : existing.role;
+    const nextOrigin = input.origin ? (String(input.origin).toUpperCase() === 'IDS' ? 'IDS' : 'CESS') : existing.origin;
+    const nextDepartment = input.department !== undefined ? String(input.department).trim() : existing.department;
+    const nextName = input.name !== undefined ? String(input.name).trim() : existing.name;
+    const nextStatus = input.accountStatus || (input.active === false ? 'Inactive' : input.active === true ? 'Active' : existing.account_status);
+    const nextWhitelisted = input.isWhitelisted !== undefined ? Boolean(input.isWhitelisted) : (nextStatus === 'Active');
+
+    if (existing.id === actor.id && (nextStatus !== 'Active' || nextRole !== ROLES.SECRETARY)) {
+      const err = new Error('You cannot deactivate or remove your own College Secretary role.');
+      err.status = 400;
+      throw err;
+    }
+
+    const updated = await provisionVerifiedUser({
+      email: targetEmail,
+      password: input.password,
+      name: nextName,
+      role: nextRole,
+      origin: nextOrigin,
+      department: nextDepartment,
+      accountStatus: nextStatus,
+      isWhitelisted: nextWhitelisted,
+    });
+
+    if (nextStatus !== 'Active' || existing.role !== updated.role) {
+      SessionModel.revokeAllUserSessions(userId);
+    }
+
+    recordUserManagementEvent({
+      action: existing.role !== updated.role ? 'user_role_changed' : 'user_updated',
+      actor,
+      targetUser: updated,
+      before: summarizeUserSnapshot(existing),
+      after: summarizeUserSnapshot(updated),
+      reason: input.reason || 'Account updated by College Secretary.',
+    });
+
+    return updated;
+  },
+
+  /**
+   * PB-43: Admin updates only a user's assigned role/unit cleanly
+   */
+  async updateUserRole(actor, userId, { role, origin, department, reason } = {}) {
+    if (!role) {
+      const err = new Error('role is required.');
+      err.status = 400;
+      throw err;
+    }
+    return this.updateUserAccount(actor, userId, { role, origin, department, reason: reason || 'Role assignment updated.' });
+  },
+
+  /**
+   * PB-43: Admin activates or deactivates a user account
+   */
+  async updateUserStatus(actor, userId, { active, accountStatus, reason } = {}) {
+    if (!canPerformAction(actor, 'manage_users')) {
+      const err = new Error('Forbidden: Only the College Secretary can update account status.');
+      err.status = 403;
+      throw err;
+    }
+
+    const existing = await UserModel.findById(userId);
+    if (!existing) {
+      const err = new Error('User account not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    let targetStatus = accountStatus;
+    if (!targetStatus && typeof active === 'boolean') {
+      targetStatus = active ? 'Active' : 'Inactive';
+    }
+    if (!['Active', 'Inactive', 'Pending_Verification'].includes(targetStatus)) {
+      const err = new Error("Invalid status. Permitted values: 'Active', 'Inactive', or 'Pending_Verification' (or boolean active).");
+      err.status = 400;
+      throw err;
+    }
+
+    if (existing.id === actor.id && targetStatus !== 'Active') {
+      const err = new Error('You cannot deactivate your own active College Secretary account.');
+      err.status = 400;
+      throw err;
+    }
+
+    const targetWhitelisted = targetStatus === 'Active';
+    const { error } = await supabase
+      .from('User')
+      .update({
+        account_status: targetStatus,
+        is_whitelisted: targetWhitelisted,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId);
+    if (error) throw error;
+
+    if (targetStatus === 'Active') {
+      const officeName = ROLE_TO_OFFICE_NAME[existing.role];
+      await UserModel.revokeUserOffices(userId);
+      if (officeName) {
+        const officeId = await UserModel.getOfficeIdByName(officeName);
+        if (officeId) {
+          await supabase.from('user_office').insert({ user_id: userId, office_id: officeId });
+        }
+      }
+    } else {
+      await UserModel.revokeUserOffices(userId);
+      SessionModel.revokeAllUserSessions(userId);
+    }
+
+    const updated = await UserModel.findById(userId);
+
+    recordUserManagementEvent({
+      action: 'user_status_changed',
+      actor,
+      targetUser: updated,
+      before: summarizeUserSnapshot(existing),
+      after: summarizeUserSnapshot(updated),
+      reason: reason || `Account status set to ${targetStatus}.`,
+    });
+
+    return updated;
+  },
+
+  /**
+   * PB-43: Retrieve traceable user/role/whitelist audit logs (Secretary only)
+   */
+  getUserManagementAuditLogs({ action = null, targetUserId = null, targetEmail = null, limit = 100 } = {}) {
+    let items = userManagementAuditLogs;
+    if (action) {
+      items = items.filter((e) => e.action === action);
+    }
+    if (targetUserId) {
+      items = items.filter((e) => e.targetUserId === targetUserId);
+    }
+    if (targetEmail) {
+      const clean = String(targetEmail).trim().toLowerCase();
+      items = items.filter((e) => String(e.targetEmail || '').toLowerCase() === clean);
+    }
+    const cap = Math.max(1, Math.min(Number(limit) || 100, 500));
+    return items.slice(0, cap);
   },
 };
 
@@ -1154,4 +1714,5 @@ module.exports = {
   getPasswordsForRole,
   sanitizeForLog,
   recordSecurityEvent,
+  recordUserManagementEvent,
 };

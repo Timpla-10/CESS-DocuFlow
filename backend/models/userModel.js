@@ -139,6 +139,34 @@ const UserModel = {
     if (user) return user;
     return null;
   },
+
+  async revokeUserOffices(userId) {
+    const { error } = await supabase.from('user_office').delete().eq('user_id', userId);
+    if (error) throw error;
+    return true;
+  },
+
+  async deleteWhitelistById(id) {
+    const existing = await this.findById(id);
+    if (!existing) {
+      const err = new Error('Whitelist user record not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    const { error } = await supabase
+      .from('User')
+      .update({
+        is_whitelisted: false,
+        account_status: 'Inactive',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', id);
+    if (error) throw error;
+
+    await this.revokeUserOffices(id);
+    return this.findById(id);
+  },
 };
 
 module.exports = UserModel;

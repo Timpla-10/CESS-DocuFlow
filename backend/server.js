@@ -42,6 +42,10 @@ app.get('/', (req, res) => {
       documents: 'GET /api/documents',
       documentTypes: 'GET /api/document-types',
       routes: 'GET /api/workflow/routes',
+      directory: 'GET /api/directory',
+      notificationLogs: 'GET /api/notifications/logs',
+      homepage: 'GET /api/homepage',
+      followUpRules: 'GET /api/follow-up-rules',
     },
   });
 });
