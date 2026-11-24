@@ -8,6 +8,8 @@ import type { Role } from './data/types'
 import { AccessDeniedPage, NotFoundPage } from './pages/StatusPages'
 import { AccountPage } from './pages/account/AccountPage'
 import { ConsultationsPage } from './pages/consultations/ConsultationsPage'
+import { ClassRecordsPage } from './pages/classRecords/ClassRecordsPage'
+import { CLASS_RECORD_ROLES } from './data/classRecords'
 import { DocumentDetailPage } from './pages/documents/DocumentDetailPage'
 import { FacultyDirectoryPage } from './pages/info/FacultyDirectoryPage'
 import { NoticesPage } from './pages/info/NoticesPage'
@@ -108,6 +110,7 @@ export default function App() {
               {/* Document Details (Available to all authorized roles) */}
               <Route path="documents/:id" element={<DocumentDetailPage />} />
               <Route path="consultations/:requestId?" element={<ConsultationsPage />} />
+              <Route path="class-records" element={<Protected allowedRoles={CLASS_RECORD_ROLES}><ClassRecordsPage /></Protected>} />
 
               {/* College Secretary */}
               <Route

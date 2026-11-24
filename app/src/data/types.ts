@@ -91,6 +91,7 @@ export interface DocumentType {
   name: string
   audience: 'student' | 'faculty'
   summary: string
+  documentNumberRequired?: boolean
   requirements: Requirement[]
   /** Downloadable blank form template file name (REQ-REQT-9, REQ-REQT-10). */
   templateName?: string
@@ -130,6 +131,7 @@ export interface Attachment {
 
 export type HistoryAction =
   | 'submitted'
+  | 'signed'
   | 'resubmitted'
   | 'checked_complete'
   | 'checked_incomplete'
@@ -188,6 +190,9 @@ export interface DocRecord {
   typeId: string
   /** Requester-supplied name for a document in the Others category. */
   customTypeName?: string
+  /** Number printed on or assigned to the source document. */
+  documentNumber?: string
+  signatures?: DocumentSignature[]
   title: string
   description: string
   origin: Origin
@@ -221,6 +226,16 @@ export interface DocRecord {
     signedFileName?: string
   }
   archived: boolean
+}
+
+export interface DocumentSignature {
+  id: string
+  signerId: string
+  signerName: string
+  office: OfficeId
+  signedAt: string
+  revision: number
+  image: string
 }
 
 export type NotificationKind = 'returned' | 'ready' | 'reminder' | 'update' | 'notice' | 'submitted' | 'rejected'

@@ -135,7 +135,7 @@ export function SettingsPage() {
       setEditingTypeDays((prev) => ({ ...prev, [saved.id]: [...saved.processingDays] }))
       toast.success(
         'Document Type Saved',
-        `Updated checklist, template, and routing rules for ${saved.name}.`,
+        `Updated request requirements and routing rules for ${saved.name}.`,
       )
       setIsDocTypeModalOpen(false)
     } catch (err: unknown) {
@@ -243,6 +243,7 @@ export function SettingsPage() {
                     </td>
                     <td className="px-5 py-4 capitalize text-ink-600 font-medium">{t.audience}</td>
                     <td className="max-w-[340px] px-5 py-4 text-xs text-ink-600">
+                      <p className="mb-1 font-semibold text-ink-800">{t.documentNumberRequired ? 'Document number required' : 'Document number optional'}</p>
                       <div className="flex items-center gap-1.5 font-bold text-ink-900">
                         <CheckSquare className="size-3.5 text-brand-600 shrink-0" />
                         <span>Checklist: {t.requirements.filter((r) => r.required).length} required, {t.requirements.filter((r) => !r.required).length} optional</span>
@@ -491,7 +492,7 @@ export function SettingsPage() {
         onClose={() => setIsDocTypeModalOpen(false)}
         size="xl"
         title={dtDraft?.id ? `Configure ${dtDraft.name}` : 'Add New Document Type'}
-        description="Edit required forms and attachments, upload or replace the blank template, and configure the CESS and IDS approval routes."
+        description="Configure document numbers, required forms, templates, and CESS and IDS approval routes."
         busy={dtBusy}
         footer={
           <>
@@ -533,6 +534,16 @@ export function SettingsPage() {
                 onChange={(e) => setDtDraft({ ...dtDraft, summary: e.target.value })}
                 placeholder="Explain when a student or faculty member uses this document..."
               />
+            </Field>
+
+            <Field label="Document number requirement">
+              <Select
+                value={dtDraft.documentNumberRequired ? 'required' : 'optional'}
+                onChange={(event) => setDtDraft({ ...dtDraft, documentNumberRequired: event.target.value === 'required' })}
+              >
+                <option value="optional">Optional</option>
+                <option value="required">Required before submission</option>
+              </Select>
             </Field>
 
             {/* Template Upload / Replacement */}

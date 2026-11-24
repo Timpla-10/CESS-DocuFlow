@@ -24,6 +24,7 @@ import {
   revisionLabel,
 } from '../content/language'
 import type { Database, DocRecord } from '../data/types'
+import { typeOf } from '../data/selectors'
 import { formatDateTime } from '../lib/time'
 import { formatSize, sessionFiles } from './documents'
 import { cn } from './ui'
@@ -34,6 +35,7 @@ import {
   generateNonPublicSecureLink,
 } from '../lib/documentSecurity'
 import { useToast } from './Toast'
+import { SignatureList } from './DocumentSignatures'
 
 export interface DocumentPreviewModalProps {
   open: boolean
@@ -55,9 +57,10 @@ export function DocumentPreviewModal({
     initialAttachmentId || (doc.attachments[0]?.id ?? 'overview'),
   )
 
-  const docType = db.documentTypes.find((t) => t.id === doc.typeId)
+  const docType = typeOf(db, doc)
   const requester = db.users.find((u) => u.id === doc.requesterId)
   const attachments = doc.attachments
+  const signatures = (doc.signatures ?? []).filter((signature) => signature.revision === doc.revision)
 
   // Sync initialAttachmentId when opened or changed
   useEffect(() => {
@@ -172,7 +175,7 @@ export function DocumentPreviewModal({
       role="dialog"
       aria-modal="true"
       aria-label="Document Preview"
-      className="fixed inset-0 z-[100] flex flex-col bg-brand-950/95 backdrop-blur-md text-white select-none animate-in fade-in duration-200"
+      className="document-preview-root fixed inset-0 z-[100] flex flex-col bg-brand-950/95 backdrop-blur-md text-white select-none animate-in fade-in duration-200"
     >
       {/* Top Header Control Bar */}
       <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/15 bg-brand-900 px-4 sm:px-6 shadow-lg">
@@ -337,14 +340,14 @@ export function DocumentPreviewModal({
       </div>
 
       {/* Main Canvas Scroll Area */}
-      <div className="flex-1 overflow-auto bg-brand-950/80 p-4 sm:p-8 flex justify-center">
+      <div className="document-print-area flex flex-1 justify-start overflow-auto bg-brand-950/80 p-4 sm:p-8 xl:justify-center">
         <div
           style={{
             transform: `scale(${zoom})`,
             transformOrigin: 'top center',
             transition: 'transform 0.15s ease-out',
           }}
-          className="relative my-auto"
+          className="document-print-zoom relative my-auto"
         >
           {/* Real uploaded blob rendering (if session contains active uploaded file) */}
           {blobUrl && activeAttachment ? (
@@ -369,7 +372,7 @@ export function DocumentPreviewModal({
             </div>
           ) : (
             /* High-Fidelity Official Digital Document Sheet (A4 Institutional Layout) */
-            <div className="w-[794px] min-h-[1123px] bg-white text-slate-900 shadow-2xl rounded-sm p-12 relative select-text font-serif">
+            <div className="document-print-sheet relative min-h-[1123px] w-[794px] select-text rounded-sm bg-white p-12 font-serif text-slate-900 shadow-2xl">
               {/* Official Translucent Watermark */}
               <div
                 className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden opacity-[0.06] select-none"
@@ -507,6 +510,7 @@ export function DocumentPreviewModal({
                 </h3>
                 <div className="mt-3 text-sm leading-relaxed text-slate-800">
                   <p className="font-bold text-base text-slate-950 mb-1">{doc.title}</p>
+                  {doc.documentNumber && <p className="mb-2 wrap-anywhere text-xs text-slate-700">Document number {doc.documentNumber}</p>}
                   <p className="text-xs leading-relaxed italic text-slate-700 bg-slate-50/70 p-3.5 rounded border border-slate-200">
                     "{doc.description || 'Official document submitted for institutional processing, review, and administrative action through CESS DocuFlow.'}"
                   </p>
@@ -639,6 +643,13 @@ export function DocumentPreviewModal({
                   </div>
                 </div>
               </div>
+
+              {signatures.length > 0 && (
+                <section className="relative mt-8 space-y-3 font-sans" aria-label="Signatures for this revision">
+                  <h3 className="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider">Electronic signatures</h3>
+                  <SignatureList signatures={signatures} />
+                </section>
+              )}
 
               {/* Institutional Footer */}
               <div className="mt-12 pt-4 border-t border-slate-200 text-center font-sans text-[10px] text-slate-500">

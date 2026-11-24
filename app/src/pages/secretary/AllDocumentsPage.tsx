@@ -42,6 +42,8 @@ import {
   revisionLabel,
 } from '../../content/language'
 import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
+import { documentNumberError } from '../../data/documentNumbers'
+import { DocumentNumberField } from '../../components/DocumentNumberField'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
 import { isDelayed, userById, visibleDocuments } from '../../data/selectors'
 import { api, useDb } from '../../data/store'
@@ -258,11 +260,12 @@ export function AllDocumentsPage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [customTypeName, setCustomTypeName] = useState('')
+  const [documentNumber, setDocumentNumber] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<
     { requirementId?: string; name: string; sizeKb: number; fileObj?: File }[]
   >([])
   const [walkInBusy, setWalkInBusy] = useState(false)
-  const [walkInErrors, setWalkInErrors] = useState<{ title?: string; files?: string; customTypeName?: string; description?: string }>({})
+  const [walkInErrors, setWalkInErrors] = useState<{ title?: string; files?: string; customTypeName?: string; description?: string; documentNumber?: string }>({})
 
   const handleOpenWalkIn = (preselectedTypeId?: string) => {
     const firstReq = requesters[0]
@@ -273,6 +276,7 @@ export function AllDocumentsPage() {
     setTitle('')
     setDescription('')
     setCustomTypeName('')
+    setDocumentNumber('')
     setAttachedFiles([])
     setWalkInErrors({})
     setIsWalkInOpen(true)
@@ -284,6 +288,7 @@ export function AllDocumentsPage() {
     const reqAudience = req?.role === 'student' ? 'student' : 'faculty'
     const nextTypes = db.documentTypes.filter((t) => !req || t.audience === reqAudience)
     setTypeId(nextTypes[0]?.id ?? '')
+    setDocumentNumber('')
     setAttachedFiles([])
     setWalkInErrors({})
   }
@@ -317,6 +322,8 @@ export function AllDocumentsPage() {
     if (!selectedType || !selectedRequester) return
 
     const errs: typeof walkInErrors = {}
+    const numberError = documentNumberError(documentNumber, selectedType.documentNumberRequired)
+    if (numberError) errs.documentNumber = numberError
     if (!title.trim()) {
       errs.title = 'Please enter a title or subject for this walk-in document.'
     }
@@ -354,6 +361,7 @@ export function AllDocumentsPage() {
         requesterId: selectedRequester.id,
         typeId: selectedType.id,
         customTypeName: isCustom ? customTypeName : undefined,
+        documentNumber,
         title: title.trim(),
         description: description.trim() || 'Walk-in physical document packet encoded by the College Secretary.',
         files: payloadFiles,
@@ -1392,6 +1400,8 @@ export function AllDocumentsPage() {
                 value={typeId}
                 onChange={(e) => {
                   setTypeId(e.target.value)
+                  setDocumentNumber('')
+                  setWalkInErrors({})
                   setAttachedFiles([])
                 }}
                 className="w-full"
@@ -1404,6 +1414,17 @@ export function AllDocumentsPage() {
               </Select>
             </Field>
           </div>
+
+          {selectedType && <DocumentNumberField
+            value={documentNumber}
+            required={selectedType.documentNumberRequired}
+            disabled={walkInBusy}
+            error={walkInErrors.documentNumber}
+            onChange={(value) => {
+              setDocumentNumber(value)
+              if (walkInErrors.documentNumber) setWalkInErrors((previous) => ({ ...previous, documentNumber: undefined }))
+            }}
+          />}
 
           {isCustom && (
             <Field label="Custom document type" required error={walkInErrors.customTypeName}>

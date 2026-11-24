@@ -13,6 +13,7 @@ import {
   Lock,
   PackageCheck,
   Paperclip,
+  PenLine,
   RotateCcw,
   Send,
   ShieldAlert,
@@ -25,6 +26,8 @@ import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
+import { DocumentNumberField } from '../../components/DocumentNumberField'
+import { SignDocumentDialog, SignatureList } from '../../components/DocumentSignatures'
 import {
   AttachmentList,
   DelayedBadge,
@@ -59,6 +62,8 @@ import {
   revisionLabel,
 } from '../../content/language'
 import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
+import { documentNumberError } from '../../data/documentNumbers'
+import { canSignDocument } from '../../data/documentSignatures'
 import { ACCEPTED_EXT, MAX_FILE_MB, reviewOptions, type NewFile, type ReviewKind } from '../../data/engine'
 import { daysWaiting, isDelayed, typeOf, userById } from '../../data/selectors'
 import { api, useDb } from '../../data/store'
@@ -78,6 +83,7 @@ export function DocumentDetailPage() {
 
   // Sub-dialog states
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
+  const [isSignatureOpen, setIsSignatureOpen] = useState(false)
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string | undefined>()
   const [isResubmitOpen, setIsResubmitOpen] = useState(false)
   const [isCheckOpen, setIsCheckOpen] = useState(false)
@@ -90,10 +96,11 @@ export function DocumentDetailPage() {
   const [resubmitTitle, setResubmitTitle] = useState('')
   const [resubmitDesc, setResubmitDesc] = useState('')
   const [resubmitCustomType, setResubmitCustomType] = useState('')
+  const [resubmitDocumentNumber, setResubmitDocumentNumber] = useState('')
   const [resubmitNote, setResubmitNote] = useState('')
   const [resubmitFiles, setResubmitFiles] = useState<{ name: string; sizeKb: number; fileObj?: File }[]>([])
   const [resubmitBusy, setResubmitBusy] = useState(false)
-  const [resubmitErrors, setResubmitErrors] = useState<{ title?: string; general?: string; customType?: string; description?: string }>({})
+  const [resubmitErrors, setResubmitErrors] = useState<{ title?: string; general?: string; customType?: string; description?: string; documentNumber?: string }>({})
 
   // Secretary Content Verification form state (REQ-REQT-4, REQ-REQT-5)
   const [checkDecision, setCheckDecision] = useState<'complete' | 'return' | 'reject'>('complete')
@@ -222,6 +229,8 @@ export function DocumentDetailPage() {
     user.role === 'secretary' && doc.status === 'with_external'
 
   const canSecretaryRelease = user.role === 'secretary' && doc.status === 'ready'
+  const canSign = canSignDocument(user, doc)
+  const signatures = doc.signatures ?? []
 
   const canOrganizeFolder =
     isDocRequester ||
@@ -261,6 +270,7 @@ export function DocumentDetailPage() {
     setResubmitTitle(doc.title)
     setResubmitDesc(doc.description)
     setResubmitCustomType(doc.customTypeName ?? '')
+    setResubmitDocumentNumber(doc.documentNumber ?? '')
     setResubmitNote('')
     setResubmitFiles([])
     setResubmitErrors({})
@@ -334,6 +344,8 @@ export function DocumentDetailPage() {
     e.preventDefault()
     setResubmitErrors({})
     const errs: typeof resubmitErrors = {}
+    const numberError = documentNumberError(resubmitDocumentNumber, docType?.documentNumberRequired)
+    if (numberError) errs.documentNumber = numberError
     if (!resubmitTitle.trim()) {
       errs.title = 'Please enter a document title.'
     }
@@ -360,6 +372,7 @@ export function DocumentDetailPage() {
         title: resubmitTitle.trim(),
         description: resubmitDesc.trim(),
         customTypeName: isCustom ? resubmitCustomType : undefined,
+        documentNumber: resubmitDocumentNumber,
         note: resubmitNote.trim(),
         files: payloadFiles,
       })
@@ -1127,7 +1140,8 @@ export function DocumentDetailPage() {
             isReviewerForDoc ||
             canSecretaryFinalize ||
             canSecretaryRecordExternalReturn ||
-            canSecretaryRelease) && (
+            canSecretaryRelease ||
+            canSign) && (
             <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-200">
               <div className="flex-1">
                 <p className="text-xs font-bold uppercase tracking-wide text-brand-800">
@@ -1149,6 +1163,7 @@ export function DocumentDetailPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {canSign && <Button variant="secondary" onClick={() => setIsSignatureOpen(true)} icon={PenLine}>Apply electronic signature</Button>}
                 {canResubmit && (
                   <Button onClick={handleOpenResubmit} icon={RotateCcw}>
                     Resubmit Corrected Document
@@ -1256,6 +1271,10 @@ export function DocumentDetailPage() {
                   label: 'Document Type',
                   value: <span className="wrap-anywhere">{docType?.name ?? '—'}</span>,
                   hint: `Audience: ${docType?.audience === 'student' ? 'Students' : 'Faculty'}`,
+                },
+                {
+                  label: 'Document Number',
+                  value: <span className="wrap-anywhere">{doc.documentNumber ?? 'None provided'}</span>,
                 },
                 {
                   label: 'Document Title',
@@ -1402,6 +1421,19 @@ export function DocumentDetailPage() {
         <AttachmentList db={db} doc={doc} />
       </Card>
 
+      {signatures.length > 0 && (
+        <Card className="space-y-4 p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="document-signatures" tabIndex={-1} className="scroll-mt-20 text-base font-bold">Electronic signatures</h2>
+            <Button variant="secondary" size="sm" icon={Eye} onClick={() => {
+              setPreviewAttachmentId('overview')
+              setIsPreviewModalOpen(true)
+            }}>View signed summary</Button>
+          </div>
+          <SignatureList signatures={signatures} />
+        </Card>
+      )}
+
       {/* Section 2: Institutional Review Route Journey */}
       <Card className="p-6">
         <div className="space-y-4">
@@ -1471,6 +1503,17 @@ export function DocumentDetailPage() {
               }}
             />
           </Field>
+
+          <DocumentNumberField
+            value={resubmitDocumentNumber}
+            required={docType?.documentNumberRequired}
+            disabled={resubmitBusy}
+            error={resubmitErrors.documentNumber}
+            onChange={(value) => {
+              setResubmitDocumentNumber(value)
+              if (resubmitErrors.documentNumber) setResubmitErrors((previous) => ({ ...previous, documentNumber: undefined }))
+            }}
+          />
 
           {isCustom && (
             <>
@@ -2230,6 +2273,8 @@ export function DocumentDetailPage() {
           </div>
         </div>
       </Dialog>
+
+      {isSignatureOpen && <SignDocumentDialog key={doc.id} doc={doc} user={user} onClose={() => setIsSignatureOpen(false)} />}
 
       {/* 5. In-App Document & Attachment Previewer Modal (Zero-download inspection) */}
       {isPreviewModalOpen && doc && (

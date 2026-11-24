@@ -255,6 +255,8 @@ export function historyTitle(e: HistoryEntry): string {
   switch (e.action) {
     case 'submitted':
       return 'Request submitted (automatic completeness check passed)'
+    case 'signed':
+      return 'Electronic signature applied'
     case 'resubmitted':
       return `Corrected document resubmitted (${revisionLabel(e.revision)})`
     case 'checked_complete':
@@ -291,6 +293,7 @@ export function historyTone(e: HistoryEntry): Tone {
     case 'approved':
     case 'marked_ready':
     case 'released':
+    case 'signed':
       return 'success'
     case 'endorsed':
     case 'checked_complete':

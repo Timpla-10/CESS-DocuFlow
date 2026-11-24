@@ -213,6 +213,10 @@ export function downloadPermittedDocument(
         `Document Type: ${docTypeName || doc.typeId}`,
         `Current Status: ${doc.status.toUpperCase()}`,
         `Current Revision: Rev ${doc.revision}`,
+        ...(doc.documentNumber ? [`Document Number: ${doc.documentNumber}`] : []),
+        ...(doc.signatures ?? []).filter((signature) => signature.revision === doc.revision).map(
+          (signature) => `Signed by ${signature.signerName} (${OFFICE_LABEL[signature.office]}) at ${signature.signedAt}`,
+        ),
         `Authorized Viewer: ${user.name} (${user.email})`,
         `Permission Scope: ${check.scopeLabel}`,
         `Generated At: ${timestamp}`,

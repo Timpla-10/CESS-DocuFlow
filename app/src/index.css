@@ -287,6 +287,35 @@
   }
 }
 
+@media print {
+  body:has(.document-print-sheet) {
+    overflow: visible !important;
+    background: white;
+  }
+  body:has(.document-print-sheet) > :not(.document-preview-root),
+  .document-preview-root:has(.document-print-sheet) > :not(.document-print-area) {
+    display: none !important;
+  }
+  .document-preview-root:has(.document-print-sheet),
+  .document-print-area:has(.document-print-sheet) {
+    position: static;
+    display: block;
+    overflow: visible;
+    padding: 0;
+    background: white;
+    backdrop-filter: none;
+  }
+  .document-print-zoom:has(.document-print-sheet) {
+    transform: none !important;
+  }
+  .document-print-sheet {
+    width: 100%;
+    min-height: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-aurora-pink,
   .animate-aurora-lavender,

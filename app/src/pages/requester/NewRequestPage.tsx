@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
+import { DocumentNumberField } from '../../components/DocumentNumberField'
 import { sessionFiles } from '../../components/documents'
 import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
@@ -29,6 +30,7 @@ import { Badge, Button, ButtonLink, Card, CardHeader, PageHeader } from '../../c
 import { controlNumber, downloadGeneratedPdf, formatRoleTitle } from '../../content/language'
 import { formatDateTime } from '../../lib/time'
 import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
+import { documentNumberError } from '../../data/documentNumbers'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
 import { api, useDb } from '../../data/store'
 import type { DocRecord, DocumentType, Origin, Requirement } from '../../data/types'
@@ -80,6 +82,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [customTypeName, setCustomTypeName] = useState('')
+  const [documentNumber, setDocumentNumber] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<SelectedFileItem[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({})
@@ -113,6 +116,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
   // Handle switching document type
   const handleTypeChange = (newTypeId: string) => {
     setSelectedTypeId(newTypeId)
+    setDocumentNumber('')
     setAttachedFiles([])
     setErrors({})
     setFileErrors({})
@@ -265,10 +269,24 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
   const isTitleValid = title.trim().length >= 3
   const isDescriptionValid = description.trim().length > 0
   const customTypeError = isCustom ? customDocumentTypeError(customTypeName) : undefined
-  const isFormComplete = !!selectedType && isTitleValid && isDescriptionValid && !customTypeError && allRequiredAttached
+  const numberError = documentNumberError(documentNumber, selectedType?.documentNumberRequired)
+  const isFormComplete = !!selectedType && isTitleValid && isDescriptionValid && !customTypeError && !numberError && allRequiredAttached
+  const numberField = (
+    <DocumentNumberField
+      value={documentNumber}
+      required={selectedType?.documentNumberRequired}
+      disabled={isSubmitting}
+      error={errors.documentNumber}
+      onChange={(value) => {
+        setDocumentNumber(value)
+        if (errors.documentNumber) clearError('documentNumber')
+      }}
+    />
+  )
 
   const missingItemsSummary: string[] = []
   if (customTypeError) missingItemsSummary.push('Custom document type (required, up to 100 characters)')
+  if (numberError) missingItemsSummary.push('Document number')
   if (!title.trim()) {
     missingItemsSummary.push('Title or Subject (required, min 3 characters)')
   } else if (title.trim().length < 3) {
@@ -287,6 +305,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
     const newErrors: Record<string, string> = {}
     if (!selectedType) newErrors.typeId = 'Please select a document type.'
     if (customTypeError) newErrors.customTypeName = customTypeError
+    if (numberError) newErrors.documentNumber = numberError
 
     if (!title.trim()) {
       newErrors.title = 'Please enter a title or subject for this request.'
@@ -324,12 +343,14 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
       toast.error('Institutional Certification Required', 'Please check the certification box to confirm your request details before submitting.')
       return
     }
-    if (!isTitleValid || !isDescriptionValid) {
-      setErrors({
+    if (!isTitleValid || !isDescriptionValid || numberError) {
+      const reviewErrors = {
+        ...(numberError && { documentNumber: numberError }),
         ...(!isTitleValid && { title: 'Enter a title or subject with at least 3 characters.' }),
         ...(!isDescriptionValid && { description: 'Enter a description or purpose for your request.' }),
-      })
-      requestAnimationFrame(() => document.querySelector<HTMLElement>(!isTitleValid ? '[name="title"]' : '[name="description"]')?.focus())
+      }
+      setErrors(reviewErrors)
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(`[name="${Object.keys(reviewErrors)[0]}"]`)?.focus())
       return
     }
 
@@ -347,6 +368,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
         title: title.trim(),
         description: description.trim(),
         customTypeName: isCustom ? customTypeName : undefined,
+        documentNumber,
         files: payloadFiles,
       })
 
@@ -496,6 +518,8 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                 </Field>
               </>
             )}
+
+            {selectedType && numberField}
 
             {selectedType && (!isCustom || selectedType.templateName) && (
               <div className="rounded-xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-100">
@@ -1226,6 +1250,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                       </div>
                     </div>
 
+                    {numberField}
                     <Field label="Request Title / Subject" required error={errors.title}>
                       <Input
                         type="text"
@@ -1563,6 +1588,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                     setTitle('')
                     setDescription('')
                     setCustomTypeName('')
+                    setDocumentNumber('')
                     setAttachedFiles([])
                     setErrors({})
                     setFileErrors({})

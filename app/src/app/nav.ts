@@ -3,6 +3,7 @@ import {
   BookOpen,
   Building2,
   ClipboardCheck,
+  ClipboardList,
   FileSpreadsheet,
   Files,
   FolderOpen,
@@ -66,6 +67,7 @@ const consultations: NavItem = {
 }
 const syllabiNav: NavItem = { to: '/app/syllabi', label: 'Course Syllabi', icon: BookOpen }
 const tosNav: NavItem = { to: '/app/tos', label: 'Table of Specifications', icon: FileSpreadsheet }
+const classRecords: NavItem = { to: '/app/class-records', label: 'Faculty Class Records', icon: ClipboardList }
 const notices: NavItem = {
   to: '/app/notices',
   label: 'Notices & Announcements',
@@ -136,6 +138,7 @@ export function navFor(role: Role): NavSection[] {
               countTone: 'warning',
             },
             tosNav,
+            classRecords,
           ],
         },
         {
@@ -161,6 +164,7 @@ export function navFor(role: Role): NavSection[] {
             { to: '/app/documents', label: 'All Documents', icon: Files },
             syllabiNav,
             tosNav,
+            classRecords,
             { to: '/app/archive', label: 'Archive', icon: Archive },
             { to: '/app/email-log', label: 'Email Log', icon: Mail },
           ],
@@ -204,7 +208,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [notices, syllabiNav, tosNav, directory],
+          items: [notices, syllabiNav, tosNav, classRecords, directory],
         },
       ]
     case 'dean':
@@ -228,7 +232,7 @@ export function navFor(role: Role): NavSection[] {
         },
         {
           heading: 'College information',
-          items: [notices, syllabiNav, tosNav, directory],
+          items: [notices, syllabiNav, tosNav, classRecords, directory],
         },
       ]
     case 'chairperson':
@@ -253,6 +257,7 @@ export function navFor(role: Role): NavSection[] {
             consultations,
             syllabiNav,
             tosNav,
+            ...(role === 'chairperson' ? [classRecords] : []),
           ],
         },
         {

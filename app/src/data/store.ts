@@ -336,13 +336,13 @@ export const api = {
   respondToConsultation: (user: User, requestId: string, input: Parameters<typeof respondToConsultation>[3]) =>
     mutate((d, at) => respondToConsultation(d, user, requestId, input, at), true),
 
-  submitRequest: (user: User, input: { typeId: string; title: string; description: string; customTypeName?: string; files: engine.NewFile[] }) =>
+  submitRequest: (user: User, input: Parameters<typeof engine.submitRequest>[2]) =>
     mutate((d, at) => engine.submitRequest(d, user, input, at), isCustomDocumentType(input.typeId)),
 
   /** REQ-REC-8: College Secretary creates a record for a document received in person. */
   encodeWalkInRequest: (
     actor: User,
-    { requesterId, ...input }: { requesterId: string; typeId: string; title: string; description: string; customTypeName?: string; files: engine.NewFile[] },
+    { requesterId, ...input }: Parameters<typeof engine.submitRequest>[2] & { requesterId: string },
   ) =>
     mutate((d, at) => {
       if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary can encode walk-in documents.')
@@ -372,6 +372,7 @@ export const api = {
         body: JSON.stringify({
           title: input.title,
           description: input.description,
+          document_number: input.documentNumber?.trim() || null,
           notes: input.note,
           files: input.files,
         }),
@@ -381,6 +382,9 @@ export const api = {
     }
     return mutate((d, at) => engine.resubmit(d, user, docId, input, at))
   },
+
+  signDocument: (user: User, documentId: string, input: Parameters<typeof engine.signDocument>[3]) =>
+    mutate((draft, at) => engine.signDocument(draft, user, documentId, input, at), true),
 
   checkRequirements: (user: User, docId: string, input: { decision?: 'complete' | 'return' | 'reject'; missing: string[]; reasons: string }) =>
     mutate((d, at) => engine.checkRequirements(d, user, docId, input, at)),
@@ -819,7 +823,7 @@ export const api = {
     mutate((d) => {
       if (actor.role !== 'secretary') throw new FriendlyError('Only the College Secretary (System Admin) can edit document types.')
       if (!docType.name.trim()) throw new FriendlyError('Please enter a name for the document type.')
-      if (docType.requirements.length === 0)
+      if (docType.requirements.length === 0 && !isCustomDocumentType(docType.id))
         throw new FriendlyError('Please include at least one required form or attachment in the checklist.')
       const idx = d.documentTypes.findIndex((t) => t.id === docType.id)
       const cleaned: DocumentType = {
@@ -835,7 +839,7 @@ export const api = {
         d.documentTypes.push(cleaned)
       }
       return cleaned
-    }),
+    }, true),
 
   /** REQ-EXT-1: Add, edit, or remove external offices. */
   saveExternalOffice: (actor: User, item: ExternalOfficeItem) =>

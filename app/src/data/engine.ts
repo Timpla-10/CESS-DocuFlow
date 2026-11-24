@@ -14,6 +14,8 @@
 import { FriendlyError, MESSAGES, OFFICE_LABEL, ROLE_OFFICE, controlNumber, externalOfficeLabel, isRequester } from '../content/language'
 import { daysSince, formatDate, plural } from '../lib/time'
 import { customDocumentTypeError, isCustomDocumentType } from './customDocumentTypes'
+import { documentNumberError } from './documentNumbers'
+import { canSignDocument, isSignatureImage } from './documentSignatures'
 export { daysSince }
 import { EXTERNAL_RETURN_OUTCOMES } from './types'
 import type {
@@ -21,6 +23,7 @@ import type {
   Database,
   DocRecord,
   DocumentType,
+  DocumentSignature,
   ExternalOfficeId,
   ExternalReturnOutcome,
   HistoryEntry,
@@ -222,6 +225,7 @@ export function submitRequest(
     title: string
     description: string
     customTypeName?: string
+    documentNumber?: string
     files: NewFile[]
     encodedBySecretary?: boolean
     encodedByName?: string
@@ -241,6 +245,8 @@ export function submitRequest(
     throw new FriendlyError('Please enter a description or purpose for your document request.')
   }
   const isCustom = isCustomDocumentType(type.id)
+  const numberError = documentNumberError(input.documentNumber, type.documentNumberRequired)
+  if (numberError) throw new FriendlyError(numberError)
   const customName = isCustom ? input.customTypeName?.trim() : undefined
   if (isCustom) {
     const error = customDocumentTypeError(customName)
@@ -257,6 +263,7 @@ export function submitRequest(
     revision: 0,
     typeId: type.id,
     customTypeName: customName,
+    documentNumber: input.documentNumber?.trim() || undefined,
     title: input.title.trim(),
     description: input.description.trim(),
     origin,
@@ -313,7 +320,7 @@ export function resubmit(
   db: Database,
   user: User,
   docId: string,
-  input: { title: string; description: string; customTypeName?: string; files: NewFile[]; note: string },
+  input: { title: string; description: string; customTypeName?: string; documentNumber?: string; files: NewFile[]; note: string },
   at: string,
 ): DocRecord {
   const doc = getDoc(db, docId)
@@ -322,6 +329,10 @@ export function resubmit(
     throw new FriendlyError('This request isn’t waiting for corrections, so it can’t be resubmitted right now.')
   if (input.files.length === 0 && !input.note.trim())
     throw new FriendlyError('Please attach at least one corrected file or explain what you changed.')
+
+  const documentNumber = input.documentNumber ?? doc.documentNumber
+  const numberError = documentNumberError(documentNumber, getType(db, doc.typeId).documentNumberRequired)
+  if (numberError) throw new FriendlyError(numberError)
 
   if (isCustomDocumentType(doc.typeId)) {
     const customName = input.customTypeName?.trim() ?? doc.customTypeName
@@ -335,6 +346,7 @@ export function resubmit(
   doc.revision += 1
   doc.title = input.title.trim()
   doc.description = input.description.trim()
+  doc.documentNumber = documentNumber?.trim() || undefined
   doc.attachments.push(...input.files.map((f) => toAttachment(db, f, doc.revision, user.name, at)))
   doc.status = 'submitted'
   doc.returnInfo = undefined
@@ -358,6 +370,36 @@ function toAttachment(db: Database, f: NewFile, revision: number, by: string, at
     uploadedBy: by,
     isSignedCopy,
   }
+}
+
+export function signDocument(
+  db: Database,
+  user: User,
+  documentId: string,
+  input: { revision: number; image: string },
+  at: string,
+): DocumentSignature {
+  const actor = getUser(db, user.id)
+  const doc = getDoc(db, documentId)
+  if (!actor || !canSignDocument(actor, doc)) {
+    throw new FriendlyError('This account cannot add a signature to the current document revision.')
+  }
+  if (doc.revision !== input.revision) throw new FriendlyError('The document revision changed. Reopen the signature form and review the new revision.')
+  if (!isSignatureImage(input.image)) throw new FriendlyError('Use a smaller PNG or JPEG signature image, or redraw the signature.')
+  const office = officeOf(actor)
+  const signature: DocumentSignature = {
+    id: nextId(db, 'signature-'),
+    signerId: actor.id,
+    signerName: actor.name,
+    office,
+    signedAt: at,
+    revision: doc.revision,
+    image: input.image,
+  }
+  const signatures = (doc.signatures ??= [])
+  signatures.push(signature)
+  addHistory(doc, { at, office: OFFICE_LABEL[office], actorName: actor.name, action: 'signed' }, db)
+  return signature
 }
 
 export function validateFiles(type: DocumentType, files: NewFile[]) {
