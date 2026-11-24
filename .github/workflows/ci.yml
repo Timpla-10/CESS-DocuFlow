@@ -3,13 +3,13 @@ name: CESS DocuFlow CI
 on:
   push:
     branches:
-      - devops-ci-setup
-      - tempoMain
+      - Main
 
   pull_request:
     branches:
-      - tempoMain
       - Main
+
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
@@ -33,6 +33,10 @@ jobs:
       - name: Install Frontend Dependencies
         working-directory: app
         run: npm ci
+
+      - name: Lint Frontend
+        working-directory: app
+        run: npm run lint
 
       - name: Build React Application
         working-directory: app
@@ -44,10 +48,10 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
@@ -59,9 +63,7 @@ jobs:
 
       - name: Check Backend Syntax
         run: |
-          node --check backend/server.js
-          node --check backend/config/database.js
-          node --check backend/routes/index.js
+          find backend -name "*.js" -not -path "backend/node_modules/*" -print0 | xargs -0 -n 1 node --check
 
   docker:
     name: Docker Build
@@ -72,7 +74,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Validate Docker Compose
         run: docker compose config --no-env-resolution --quiet

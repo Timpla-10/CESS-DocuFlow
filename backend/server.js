@@ -8,7 +8,31 @@ const { sanitizeForLog } = require('./services/authService');
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  'https://cess-docu-flow.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:8080',
+  ...(process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : []),
+];
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        /^https:\/\/cess-docu-flow-[a-z0-9-]+\.vercel\.app$/i.test(origin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS policy does not allow origin: ${origin}`));
+    },
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-email', 'x-user-id'],
+  })
+);
 app.use(express.json());
 
 // Swagger API Documentation (Interactive UI & Raw JSON Spec)

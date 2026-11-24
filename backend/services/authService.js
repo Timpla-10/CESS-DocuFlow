@@ -432,7 +432,7 @@ const AuthService = {
     });
 
     // PB-04 (SRS 3.1 REQ-AUTH-14): Issue session token with Remember-Me lifecycle (7 days vs 1 day)
-    const session = SessionModel.createSession({
+    const session = await SessionModel.createSession({
       userId: profile.id,
       email: cleanEmail,
       role: profile.role,
@@ -737,6 +737,9 @@ const AuthService = {
     // Invalidate token immediately (single-use)
     tokenRecord.used = true;
 
+    // Revoke all existing sessions for this user after successful password reset
+    await SessionModel.revokeAllUserSessions(profile.id);
+
     recordSecurityEvent({
       event: 'password_reset_completed',
       email: targetEmail,
@@ -878,6 +881,9 @@ const AuthService = {
       customPasswordHashes.set(cleanEmail, sha256(newPassword));
     }
 
+    // Revoke all existing sessions (including current session) after successful password change
+    await SessionModel.revokeAllUserSessions(actor.id);
+
     recordSecurityEvent({
       event: 'password_changed',
       email: cleanEmail,
@@ -936,7 +942,7 @@ const AuthService = {
       throw err;
     }
 
-    const session = SessionModel.createSession({
+    const session = await SessionModel.createSession({
       userId: profile.id,
       email: cleanEmail,
       role: profile.role,
@@ -964,7 +970,7 @@ const AuthService = {
   async logoutUser(token, user) {
     const cleanToken = token ? token.replace(/^Bearer\s+/i, '').trim() : null;
     if (cleanToken) {
-      SessionModel.revokeSession(cleanToken);
+      await SessionModel.revokeSession(cleanToken);
     }
     if (user?.id) {
       recordSecurityEvent({
@@ -1232,7 +1238,7 @@ const AuthService = {
     if (error) throw error;
 
     await UserModel.revokeUserOffices(registrationId);
-    SessionModel.revokeAllUserSessions(registrationId);
+    await SessionModel.revokeAllUserSessions(registrationId);
     pendingRequestedRoles.delete(String(reg.email || '').toLowerCase());
 
     const updated = await UserModel.findById(registrationId);
@@ -1425,7 +1431,7 @@ const AuthService = {
     }
 
     const updated = await UserModel.deleteWhitelistById(userId);
-    SessionModel.revokeAllUserSessions(userId);
+    await SessionModel.revokeAllUserSessions(userId);
 
     recordUserManagementEvent({
       action: 'whitelist_removed',
@@ -1509,7 +1515,7 @@ const AuthService = {
     });
 
     if (accountStatus !== 'Active' || (before && before.role !== saved.role)) {
-      SessionModel.revokeAllUserSessions(saved.id);
+      await SessionModel.revokeAllUserSessions(saved.id);
     }
 
     recordUserManagementEvent({
@@ -1589,7 +1595,7 @@ const AuthService = {
     });
 
     if (nextStatus !== 'Active' || existing.role !== updated.role) {
-      SessionModel.revokeAllUserSessions(userId);
+      await SessionModel.revokeAllUserSessions(userId);
     }
 
     recordUserManagementEvent({
@@ -1671,7 +1677,7 @@ const AuthService = {
       }
     } else {
       await UserModel.revokeUserOffices(userId);
-      SessionModel.revokeAllUserSessions(userId);
+      await SessionModel.revokeAllUserSessions(userId);
     }
 
     const updated = await UserModel.findById(userId);

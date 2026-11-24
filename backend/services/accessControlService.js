@@ -2013,10 +2013,10 @@ const AccessControlService = {
     const remarks = (payload.remarks || payload.notes || '').trim();
 
     // REQ-EXT-1: Resolve external office record from Office table (office_type = 'External_Office')
-    // Uses the supabase client via the shared module. Falls back gracefully if office not found.
+    // Uses the shared Supabase client from ../config/database. Falls back gracefully if office not found.
     let externalOfficeId = null;
     try {
-      const supabase = require('../config/supabase');
+      const supabase = require('../config/database');
       const { data: officeRows } = await supabase
         .from('office')
         .select('office_id, office_name')

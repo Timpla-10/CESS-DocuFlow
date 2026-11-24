@@ -26,7 +26,7 @@ async function verifyUser(req, res, next) {
     if (directToken) {
       // Check if this is a DocuFlow session token (PB-04)
       if (directToken.startsWith('sess_')) {
-        const validation = SessionModel.validateSession(directToken);
+        const validation = await SessionModel.validateSession(directToken);
         if (!validation.valid) {
           return res.status(validation.status || 401).json({
             error: `Unauthorized: ${validation.reason || 'Invalid or expired session.'}`,

@@ -33,6 +33,11 @@ import type {
 } from './types'
 
 const KEY = 'docuflow.db'
+export const AUTH_TOKEN_KEY = 'docuflow.authToken'
+export const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
+export function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`
+}
 const listeners = new Set<() => void>()
 
 function load(): Database {
@@ -128,22 +133,29 @@ export const api = {
     }
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password }),
+        body: JSON.stringify({ email: cleanEmail, password, rememberMe: true }),
       })
       if (res.ok) {
         const data = await res.json()
         if (data?.user) {
+          if (data.token) {
+            try {
+              localStorage.setItem(AUTH_TOKEN_KEY, data.token)
+            } catch {
+              /* ignore storage errors */
+            }
+          }
           const liveUser: User = {
             id: data.user.id || data.user.user_id,
             name: data.user.name,
             email: data.user.email,
             role: data.user.role,
             origin: data.user.origin,
-            department: data.user.department,
-            position: data.user.position,
+            department: data.user.department || 'CESS',
+            position: data.user.position || data.user.roleLabel || data.user.role,
             active: data.user.active ?? true,
           }
           const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail)
@@ -154,8 +166,10 @@ export const api = {
           }
           // PB-10 & PB-11: Sync live document types and requirement checklists from backend
           try {
-            const dtRes = await fetch('/api/document-types', {
-              headers: { 'x-user-email': liveUser.email },
+            const dtHeaders: Record<string, string> = { 'x-user-email': liveUser.email }
+            if (data.token) dtHeaders.Authorization = `Bearer ${data.token}`
+            const dtRes = await fetch(apiUrl('/api/document-types'), {
+              headers: dtHeaders,
             })
             if (dtRes.ok) {
               const dtData = await dtRes.json()
@@ -225,7 +239,7 @@ export const api = {
     }
 
     try {
-      const res = await fetch('/api/auth/google', {
+      const res = await fetch(apiUrl('/api/auth/google'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail }),
@@ -233,14 +247,21 @@ export const api = {
       if (res.ok) {
         const data = await res.json()
         if (data?.user) {
+          if (data.token) {
+            try {
+              localStorage.setItem(AUTH_TOKEN_KEY, data.token)
+            } catch {
+              /* ignore storage errors */
+            }
+          }
           const liveUser: User = {
             id: data.user.id || data.user.user_id,
             name: data.user.name,
             email: data.user.email,
             role: data.user.role,
             origin: data.user.origin,
-            department: data.user.department,
-            position: data.user.position,
+            department: data.user.department || 'CESS',
+            position: data.user.position || data.user.roleLabel || data.user.role,
             active: data.user.active ?? true,
           }
           const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === cleanEmail)
@@ -251,8 +272,10 @@ export const api = {
           }
           // PB-10 & PB-11: Sync live document types and requirement checklists from backend
           try {
-            const dtRes = await fetch('/api/document-types', {
-              headers: { 'x-user-email': liveUser.email },
+            const dtHeaders: Record<string, string> = { 'x-user-email': liveUser.email }
+            if (data.token) dtHeaders.Authorization = `Bearer ${data.token}`
+            const dtRes = await fetch(apiUrl('/api/document-types'), {
+              headers: dtHeaders,
             })
             if (dtRes.ok) {
               const dtData = await dtRes.json()
@@ -351,12 +374,15 @@ export const api = {
   resubmit: async (user: User, docId: string, input: { title: string; description: string; files: engine.NewFile[]; note: string }) => {
     // PB-18 / PB-19: Sync live backend if connected
     try {
-      await fetch(`/api/documents/${docId}/resubmit`, {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY)
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-user-email': user.email,
+      }
+      if (token) headers.Authorization = `Bearer ${token}`
+      await fetch(apiUrl(`/api/documents/${docId}/resubmit`), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-email': user.email,
-        },
+        headers,
         body: JSON.stringify({
           title: input.title,
           description: input.description,
