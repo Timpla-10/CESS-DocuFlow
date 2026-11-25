@@ -1,7 +1,17 @@
 import { FriendlyError } from '../content/language'
 
 const TOKEN_KEY = 'docuflow.auth-token'
-const apiBase = (import.meta.env?.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')
+
+export function resolveApiBaseUrl(
+  primary: string | undefined = import.meta.env.VITE_API_BASE_URL,
+  fallback: string | undefined = import.meta.env.VITE_API_URL,
+): string {
+  const raw = (primary ?? '').trim() || (fallback ?? '').trim()
+  return raw.replace(/\/+$/, '')
+}
+
+export const API_BASE_URL = resolveApiBaseUrl()
+const apiBase = API_BASE_URL
 
 export function getAuthToken(): string | null {
   try {
