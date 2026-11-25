@@ -79,9 +79,13 @@ export function secretaryQueues(db: Database) {
   const docs = db.documents
   return {
     toCheck: docs.filter((d) => d.status === 'submitted').sort(byOldest),
+    inReview: docs.filter((d) => d.status === 'with_office').sort(byOldest),
     toProcess: docs.filter((d) => d.status === 'with_office' && d.route[d.routeIndex]?.stage === 'final').sort(byOldest),
     external: docs.filter((d) => d.status === 'with_external').sort(byOldest),
     ready: docs.filter((d) => d.status === 'ready').sort(byOldest),
+    returned: docs.filter((d) => d.status === 'returned').sort(byOldest),
+    rejected: docs.filter((d) => d.status === 'rejected').sort(byOldest),
+    ids: docs.filter((d) => d.origin === 'IDS' && !d.archived).sort(byOldest),
   }
 }
 

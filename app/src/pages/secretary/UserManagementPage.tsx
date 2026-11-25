@@ -21,10 +21,10 @@ import { useToast } from '../../components/Toast'
 import { Badge, Button, Card, CardHeader, EmptyState, PageHeader, Segmented, cn } from '../../components/ui'
 import { ROLE_LABEL } from '../../content/language'
 import { api, useDb } from '../../data/store'
-import type { Origin, PendingRegistration, Role, User, WhitelistEntry } from '../../data/types'
+import type { NotificationPreference, Origin, PendingRegistration, Role, User, WhitelistEntry } from '../../data/types'
 import { formatDate } from '../../lib/time'
 
-const ALL_ROLES: Role[] = ['student', 'faculty', 'secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+const ALL_ROLES: Role[] = ['student', 'faculty', 'secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
 
 interface ParsedRow {
   idNumber: string
@@ -62,6 +62,7 @@ export function UserManagementPage() {
   const [uOrigin, setUOrigin] = useState<Origin>('CESS')
   const [uDept, setUDept] = useState('')
   const [uPos, setUPos] = useState('')
+  const [uNotifPref, setUNotifPref] = useState<NotificationPreference>('both')
   const [userBusy, setUserBusy] = useState(false)
   const [userErrors, setUserErrors] = useState<Record<string, string>>({})
 
@@ -151,6 +152,7 @@ export function UserManagementPage() {
     setUOrigin('CESS')
     setUDept('BSEd English')
     setUPos('Student')
+    setUNotifPref('both')
     setUserErrors({})
     setIsUserModalOpen(true)
   }
@@ -163,6 +165,7 @@ export function UserManagementPage() {
     setUOrigin(u.origin ?? 'CESS')
     setUDept(u.department)
     setUPos(u.position)
+    setUNotifPref(u.notificationPreference ?? 'both')
     setUserErrors({})
     setIsUserModalOpen(true)
   }
@@ -203,6 +206,7 @@ export function UserManagementPage() {
         origin: uRole === 'student' || uRole === 'faculty' ? uOrigin : undefined,
         department: uDept.trim(),
         position: uPos.trim(),
+        notificationPreference: uNotifPref,
       })
       toast.success(
         editingUserId ? 'Account Updated' : 'Account Created',
@@ -588,10 +592,10 @@ export function UserManagementPage() {
               </div>
 
               <div>
-                <select
+                <Select
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="h-9 text-xs"
                 >
                   <option value="all">All Roles ({db.users.length})</option>
                   {ALL_ROLES.map((r) => (
@@ -599,31 +603,31 @@ export function UserManagementPage() {
                       {ROLE_LABEL[r]}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div>
-                <select
+                <Select
                   value={originFilter}
                   onChange={(e) => setOriginFilter(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="h-9 text-xs"
                 >
                   <option value="all">All Units (CESS & IDS)</option>
                   <option value="CESS">CESS Main Campus</option>
                   <option value="IDS">Integrated Developmental School (IDS)</option>
-                </select>
+                </Select>
               </div>
 
               <div>
-                <select
+                <Select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="h-9 text-xs"
                 >
                   <option value="all">All Account Statuses</option>
                   <option value="active">Active Only</option>
                   <option value="deactivated">Deactivated Only</option>
-                </select>
+                </Select>
               </div>
             </div>
           </div>
@@ -659,7 +663,17 @@ export function UserManagementPage() {
                           <span className="font-semibold text-ink-800">{ROLE_LABEL[u.role]}</span>
                           {u.origin && <Badge tone="neutral">{u.origin}</Badge>}
                         </div>
-                        <div className="mt-0.5 text-xs text-ink-500">{u.position}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
+                          <span>{u.position}</span>
+                          <span>·</span>
+                          <span className="font-medium text-ink-600">
+                            {u.notificationPreference === 'email_only'
+                              ? '📧 Email Only'
+                              : u.notificationPreference === 'in_system_only'
+                              ? '🔔 In-System Only'
+                              : '🔔+📧 Both'}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 font-mono text-xs text-ink-600">{u.email}</td>
                       <td className="px-5 py-3.5 whitespace-nowrap">
@@ -707,14 +721,14 @@ export function UserManagementPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-ink-800">Masterlist Type</label>
-                  <select
+                  <Select
                     value={importTargetRole}
                     onChange={(e) => setImportTargetRole(e.target.value as 'student' | 'faculty')}
-                    className="h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-800 focus:border-brand-500 focus:outline-none"
+                    className="h-10 text-sm"
                   >
                     <option value="student">Enrolled Students Masterlist</option>
                     <option value="faculty">Faculty & Academic Staff Roster</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div>
@@ -909,15 +923,15 @@ export function UserManagementPage() {
                 </div>
 
                 <div>
-                  <select
+                  <Select
                     value={whitelistRoleFilter}
                     onChange={(e) => setWhitelistRoleFilter(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none"
+                    className="h-9 text-xs"
                   >
                     <option value="all">All Roles</option>
                     <option value="student">Students</option>
                     <option value="faculty">Faculty</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -1058,7 +1072,7 @@ export function UserManagementPage() {
       <Dialog
         open={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
-        size="md"
+        size="lg"
         title={editingUserId ? 'Edit User Account & Role' : 'Create User Account'}
         description="Configure university email, assign official roles, and designate CESS or IDS origin."
         busy={userBusy}
@@ -1073,7 +1087,7 @@ export function UserManagementPage() {
           </>
         }
       >
-        <form onSubmit={handleSaveUser} className="space-y-4">
+        <form onSubmit={handleSaveUser} className="space-y-5">
           <Field label="Full Name" required error={userErrors.name}>
             <Input
               value={uName}
@@ -1099,7 +1113,7 @@ export function UserManagementPage() {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-5">
             <Field label="Official Role" required>
               <Select value={uRole} onChange={(e) => setURole(e.target.value as Role)}>
                 {ALL_ROLES.map((r) => (
@@ -1111,7 +1125,7 @@ export function UserManagementPage() {
             </Field>
 
             {(uRole === 'student' || uRole === 'faculty') && (
-              <Field label="Unit / Origin (REQ-SUB-6)" required>
+              <Field label="Unit / Origin" hint="Designate campus affiliation for document routing." required>
                 <Select value={uOrigin} onChange={(e) => setUOrigin(e.target.value as Origin)}>
                   <option value="CESS">CESS Main Campus</option>
                   <option value="IDS">Integrated Developmental School (IDS)</option>
@@ -1143,6 +1157,32 @@ export function UserManagementPage() {
               required
             />
           </Field>
+
+          <Field label="Notification Delivery Preference" hint="User can also change this anytime from their Account Settings.">
+            <Select
+              value={uNotifPref}
+              onChange={(e) => setUNotifPref(e.target.value as NotificationPreference)}
+            >
+              <option value="both">Both External Email &amp; In-System Bell (Default)</option>
+              <option value="email_only">External Email Only (In-System Bell Muted)</option>
+              <option value="in_system_only">In-System Bell Only (External Email Muted)</option>
+            </Select>
+          </Field>
+
+          {!editingUserId && (
+            <div className="rounded-lg bg-brand-50 p-3 text-xs text-brand-900 border border-brand-200">
+              <p className="font-bold flex items-center gap-1.5">
+                <span>Default Password for New Accounts</span>
+              </p>
+              <p className="mt-1 text-brand-700 leading-relaxed">
+                New accounts are assigned the system default password:{' '}
+                <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-brand-300 text-brand-950">
+                  cess2026
+                </strong>
+                . The user can sign in using their official Gmail (<span className="font-mono">@msunaawan.edu.ph</span>) and this password.
+              </p>
+            </div>
+          )}
         </form>
       </Dialog>
 
@@ -1152,7 +1192,7 @@ export function UserManagementPage() {
       <Dialog
         open={!!approveDialogReg}
         onClose={() => setApproveDialogReg(null)}
-        size="md"
+        size="lg"
         title="Approve & Activate Account"
         description="Confirm or adjust the assigned role and department before activating this university user."
         busy={approveBusy}
@@ -1168,8 +1208,8 @@ export function UserManagementPage() {
         }
       >
         {approveDialogReg && (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-ink-50 p-3 text-xs space-y-1">
+          <div className="space-y-5">
+            <div className="rounded-xl bg-ink-50 p-4 text-xs space-y-1.5 border border-ink-100">
               <div>
                 <span className="font-semibold text-ink-700">Applicant: </span>
                 <span className="text-ink-900 font-bold">{approveDialogReg.name}</span>
@@ -1234,7 +1274,7 @@ export function UserManagementPage() {
         }
       >
         {rejectDialogReg && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             <p className="text-xs text-ink-600">
               Rejecting will notify <span className="font-bold">{rejectDialogReg.name}</span> ({rejectDialogReg.email}).
             </p>
