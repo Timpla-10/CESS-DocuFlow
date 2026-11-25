@@ -4,6 +4,12 @@
  * Traceability: SRS 3.3 (Completeness/Content Check); SRS 3.4 (Recording & Repository); SRS 3.11 (Workflow Monitoring)
  * Dependencies: PB-15 (Completeness scan), PB-17 (Control Number)
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
 

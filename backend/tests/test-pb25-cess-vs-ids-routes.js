@@ -12,6 +12,12 @@
  *   3. Invalid transitions are blocked (REQ-ROUTE-7)
  *   4. Every handoff is logged (REQ-ROUTE-8)
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const UserModel = require('../models/userModel');
 const DocumentModel = require('../models/documentModel');

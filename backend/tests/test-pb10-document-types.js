@@ -2,6 +2,12 @@
  * Integration Test Suite for Ticket PB-10:
  * "Browse available document types [P0]" (REQ-SUB-1, REQ-AUTH-2)
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const supabase = require('../config/database');
 const DocumentModel = require('../models/documentModel');

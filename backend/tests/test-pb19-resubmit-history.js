@@ -4,6 +4,12 @@
  * Traceability: SRS 3.2 REQ-SUB-8; SRS 3.5 REQ-ROUTE-9; SRS 3.6 (REQ-TRK-1 to TRK-4); SRS 3.7 REQ-MON-2
  * Dependencies: PB-22 (Reviewer return with remarks), PB-18 (Editing locks)
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
 

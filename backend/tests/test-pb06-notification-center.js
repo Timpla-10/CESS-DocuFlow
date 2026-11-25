@@ -12,6 +12,12 @@
  *   4. PO Note: Add mark-read, clear and retention behavior
  */
 const assert = require('assert');
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const supabase = require('../config/database');
 const NotificationModel = require('../models/notificationModel');

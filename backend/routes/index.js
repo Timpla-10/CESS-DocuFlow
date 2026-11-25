@@ -8,6 +8,7 @@ const directoryRoutes = require('./directoryRoutes');
 const homepageRoutes = require('./homepageRoutes');
 const followUpRuleRoutes = require('./followUpRuleRoutes');
 const DocumentController = require('../controllers/documentController');
+const DirectoryController = require('../controllers/directoryController');
 const { verifyUser, requireAction } = require('../middleware/authMiddleware');
 
 router.get('/health', (req, res) => {
@@ -37,6 +38,8 @@ router.use('/workflow/routes', workflowRouteRoutes);
 router.use('/routes', workflowRouteRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/directory', directoryRoutes);
+// Alias /api/syllabi for frontend compatibility with app/src/lib/supabase.ts
+router.get('/syllabi', verifyUser, DirectoryController.listSyllabi);
 router.use('/homepage', homepageRoutes);
 router.use('/follow-up-rules', followUpRuleRoutes);
 

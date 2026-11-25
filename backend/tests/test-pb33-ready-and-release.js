@@ -12,6 +12,12 @@
  *   4. Final document view/download respects permissions (requester, reviewer, secretary)
  */
 
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const DocumentModel = require('../models/documentModel');
 const UserModel = require('../models/userModel');

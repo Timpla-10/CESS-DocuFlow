@@ -11,7 +11,14 @@
  *   3. Logout ends the session (immediate server-side revocation + token invalidation + security audit log)
  */
 const assert = require('assert');
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized and SessionModel.clear() cannot run unless targeting verified staging.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
+const supabase = require('../config/database');
 const SessionModel = require('../models/sessionModel');
 const AuthService = require('../services/authService');
 const { getPasswordsForRole, provisionVerifiedUser } = require('../services/authService');
@@ -63,8 +70,8 @@ async function runTests() {
   await seedTestAccounts();
   console.log('✅ Provisioned verified test accounts.\n');
 
-  // Clear in-memory session store for clean test run
-  SessionModel.clear();
+  // Clear session store for clean test run (non-production only)
+  await SessionModel.clear();
 
   const server = app.listen(0);
   const port = server.address().port;
@@ -106,7 +113,7 @@ async function runTests() {
     assert(rememberLoginRes.body.token.startsWith('sess_'), 'Session token should use sess_ prefix');
     assert.strictEqual(rememberLoginRes.body.rememberMe, true, 'rememberMe must be reflected in login response');
 
-    const rememberSession = SessionModel.getSession(rememberLoginRes.body.token);
+    const rememberSession = await SessionModel.getSession(rememberLoginRes.body.token);
     assert(rememberSession, 'Session must exist in SessionModel store');
     assert.strictEqual(rememberSession.rememberMe, true, 'SessionModel must store rememberMe: true');
     assert.strictEqual(rememberSession.ttlMs, SessionModel.SEVEN_DAYS_MS, 'Remember-Me TTL must be exactly 7 days');
@@ -129,7 +136,7 @@ async function runTests() {
     assert(nonRememberLoginRes.body.token, 'Response must include session token');
     assert.strictEqual(nonRememberLoginRes.body.rememberMe, false, 'rememberMe=false must be reflected in login response');
 
-    const nonRememberSession = SessionModel.getSession(nonRememberLoginRes.body.token);
+    const nonRememberSession = await SessionModel.getSession(nonRememberLoginRes.body.token);
     assert(nonRememberSession, 'Session must exist in SessionModel store');
     assert.strictEqual(nonRememberSession.rememberMe, false, 'SessionModel must store rememberMe: false');
     assert.strictEqual(nonRememberSession.ttlMs, SessionModel.ONE_DAY_MS, 'Non-Remember session TTL must be 1 day (24 hours)');
@@ -140,7 +147,7 @@ async function runTests() {
     // -------------------------------------------------------------
     console.log('\n3️⃣  Testing Authenticated Access & Activity Touch (GET /api/auth/me)...');
     const activeToken = rememberLoginRes.body.token;
-    const initialSession = SessionModel.getSession(activeToken);
+    const initialSession = await SessionModel.getSession(activeToken);
     const initialLastActive = initialSession.lastActiveAt;
 
     // Small delay to ensure timestamp advancement
@@ -157,7 +164,7 @@ async function runTests() {
     assert.strictEqual(meRes.body.verified, true, 'Profile must be verified');
     assert.strictEqual(meRes.body.user.email, facultyCreds.email, 'User email must match signed-in user');
 
-    const touchedSession = SessionModel.getSession(activeToken);
+    const touchedSession = await SessionModel.getSession(activeToken);
     assert(
       new Date(touchedSession.lastActiveAt).getTime() >= new Date(initialLastActive).getTime(),
       'lastActiveAt must be updated on request activity'
@@ -168,10 +175,13 @@ async function runTests() {
     // Test Case 4: Inactivity Expiration (REQ-AUTH-14 7-day idle policy)
     // -------------------------------------------------------------
     console.log('\n4️⃣  Testing Inactivity Expiration (REQ-AUTH-14 7-day inactivity limit)...');
-    // Artificially age the session to 7 days + 1 second ago
+    // Artificially age the persisted session to 7 days + 1 second ago
     const expiredToken = nonRememberLoginRes.body.token;
-    const sessionToAge = SessionModel.getSession(expiredToken);
-    sessionToAge.lastActiveAt = new Date(Date.now() - (SessionModel.SEVEN_DAYS_MS + 1000)).toISOString();
+    const staleIso = new Date(Date.now() - (SessionModel.SEVEN_DAYS_MS + 1000)).toISOString();
+    await supabase
+      .from(SessionModel.TABLE)
+      .update({ last_active_at: staleIso })
+      .eq('token_hash', SessionModel.hashToken(expiredToken));
 
     const inactiveRes = await request('/auth/me', {
       method: 'GET',
@@ -185,7 +195,8 @@ async function runTests() {
       inactiveRes.body.error.toLowerCase().includes('inactivity'),
       'Error message must indicate session expiration due to inactivity'
     );
-    assert.strictEqual(sessionToAge.isRevoked, true, 'Inactive session must be marked as revoked');
+    const agedSessionAfter = await SessionModel.getSession(expiredToken);
+    assert.strictEqual(agedSessionAfter.isRevoked, true, 'Inactive session must be marked as revoked');
     console.log('   ✅ Inactive session (> 7 days) rejected with 401 and automatically revoked.');
 
     // -------------------------------------------------------------
@@ -214,7 +225,7 @@ async function runTests() {
     assert.strictEqual(logoutRes.body.success, true, 'Logout body must indicate success');
 
     // Verify token is revoked in SessionModel
-    const revokedSession = SessionModel.getSession(sessionToLogout);
+    const revokedSession = await SessionModel.getSession(sessionToLogout);
     assert.strictEqual(revokedSession.isRevoked, true, 'Session must be marked revoked after logout');
 
     // Attempting to use the revoked token must now fail with 401
@@ -249,31 +260,32 @@ async function runTests() {
     // Test Case 7: Password Reset Cascade Revocation (Multi-Session)
     // -------------------------------------------------------------
     console.log('\n7️⃣  Testing Cascade Revocation of All User Sessions on Password Reset...');
-    // Create two parallel sessions for faculty
-    const s1 = SessionModel.createSession({
-      userId: facultyCreds.email,
+    // Create two parallel sessions for faculty (using real persisted user UUID)
+    const facultyUserId = rememberLoginRes.body.user.id;
+    const s1 = await SessionModel.createSession({
+      userId: facultyUserId,
       email: facultyCreds.email,
       role: 'faculty',
       origin: 'CESS',
       rememberMe: true,
     });
-    const s2 = SessionModel.createSession({
-      userId: facultyCreds.email,
+    const s2 = await SessionModel.createSession({
+      userId: facultyUserId,
       email: facultyCreds.email,
       role: 'faculty',
       origin: 'CESS',
       rememberMe: false,
     });
 
-    assert.strictEqual(SessionModel.validateSession(s1.token).valid, true, 'Session 1 must be valid');
-    assert.strictEqual(SessionModel.validateSession(s2.token).valid, true, 'Session 2 must be valid');
+    assert.strictEqual((await SessionModel.validateSession(s1.token)).valid, true, 'Session 1 must be valid');
+    assert.strictEqual((await SessionModel.validateSession(s2.token)).valid, true, 'Session 2 must be valid');
 
     // Revoke all sessions for this user ID
-    const revokedCount = SessionModel.revokeAllUserSessions(facultyCreds.email);
+    const revokedCount = await SessionModel.revokeAllUserSessions(facultyUserId);
     assert(revokedCount >= 2, 'Should revoke all active sessions for the user');
 
-    assert.strictEqual(SessionModel.validateSession(s1.token).valid, false, 'Session 1 must now be invalid');
-    assert.strictEqual(SessionModel.validateSession(s2.token).valid, false, 'Session 2 must now be invalid');
+    assert.strictEqual((await SessionModel.validateSession(s1.token)).valid, false, 'Session 1 must now be invalid');
+    assert.strictEqual((await SessionModel.validateSession(s2.token)).valid, false, 'Session 2 must now be invalid');
     console.log('   ✅ All concurrent user sessions successfully revoked on password change/reset.');
 
     console.log('\n================================================================');

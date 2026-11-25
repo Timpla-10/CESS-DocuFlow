@@ -12,6 +12,12 @@
  *   2. Chronological office/action/reason/actor/time history
  *   3. Ordinary users cannot edit history (immutability)
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const UserModel = require('../models/userModel');
 const DocumentModel = require('../models/documentModel');

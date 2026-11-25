@@ -1,5 +1,6 @@
 const AuthService = require('../services/authService');
 const UserModel = require('../models/userModel');
+const { isHeaderAuthAllowed } = require('../middleware/authMiddleware');
 const { getRoleLabel } = require('../utils/roles');
 
 const AuthController = {
@@ -17,8 +18,8 @@ const AuthController = {
   /** POST /api/auth/google — Sign In with University Google Workspace */
   async loginGoogle(req, res, next) {
     try {
-      const { email, rememberMe } = req.body;
-      const result = await AuthService.loginWithGoogle(email, rememberMe);
+      const { email, accessToken, idToken, rememberMe } = req.body || {};
+      const result = await AuthService.loginWithGoogle({ email, accessToken, idToken }, rememberMe);
       res.json(result);
     } catch (err) {
       next(err);
@@ -39,7 +40,9 @@ const AuthController = {
   /** POST /api/auth/logout — Explicit logout ending the session (PB-04) */
   async logout(req, res, next) {
     try {
-      const token = req.headers.authorization || req.headers['x-session-token'];
+      const token =
+        req.headers.authorization ||
+        (isHeaderAuthAllowed() ? req.headers['x-session-token'] : null);
       const result = await AuthService.logoutUser(token, req.user);
       res.json(result);
     } catch (err) {
@@ -53,6 +56,28 @@ const AuthController = {
       verified: true,
       user: req.user,
     });
+  },
+
+  /** GET /api/auth/directory — Active institutional directory for authenticated users */
+  async getDirectory(req, res, next) {
+    try {
+      const people = await UserModel.findAll();
+      const users = people
+        .filter((person) => person.active && (req.user.role === 'secretary' || person.role !== 'student'))
+        .map(({ id, name, email, role, origin, department, position, active }) => ({
+          id,
+          name,
+          email,
+          role,
+          origin,
+          department,
+          position,
+          active,
+        }));
+      res.json({ users });
+    } catch (err) {
+      next(err);
+    }
   },
 
   /** GET /api/auth/whitelist — List pre-registered / activated whitelist with optional filters (Secretary only, PB-43) */
