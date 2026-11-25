@@ -3,6 +3,12 @@
  * "Prevent editing while request is in process [P0]"
  * Traceability: SRS 3.2 REQ-SUB-7, REQ-SUB-8
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');
 

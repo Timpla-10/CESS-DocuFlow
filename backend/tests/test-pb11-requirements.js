@@ -3,6 +3,12 @@
  * "Show required forms, attachments, and source office [P0]"
  * Traceability: SRS 3.3 REQ-REQT-1, REQ-REQT-2, REQ-REQT-7, REQ-REQT-8
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const DocumentTypeModel = require('../models/documentTypeModel');
 const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');

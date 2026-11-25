@@ -11,6 +11,12 @@
  *   6. PO Note: Syllabus-template replacement automatically creates a published announcement
  */
 const assert = require('assert');
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const DirectoryModel = require('../models/directoryModel');
 const UserModel = require('../models/userModel');

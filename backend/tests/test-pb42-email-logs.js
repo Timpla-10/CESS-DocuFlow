@@ -10,6 +10,12 @@
  *   5. PO Note: Secretary sees all system emails and only workflow notifications
  */
 const assert = require('assert');
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const supabase = require('../config/database');
 const mailer = require('../config/mailer');

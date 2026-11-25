@@ -11,6 +11,12 @@
  *   3. Reason appears to requester and in document history
  *   4. Notification follows requester's preference (Both, Email, In_System)
  */
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const DocumentModel = require('../models/documentModel');
 const { provisionVerifiedUser, getPasswordsForRole } = require('../services/authService');

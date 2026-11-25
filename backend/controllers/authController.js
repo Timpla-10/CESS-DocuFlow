@@ -1,5 +1,6 @@
 const AuthService = require('../services/authService');
 const UserModel = require('../models/userModel');
+const { isHeaderAuthAllowed } = require('../middleware/authMiddleware');
 const { getRoleLabel } = require('../utils/roles');
 
 const AuthController = {
@@ -17,8 +18,8 @@ const AuthController = {
   /** POST /api/auth/google — Sign In with University Google Workspace */
   async loginGoogle(req, res, next) {
     try {
-      const { email, rememberMe } = req.body;
-      const result = await AuthService.loginWithGoogle(email, rememberMe);
+      const { email, accessToken, idToken, rememberMe } = req.body || {};
+      const result = await AuthService.loginWithGoogle({ email, accessToken, idToken }, rememberMe);
       res.json(result);
     } catch (err) {
       next(err);
@@ -39,7 +40,9 @@ const AuthController = {
   /** POST /api/auth/logout — Explicit logout ending the session (PB-04) */
   async logout(req, res, next) {
     try {
-      const token = req.headers.authorization || req.headers['x-session-token'];
+      const token =
+        req.headers.authorization ||
+        (isHeaderAuthAllowed() ? req.headers['x-session-token'] : null);
       const result = await AuthService.logoutUser(token, req.user);
       res.json(result);
     } catch (err) {

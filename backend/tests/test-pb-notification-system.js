@@ -12,6 +12,12 @@
  *   - PB-52: Deployment, Environment, and Recovery Readiness (readiness endpoint, SMTP health)
  */
 
+const { initializeStagingTestEnvironment } = require('./stagingSafetyGuard');
+
+// Fail closed BEFORE importing ../server or ../config/database so no Supabase client
+// is initialized unless explicitly targeting the verified staging Supabase project.
+initializeStagingTestEnvironment();
+
 const app = require('../server');
 const DocumentModel = require('../models/documentModel');
 const NotificationModel = require('../models/notificationModel');
