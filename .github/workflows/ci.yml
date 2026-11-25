@@ -4,10 +4,14 @@ on:
   push:
     branches:
       - Main
+      - Frontend
+      - Backend
 
   pull_request:
     branches:
       - Main
+      - Frontend
+      - Backend
 
   workflow_dispatch:
 
@@ -64,6 +68,13 @@ jobs:
       - name: Check Backend Syntax
         run: |
           find backend -name "*.js" -not -path "backend/node_modules/*" -print0 | xargs -0 -n 1 node --check
+
+      - name: Run Isolated Backend Security & Session Mock Tests
+        run: |
+          node backend/tests/test-auth-security-hardening-mock.js
+          node backend/tests/test-oauth-and-header-hardening-mock.js
+          node backend/tests/test-session-persistence-mock.js
+          node backend/tests/test-staging-safety-guard-mock.js
 
   docker:
     name: Docker Build
