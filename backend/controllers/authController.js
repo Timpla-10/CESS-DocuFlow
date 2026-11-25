@@ -58,6 +58,28 @@ const AuthController = {
     });
   },
 
+  /** GET /api/auth/directory — Active institutional directory for authenticated users */
+  async getDirectory(req, res, next) {
+    try {
+      const people = await UserModel.findAll();
+      const users = people
+        .filter((person) => person.active && (req.user.role === 'secretary' || person.role !== 'student'))
+        .map(({ id, name, email, role, origin, department, position, active }) => ({
+          id,
+          name,
+          email,
+          role,
+          origin,
+          department,
+          position,
+          active,
+        }));
+      res.json({ users });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   /** GET /api/auth/whitelist — List pre-registered / activated whitelist with optional filters (Secretary only, PB-43) */
   async getWhitelist(req, res, next) {
     try {

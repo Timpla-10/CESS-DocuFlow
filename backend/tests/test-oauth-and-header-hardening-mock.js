@@ -14,13 +14,17 @@
  *  8. Session database failures fail closed (500, next() never called).
  *  9. Explicit non-production compatibility (ALLOW_HEADER_AUTH=true, ALLOW_DEMO_AUTH=true) does NOT activate in production.
  * 10. Existing role-based authorization (`requireRole`, `requireAction`) remains intact.
+ * 11-12. `x-session-token` hardening in production vs explicit non-production opt-in.
+ * 13-19. `GET /api/auth/directory` Bearer auth, role-scoped filtering, inactive exclusion, 8-field projection, and DB error forwarding.
  */
 const assert = require('assert');
 const crypto = require('crypto');
+const http = require('http');
 
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://placeholder.invalid';
 process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
+const app = require('../server');
 const supabase = require('../config/database');
 const UserModel = require('../models/userModel');
 const SessionModel = require('../models/sessionModel');
@@ -100,6 +104,7 @@ async function runTests() {
   };
   const origFindByEmail = UserModel.findByEmail;
   const origFindById = UserModel.findById;
+  const origFindAll = UserModel.findAll;
   const origGetUser = supabase.auth.getUser;
 
   const studentUser = {
@@ -392,7 +397,181 @@ async function runTests() {
     assert.strictEqual(devWithFlagRes.req.user.email, studentUser.email);
     console.log('PASS 12: Non-production x-session-token compatibility works ONLY when ALLOW_HEADER_AUTH=true.');
 
-    console.log('\nALL 12 GOOGLE OAUTH & HEADER AUTH HARDENING TESTS PASSED!');
+    // =========================================================================
+    // GET /api/auth/directory ENDPOINT TESTS (13-19, full Express + middleware)
+    // =========================================================================
+    process.env.NODE_ENV = 'production';
+    delete process.env.ALLOW_HEADER_AUTH;
+    delete process.env.ALLOW_DEMO_AUTH;
+
+    const facultyUser = {
+      id: crypto.randomUUID(),
+      email: 'faculty@msunaawan.edu.ph',
+      name: 'Prof. Elena Cruz',
+      role: 'faculty',
+      origin: 'CESS',
+      department: 'Department of Education',
+      position: 'Assistant Professor',
+      active: true,
+      is_whitelisted: true,
+      account_status: 'Active',
+      password_hash: 'internal-hash-must-not-leak',
+      session_token: 'sess_internal_must_not_leak',
+    };
+    const inactiveFaculty = {
+      id: crypto.randomUUID(),
+      email: 'inactive.faculty@msunaawan.edu.ph',
+      name: 'Prof. Inactive Member',
+      role: 'faculty',
+      origin: 'CESS',
+      department: 'Department of Education',
+      position: 'Instructor',
+      active: false,
+      is_whitelisted: false,
+      account_status: 'Inactive',
+      password_hash: 'internal-hash-must-not-leak',
+    };
+    const inactiveStudent = {
+      id: crypto.randomUUID(),
+      email: 'inactive.student@msunaawan.edu.ph',
+      name: 'Inactive Student',
+      role: 'student',
+      origin: 'CESS',
+      department: 'BSEd English',
+      position: 'Student',
+      active: false,
+      is_whitelisted: false,
+      account_status: 'Inactive',
+    };
+    const directoryFixture = [
+      { ...studentUser, position: 'Student', password_hash: 'hash-student', internal_secret: 'nope' },
+      { ...secretaryUser, position: 'College Secretary', password_hash: 'hash-sec', session_token: 'tok-sec' },
+      facultyUser,
+      inactiveFaculty,
+      inactiveStudent,
+    ];
+
+    UserModel.findById = async (id) => directoryFixture.find((u) => u.id === id) || null;
+    UserModel.findAll = async () => directoryFixture.map((u) => ({ ...u }));
+
+    const dirSecSession = await SessionModel.createSession({
+      userId: secretaryUser.id,
+      email: secretaryUser.email,
+      role: 'secretary',
+      origin: 'CESS',
+      rememberMe: true,
+    });
+    const dirFacSession = await SessionModel.createSession({
+      userId: facultyUser.id,
+      email: facultyUser.email,
+      role: 'faculty',
+      origin: 'CESS',
+      rememberMe: true,
+    });
+    const dirStuSession = await SessionModel.createSession({
+      userId: studentUser.id,
+      email: studentUser.email,
+      role: 'student',
+      origin: 'CESS',
+      rememberMe: true,
+    });
+
+    const dirServer = http.createServer(app);
+    await new Promise((resolve) => dirServer.listen(0, '127.0.0.1', resolve));
+    const dirBaseUrl = `http://127.0.0.1:${dirServer.address().port}`;
+    try {
+      // 13. Unauthenticated request (and spoofed identity header) returns 401
+      const unauthDirRes = await fetch(`${dirBaseUrl}/api/auth/directory`);
+      assert.strictEqual(unauthDirRes.status, 401, 'Unauthenticated GET /api/auth/directory must return 401');
+
+      const spoofedDirRes = await fetch(`${dirBaseUrl}/api/auth/directory`, {
+        headers: { 'x-user-email': secretaryUser.email },
+      });
+      assert.strictEqual(spoofedDirRes.status, 401, 'Spoofed x-user-email without Bearer must return 401');
+      console.log('PASS 13: Unauthenticated and spoofed-header GET /api/auth/directory requests return 401.');
+
+      // 14. Authenticated non-secretary receives active institutional users
+      const facDirRes = await fetch(`${dirBaseUrl}/api/auth/directory`, {
+        headers: { Authorization: `Bearer ${dirFacSession.token}` },
+      });
+      assert.strictEqual(facDirRes.status, 200, 'Authenticated faculty must receive 200');
+      const facDirBody = await facDirRes.json();
+      assert(Array.isArray(facDirBody.users), 'Response must contain users array');
+      const facDirIds = facDirBody.users.map((u) => u.id);
+      assert(facDirIds.includes(secretaryUser.id), 'Non-secretary directory must include active secretary');
+      assert(facDirIds.includes(facultyUser.id), 'Non-secretary directory must include active faculty');
+      console.log('PASS 14: Authenticated non-secretary receives active institutional users (200).');
+
+      // 15. Student accounts are excluded for non-secretary roles (faculty & student callers)
+      assert(!facDirBody.users.some((u) => u.role === 'student'), 'Faculty directory must exclude students');
+      const stuDirRes = await fetch(`${dirBaseUrl}/api/auth/directory`, {
+        headers: { Authorization: `Bearer ${dirStuSession.token}` },
+      });
+      assert.strictEqual(stuDirRes.status, 200);
+      const stuDirBody = await stuDirRes.json();
+      assert(!stuDirBody.users.some((u) => u.role === 'student'), 'Student directory must exclude student accounts');
+      assert.strictEqual(stuDirBody.users.length, 2, 'Non-secretary roles see only active non-student accounts');
+      console.log('PASS 15: Student accounts are excluded for non-secretary roles.');
+
+      // 16. Secretary receives active student and non-student accounts
+      const secDirRes = await fetch(`${dirBaseUrl}/api/auth/directory`, {
+        headers: { Authorization: `Bearer ${dirSecSession.token}` },
+      });
+      assert.strictEqual(secDirRes.status, 200, 'Authenticated secretary must receive 200');
+      const secDirBody = await secDirRes.json();
+      const secDirIds = secDirBody.users.map((u) => u.id);
+      assert(secDirIds.includes(studentUser.id), 'Secretary directory must include active student');
+      assert(secDirIds.includes(facultyUser.id), 'Secretary directory must include active faculty');
+      assert(secDirIds.includes(secretaryUser.id), 'Secretary directory must include active secretary');
+      assert.strictEqual(secDirBody.users.length, 3, 'Secretary sees all 3 active accounts');
+      console.log('PASS 16: Secretary receives active student and non-student accounts.');
+
+      // 17. Inactive accounts are always excluded (for both secretary and non-secretary)
+      for (const body of [facDirBody, stuDirBody, secDirBody]) {
+        assert(body.users.every((u) => u.active === true), 'All returned directory users must be active');
+        assert(!body.users.some((u) => u.id === inactiveFaculty.id), 'Inactive faculty must always be excluded');
+        assert(!body.users.some((u) => u.id === inactiveStudent.id), 'Inactive student must always be excluded');
+      }
+      console.log('PASS 17: Inactive accounts are always excluded for all roles.');
+
+      // 18. Response contains ONLY the exact eight approved fields
+      const expectedKeys = ['active', 'department', 'email', 'id', 'name', 'origin', 'position', 'role'];
+      for (const body of [facDirBody, secDirBody]) {
+        assert.deepStrictEqual(Object.keys(body), ['users'], 'Top-level response must contain only { users }');
+        for (const u of body.users) {
+          assert.deepStrictEqual(
+            Object.keys(u).sort(),
+            expectedKeys,
+            'Directory user object must contain strictly the 8 approved fields'
+          );
+          assert.strictEqual(u.password_hash, undefined);
+          assert.strictEqual(u.session_token, undefined);
+          assert.strictEqual(u.is_whitelisted, undefined);
+          assert.strictEqual(u.account_status, undefined);
+        }
+      }
+      console.log('PASS 18: Response contains strictly the 8 approved fields with no internal fields exposed.');
+
+      // 19. Database errors are forwarded via next(err) to the global error handler
+      UserModel.findAll = async () => {
+        throw new Error('Simulated directory database failure');
+      };
+      const dbErrRes = await fetch(`${dirBaseUrl}/api/auth/directory`, {
+        headers: { Authorization: `Bearer ${dirSecSession.token}` },
+      });
+      assert.strictEqual(dbErrRes.status, 500, 'Database failure must be forwarded to global error handler (500)');
+      const dbErrBody = await dbErrRes.json();
+      assert.strictEqual(typeof dbErrBody.error, 'string', 'Error handler must return JSON error message');
+      assert(
+        dbErrBody.error.includes('Simulated directory database failure'),
+        'Global error handler must receive the forwarded error'
+      );
+      console.log('PASS 19: Database errors on GET /api/auth/directory are forwarded to the global error handler (500).');
+    } finally {
+      await new Promise((resolve) => dirServer.close(resolve));
+    }
+
+    console.log('\nALL 19 GOOGLE OAUTH, HEADER AUTH & DIRECTORY HARDENING TESTS PASSED!');
   } finally {
     for (const [k, v] of Object.entries(origEnv)) {
       if (v === undefined) delete process.env[k];
@@ -400,6 +579,7 @@ async function runTests() {
     }
     UserModel.findByEmail = origFindByEmail;
     UserModel.findById = origFindById;
+    UserModel.findAll = origFindAll;
     supabase.auth.getUser = origGetUser;
     SessionModel._resetClient();
   }
