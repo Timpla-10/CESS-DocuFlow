@@ -5,11 +5,11 @@ import {
   FilePlus2,
   FolderOpen,
   PackageCheck,
-  RotateCcw,
   Send,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useUser } from '../../app/session'
+import { ActionNeededBanner } from '../../components/ActionNeededBanner'
 import {
   DocumentList,
   FilterBar,
@@ -31,6 +31,7 @@ export function DashboardPage() {
   if (
     user.role === 'chairperson' ||
     user.role === 'ovcaa' ||
+    user.role === 'vcaf' ||
     user.role === 'chancellor' ||
     user.role === 'dean' ||
     user.role === 'ids_principal'
@@ -61,37 +62,19 @@ function RequesterDashboard() {
         title="Dashboard"
         description="Track the real-time routing progress, current reviewing office, and status of all your submitted documents."
         actions={
-          <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
-            Submit Document Request
-          </ButtonLink>
+          <div className="flex flex-wrap items-center gap-2">
+            <ButtonLink to="/app/my-documents" variant="secondary" icon={FolderOpen} size="md">
+              My Documents
+            </ButtonLink>
+            <ButtonLink to="/app/requests/new" icon={FilePlus2} size="md">
+              Submit Document Request
+            </ButtonLink>
+          </div>
         }
       />
 
-      {/* High-priority Action Callouts */}
-      {returnedDocs.length > 0 && (
-        <Callout
-          tone="danger"
-          icon={AlertCircle}
-          title={`${returnedDocs.length === 1 ? 'A document needs attention' : `${returnedDocs.length} documents need attention`}`}
-        >
-          <p>
-            {returnedDocs.length === 1
-              ? 'Your document was returned for correction. Review the comments and resubmit.'
-              : 'Some documents were returned for correction. Review the comments and resubmit.'}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {returnedDocs.map((doc) => (
-              <Link
-                key={doc.id}
-                to={`/app/documents/${doc.id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-danger-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-danger-700"
-              >
-                <RotateCcw className="size-3.5" /> Fix {doc.title}
-              </Link>
-            ))}
-          </div>
-        </Callout>
-      )}
+      {/* High-priority Action-Needed Banner for Returned Requests */}
+      <ActionNeededBanner docs={returnedDocs} />
 
       {readyDocs.length > 0 && (
         <Callout
@@ -107,9 +90,9 @@ function RequesterDashboard() {
               <Link
                 key={doc.id}
                 to={`/app/documents/${doc.id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-700"
+                className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-success-700"
               >
-                View {doc.title}
+                <span className="truncate">View {doc.title}</span>
               </Link>
             ))}
           </div>
@@ -117,7 +100,7 @@ function RequesterDashboard() {
       )}
 
       {/* Overview Metric Summary Cards */}
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2.5 min-[380px]:grid-cols-2 min-[380px]:gap-3.5 sm:grid-cols-4">
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <span className="text-2xs font-bold uppercase tracking-wider text-ink-500">
@@ -181,19 +164,29 @@ function RequesterDashboard() {
 
       {/* Main Flat Table with Search & Filters */}
       <Card>
-        <div className="border-b border-ink-100 p-4 sm:px-6 sm:py-4">
-          <h2 className="text-base font-bold text-ink-950">
-            All Submitted Requests
-          </h2>
-          <p className="text-xs text-ink-500">
-            Search, filter, and track where your documents currently are in the college routing pipeline.
-          </p>
+        <div className="flex flex-wrap items-center justify-between border-b border-ink-100 p-4 sm:px-6 sm:py-4 gap-3">
+          <div>
+            <h2 className="text-base font-bold text-ink-950">
+              All Submitted Requests
+            </h2>
+            <p className="text-xs text-ink-500">
+              Search, filter, and track where your documents currently are in the college routing pipeline.
+            </p>
+          </div>
+          <Link
+            to="/app/my-documents"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900"
+          >
+            <span>Open in My Documents</span>
+            <FolderOpen className="size-3.5" />
+          </Link>
         </div>
 
         <FilterBar
           db={db}
           filters={filters}
           setFilters={setFilters}
+          showDateRange={true}
           audience={user.role === 'student' ? 'student' : 'faculty'}
           searchLabel="Search by title, control number, or type…"
         />

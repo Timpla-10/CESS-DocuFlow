@@ -1,5 +1,6 @@
 const mailer = require('../config/mailer');
 const { defaultFrom } = mailer;
+const { resolveFrontendBaseUrl, buildPasswordResetUrl } = require('../config/server');
 const NotificationModel = require('../models/notificationModel');
 const UserModel = require('../models/userModel');
 const { redactSensitiveText, sanitizeErrorForLog } = require('../utils/logSanitizer');
@@ -219,12 +220,26 @@ const EmailService = {
   /**
    * PB-03: Send Password Reset Verification Code & Recovery Link
    */
-  async sendPasswordResetEmail({ to, name = 'Valued User', code = '658485', resetToken, expiresAt }) {
+  async sendPasswordResetEmail({
+    to,
+    name = 'Valued User',
+    code = '658485',
+    resetToken,
+    resetUrl: providedResetUrl,
+    frontendUrl,
+    expiresAt,
+  }) {
     const formattedExpires = expiresAt
       ? new Date(expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : '15 minutes';
 
-    const resetUrl = `http://localhost:5173/forgot-password?email=${encodeURIComponent(to)}&token=${encodeURIComponent(resetToken || '')}`;
+    const resetUrl =
+      providedResetUrl ||
+      buildPasswordResetUrl({
+        email: to,
+        token: resetToken || '',
+        origin: frontendUrl,
+      });
 
     const contentHtml = `
       <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #1E1035;">
@@ -332,8 +347,8 @@ const EmailService = {
   /**
    * PB-02: Account Verified & Activated Email
    */
-  async sendAccountActivatedEmail({ to, name = 'University Member', role, department }) {
-    const signInUrl = 'http://localhost:5173/sign-in';
+  async sendAccountActivatedEmail({ to, name = 'University Member', role, department, frontendUrl }) {
+    const signInUrl = `${resolveFrontendBaseUrl({ origin: frontendUrl })}/sign-in`;
 
     const contentHtml = `
       <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #047857;">
@@ -438,8 +453,8 @@ const EmailService = {
   /**
    * PB-17: Document Request Submitted & Control Number Assigned Confirmation
    */
-  async sendSubmissionConfirmationEmail({ to, name = 'Requester', controlNumber, title, documentType, documentId, recipientId }) {
-    const trackUrl = `http://localhost:5173/documents`;
+  async sendSubmissionConfirmationEmail({ to, name = 'Requester', controlNumber, title, documentType, documentId, recipientId, frontendUrl }) {
+    const trackUrl = `${resolveFrontendBaseUrl({ origin: frontendUrl })}/app/my-documents`;
 
     const contentHtml = `
       <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #1E1035;">
@@ -483,8 +498,8 @@ const EmailService = {
   /**
    * PB-22: Document Returned for Revision Notification
    */
-  async sendReturnForRevisionEmail({ to, name = 'Requester', controlNumber, title, returnedByOffice, remarks, documentId, recipientId }) {
-    const editUrl = `http://localhost:5173/documents`;
+  async sendReturnForRevisionEmail({ to, name = 'Requester', controlNumber, title, returnedByOffice, remarks, documentId, recipientId, frontendUrl }) {
+    const editUrl = `${resolveFrontendBaseUrl({ origin: frontendUrl })}/app/my-documents`;
 
     const contentHtml = `
       <h2 style="margin: 0 0 12px 0; font-size: 20px; font-weight: 700; color: #D97706;">

@@ -2,6 +2,7 @@
  * Domain types for CESS DocuFlow.
  * Field names follow the SRS v1.3 (see REQ-REC-1, REQ-TRK-1, REQ-ROUTE-*, REQ-EXT-*, REQ-NOT-7).
  */
+import type { ServiceFeedback } from './serviceFeedback'
 
 export type Role =
   | 'student'
@@ -11,10 +12,11 @@ export type Role =
   | 'ids_principal'
   | 'dean'
   | 'ovcaa'
+  | 'vcaf'
   | 'chancellor'
 
 /** Offices that have accounts and can hold a document (REQ-AUTH-2). */
-export type OfficeId = 'secretary' | 'chairperson' | 'ids_principal' | 'dean' | 'ovcaa' | 'chancellor'
+export type OfficeId = 'secretary' | 'chairperson' | 'ids_principal' | 'dean' | 'ovcaa' | 'vcaf' | 'chancellor'
 
 /** Offices without accounts; the College Secretary records hand-offs for them (REQ-EXT-1). */
 export type ExternalOfficeId = string
@@ -23,6 +25,37 @@ export interface ExternalOfficeItem {
   id: ExternalOfficeId
   label: string
   shortLabel: string
+}
+
+export type ExternalReturnOutcome =
+  | 'signed'
+  | 'endorsed'
+  | 'needs_clarification'
+  | 'returned_without_action'
+  | 'other'
+
+export const EXTERNAL_RETURN_OUTCOMES: { value: ExternalReturnOutcome; label: string }[] = [
+  { value: 'signed', label: 'Signed / Completed' },
+  { value: 'endorsed', label: 'Endorsed with Action / Comments' },
+  { value: 'needs_clarification', label: 'Needs Additional Requirements / Clarification' },
+  { value: 'returned_without_action', label: 'Returned Without Action' },
+  { value: 'other', label: 'Other (see notes)' },
+]
+
+export interface ExternalTransferInfo {
+  office: ExternalOfficeId
+  officeName: string
+  transferredAt: string
+  transferDate?: string
+  handedBy: string
+  referenceNumber?: string
+  notes?: string
+  returnedAt?: string
+  returnDate?: string
+  returnRecordedBy?: string
+  returnOutcome?: ExternalReturnOutcome
+  returnOutcomeLabel?: string
+  returnNotes?: string
 }
 
 export type Origin = 'CESS' | 'IDS'
@@ -59,9 +92,11 @@ export interface DocumentType {
   name: string
   audience: 'student' | 'faculty'
   summary: string
+  documentNumberRequired?: boolean
   requirements: Requirement[]
   /** Downloadable blank form template file name (REQ-REQT-9, REQ-REQT-10). */
   templateName?: string
+  templateUrl?: string
   /** Standard processing time in working days [min, max] (REQ-WFM-7). */
   processingDays: [number, number]
   /** Ordered reviewing offices for CESS origin (REQ-ROUTE-1, REQ-ROUTE-2). */
@@ -88,6 +123,7 @@ export interface Attachment {
   id: string
   requirementId?: string
   name: string
+  fileUrl?: string
   sizeKb: number
   revision: number
   uploadedAt: string
@@ -98,6 +134,7 @@ export interface Attachment {
 
 export type HistoryAction =
   | 'submitted'
+  | 'signed'
   | 'resubmitted'
   | 'checked_complete'
   | 'checked_incomplete'
@@ -154,6 +191,11 @@ export interface DocRecord {
   controlBase: string
   revision: number
   typeId: string
+  /** Requester-supplied name for a document in the Others category. */
+  customTypeName?: string
+  /** Number printed on or assigned to the source document. */
+  documentNumber?: string
+  signatures?: DocumentSignature[]
   title: string
   description: string
   origin: Origin
@@ -161,6 +203,7 @@ export interface DocRecord {
   status: Status
   currentOffice: OfficeId | null
   externalOffice?: ExternalOfficeId
+  externalTransfer?: ExternalTransferInfo
   route: RouteStep[]
   routeIndex: number
   submittedAt: string
@@ -177,6 +220,8 @@ export interface DocRecord {
   contentVerification?: ContentVerification
   /** True when the record was encoded by the College Secretary for a walk-in submission (REQ-REC-8). */
   encodedBySecretary?: boolean
+  /** PB-58: Custom folder assignment in the document repository. */
+  folderId?: string
   release?: {
     receivedBy: string
     at: string
@@ -184,6 +229,16 @@ export interface DocRecord {
     signedFileName?: string
   }
   archived: boolean
+}
+
+export interface DocumentSignature {
+  id: string
+  signerId: string
+  signerName: string
+  office: OfficeId
+  signedAt: string
+  revision: number
+  image: string
 }
 
 export type NotificationKind = 'returned' | 'ready' | 'reminder' | 'update' | 'notice' | 'submitted' | 'rejected'
@@ -206,6 +261,9 @@ export interface NotificationLog {
   channels?: ('email' | 'in_system')[]
 }
 
+export type NoticeAudience = 'all' | 'students' | 'faculty' | 'reviewers' | 'staff'
+export type NoticeStatus = 'draft' | 'published'
+
 export interface Notice {
   id: string
   kind: 'notice' | 'minutes'
@@ -216,6 +274,11 @@ export interface Notice {
   postedByOffice: string
   postedAt: string
   readBy: string[]
+  status?: NoticeStatus
+  targetAudience?: NoticeAudience
+  publishDate?: string
+  expiryDate?: string
+  content?: string
 }
 
 export interface Subject {
@@ -226,9 +289,120 @@ export interface Subject {
 
 export interface SyllabusTemplate {
   fileName: string
+  fileUrl?: string
   updatedAt: string
   uploadedBy: string
   fileSize?: string
+}
+
+export interface SyllabusVersion {
+  version: number
+  fileName: string
+  fileUrl?: string
+  fileSizeKb?: number
+  uploadedAt: string
+  uploadedBy: string
+  changeNote?: string
+}
+
+/**
+ * Dedicated Course Syllabus Record.
+ * Stored separately from regular document requests to facilitate
+ * faculty course management, accreditation retrieval, and departmental organization.
+ */
+export interface SyllabusRecord {
+  id: string
+  subjectCode: string
+  subjectTitle: string
+  facultyId: string
+  facultyName: string
+  facultyUserId?: string
+  department: string
+  academicYear: string
+  semester: string
+  fileName: string
+  fileUrl?: string
+  fileSizeKb?: number
+  uploadedAt: string
+  description?: string
+  status: 'active' | 'archived'
+  version?: number
+  changeNote?: string
+  versionHistory?: SyllabusVersion[]
+  templateCompliant?: boolean
+}
+
+/**
+ * PB-57: Table of Specifications (TOS) Template.
+ * Standard institutional test blueprint template maintained by the College Secretary.
+ */
+export interface TosTemplate {
+  fileName: string
+  fileUrl?: string
+  updatedAt: string
+  uploadedBy: string
+  fileSize?: string
+}
+
+export interface TosCognitiveLevels {
+  remembering?: number
+  understanding?: number
+  applying?: number
+  analyzing?: number
+  evaluating?: number
+  creating?: number
+}
+
+/**
+ * PB-57: Table of Specifications (TOS) Record.
+ * Dedicated curriculum assessment blueprint mapping examination questions to cognitive levels
+ * (Remembering, Understanding, Applying, Analyzing, Evaluating, Creating) and Course Learning Outcomes (CLOs).
+ * Managed and organized strictly separately from course syllabi and general administrative requests.
+ */
+export interface TosRecord {
+  id: string
+  subjectCode: string
+  subjectTitle: string
+  facultyId: string
+  facultyName: string
+  facultyUserId?: string
+  department: string
+  academicYear: string
+  semester: string
+  term: 'Midterm' | 'Final' | 'Midterm & Final'
+  examType: string
+  totalItems: number
+  cognitiveDistribution?: TosCognitiveLevels
+  fileName: string
+  fileUrl?: string
+  fileSizeKb?: number
+  uploadedAt: string
+  description?: string
+  status: 'active' | 'archived'
+}
+
+export type FolderCategory = 'academic' | 'administrative' | 'accreditation' | 'financial' | 'general'
+
+/**
+ * PB-58: Custom Document Repository Folder.
+ * Allows authorized users (Secretary, Dean, Chairs, Faculty) to create, name, rename,
+ * and manage folders in the document repository to organize documents by type, category, or purpose.
+ * Enforces role-based access control to prevent unauthorized modifications.
+ */
+export interface DocumentFolder {
+  id: string
+  name: string
+  description?: string
+  category: FolderCategory
+  purpose?: string
+  createdBy: string
+  createdByName: string
+  createdByRole: Role
+  createdAt: string
+  updatedAt: string
+  isSystem?: boolean
+  origin?: Origin
+  allowedRoles?: Role[]
 }
 
 export interface FacultyEntry {
@@ -237,6 +411,26 @@ export interface FacultyEntry {
   name: string
   department: string
   subjects: Subject[]
+}
+
+export type ConsultationStatus = 'pending' | 'responded' | 'completed'
+
+export interface ConsultationUpdate {
+  id: string
+  message: string
+  status: Exclude<ConsultationStatus, 'pending'>
+  at: string
+}
+
+export interface Consultation {
+  id: string
+  studentId: string
+  assigneeId: string
+  purpose: string
+  status: ConsultationStatus
+  submittedAt: string
+  updatedAt: string
+  updates: ConsultationUpdate[]
 }
 
 export interface Settings {
@@ -278,8 +472,14 @@ export interface Database {
   documents: DocRecord[]
   notifications: NotificationLog[]
   notices: Notice[]
+  consultations?: Consultation[]
+  serviceFeedback?: ServiceFeedback[]
   faculty: FacultyEntry[]
   syllabusTemplate?: SyllabusTemplate
+  syllabi?: SyllabusRecord[]
+  tosTemplate?: TosTemplate
+  tos?: TosRecord[]
+  folders?: DocumentFolder[]
   settings: Settings
   counter: number
   whitelist: WhitelistEntry[]

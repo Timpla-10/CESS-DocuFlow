@@ -20,7 +20,8 @@ export function visibleDocuments(db: Database, user: User): DocRecord[] {
 }
 
 export function typeOf(db: Database, doc: DocRecord): DocumentType | undefined {
-  return db.documentTypes.find((t) => t.id === doc.typeId)
+  const type = db.documentTypes.find((t) => t.id === doc.typeId)
+  return type && doc.customTypeName ? { ...type, name: doc.customTypeName } : type
 }
 
 export function userById(db: Database, id: string): User | undefined {
@@ -79,9 +80,13 @@ export function secretaryQueues(db: Database) {
   const docs = db.documents
   return {
     toCheck: docs.filter((d) => d.status === 'submitted').sort(byOldest),
+    inReview: docs.filter((d) => d.status === 'with_office').sort(byOldest),
     toProcess: docs.filter((d) => d.status === 'with_office' && d.route[d.routeIndex]?.stage === 'final').sort(byOldest),
     external: docs.filter((d) => d.status === 'with_external').sort(byOldest),
     ready: docs.filter((d) => d.status === 'ready').sort(byOldest),
+    returned: docs.filter((d) => d.status === 'returned').sort(byOldest),
+    rejected: docs.filter((d) => d.status === 'rejected').sort(byOldest),
+    ids: docs.filter((d) => d.origin === 'IDS' && !d.archived).sort(byOldest),
   }
 }
 

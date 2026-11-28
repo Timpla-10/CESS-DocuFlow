@@ -304,7 +304,11 @@ const AuthController = {
   async requestPasswordReset(req, res, next) {
     try {
       const { email, redirectTo } = req.body || {};
-      const result = await AuthService.requestPasswordReset(email, { redirectTo });
+      const result = await AuthService.requestPasswordReset(email, {
+        redirectTo,
+        origin: req.headers.origin,
+        referer: req.headers.referer,
+      });
       res.json(result);
     } catch (err) {
       next(err);

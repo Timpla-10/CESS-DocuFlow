@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const supabase = require('../config/database');
+const { buildPasswordResetUrl, resolveFrontendBaseUrl } = require('../config/server');
 const UserModel = require('../models/userModel');
 const SessionModel = require('../models/sessionModel');
 const EmailService = require('./emailService');
@@ -587,15 +588,42 @@ const AuthService = {
     passwordResetTokens.set(tokenHash, tokenRecord);
     passwordResetTokens.set(otpHash, tokenRecord);
 
+    // Persist SHA-256 hashed reset token & OTP in PostgreSQL so reset links survive Vercel cold starts
+    try {
+      await SessionModel.createPasswordResetTokens({
+        userId: profile.id,
+        email: cleanEmail,
+        rawToken,
+        otpCode,
+        expiresAt,
+        ttlMs: RESET_TOKEN_TTL_MS,
+      });
+    } catch (persistErr) {
+      console.warn('[PB-03] Warning: Could not persist password reset token to DB:', persistErr.message);
+    }
+
     // Also accept Figma demo code in non-production for instant prototyping
     if (process.env.NODE_ENV !== 'production') {
       passwordResetTokens.set(sha256('658485'), tokenRecord);
     }
 
+    const frontendBaseUrl = resolveFrontendBaseUrl({
+      redirectTo: options.redirectTo,
+      origin: options.origin,
+      referer: options.referer,
+    });
+    const resetUrl = buildPasswordResetUrl({
+      email: cleanEmail,
+      token: rawToken,
+      redirectTo: options.redirectTo,
+      origin: options.origin,
+      referer: options.referer,
+    });
+
     // Best-effort trigger of Supabase Auth email recovery link (non-blocking if rate-limited)
     try {
       await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: options.redirectTo || 'http://localhost:5173/reset-password',
+        redirectTo: resetUrl,
       });
     } catch {
       // Recovery token is managed deterministically above
@@ -619,6 +647,8 @@ const AuthService = {
       name: profile.name || cleanEmail,
       code: otpCode,
       resetToken: rawToken,
+      resetUrl,
+      frontendUrl: frontendBaseUrl,
       expiresAt,
     }).catch((mailErr) => {
       console.warn(`[Nodemailer] Warning: Could not deliver reset email to ${cleanEmail}:`, mailErr.message);
@@ -663,7 +693,39 @@ const AuthService = {
     }
 
     const tokenHash = sha256(rawToken);
-    const tokenRecord = passwordResetTokens.get(tokenHash);
+    let tokenRecord = passwordResetTokens.get(tokenHash) || null;
+
+    // Fallback to PostgreSQL-persisted reset tokens (survives Vercel Serverless cold starts)
+    if (!tokenRecord) {
+      try {
+        tokenRecord = await SessionModel.lookupPasswordResetToken({
+          rawToken,
+          email: providedEmail,
+        });
+      } catch (lookupErr) {
+        console.warn('[PB-03] Warning: Could not query persisted password reset token:', lookupErr.message);
+      }
+    }
+
+    // Fallback: verify Supabase Auth recovery JWT if user arrived with Supabase's access_token
+    if (!tokenRecord && rawToken.split('.').length === 3) {
+      try {
+        const authClient = supabase.createAuthClient();
+        const { data: authData, error: authErr } = await authClient.auth.getUser(rawToken);
+        if (!authErr && authData?.user?.email) {
+          tokenRecord = {
+            email: String(authData.user.email).trim().toLowerCase(),
+            userId: authData.user.id,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + RESET_TOKEN_TTL_MS,
+            used: false,
+            verifiedViaSupabaseJwt: true,
+          };
+        }
+      } catch {
+        // Invalid or non-Supabase JWT falls through to standard rejection below
+      }
+    }
 
     if (!tokenRecord || tokenRecord.used || Date.now() > tokenRecord.expiresAt) {
       recordSecurityEvent({
@@ -768,8 +830,13 @@ const AuthService = {
       customPasswordHashes.set(targetEmail, sha256(newPassword));
     }
 
-    // Invalidate token immediately (single-use)
+    // Invalidate token immediately (single-use — both in-memory and in PostgreSQL)
     tokenRecord.used = true;
+    try {
+      await SessionModel.consumePasswordResetTokens(profile.id);
+    } catch (consumeErr) {
+      console.warn('[PB-03] Warning: Could not mark persisted reset token as consumed:', consumeErr.message);
+    }
 
     // Revoke all existing sessions for this user after successful password reset
     await SessionModel.revokeAllUserSessions(profile.id);

@@ -2,39 +2,24 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  ChevronDown,
   Clock,
   Eye,
   EyeOff,
-  Info,
   KeyRound,
   Lock,
   Mail,
-  MailCheck,
-  Shield,
   ShieldCheck,
-  Sparkles,
 } from 'lucide-react'
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { homeFor } from '../../app/nav'
 import { useSession } from '../../app/session'
 import { Logo } from '../../components/Logo'
 import { ButtonLink, Callout, cn } from '../../components/ui'
-import { MESSAGES, ROLE_LABEL, friendlyError } from '../../content/language'
-import { DEMO_PASSWORD } from '../../data/seed'
-import { api, useDb } from '../../data/store'
+import { MESSAGES, friendlyError } from '../../content/language'
+import { api } from '../../data/store'
 import type { Origin, Role } from '../../data/types'
-
-const PORTAL_OPTIONS: { id: string; label: string; role: Role; origin?: 'CESS' | 'IDS' }[] = [
-  { id: 'student', label: ROLE_LABEL.student, role: 'student', origin: 'CESS' },
-  { id: 'faculty', label: ROLE_LABEL.faculty, role: 'faculty' },
-  { id: 'secretary', label: ROLE_LABEL.secretary, role: 'secretary' },
-  { id: 'chairperson', label: ROLE_LABEL.chairperson, role: 'chairperson' },
-  { id: 'ids_principal', label: ROLE_LABEL.ids_principal, role: 'ids_principal' },
-  { id: 'dean', label: ROLE_LABEL.dean, role: 'dean' },
-  { id: 'ovcaa', label: ROLE_LABEL.ovcaa, role: 'ovcaa' },
-  { id: 'chancellor', label: ROLE_LABEL.chancellor, role: 'chancellor' },
-]
 
 /**
  * Right-panel visual: Smooth purple organic wave (#7C3AED -> #581C87) curving
@@ -105,9 +90,10 @@ function IsometricDocumentsPanel() {
         <div
           className="absolute inset-0 opacity-[0.08] [background-image:radial-gradient(var(--color-white)_1px,transparent_1px)] [background-size:22px_22px]"
         />
-        <div className="absolute -bottom-32 -right-32 size-[460px] rounded-full bg-dssh-500/40 blur-2xl animate-aurora-violet" />
-        <div className="absolute -top-24 -left-24 size-[400px] rounded-full bg-ids-400/50 blur-2xl animate-aurora-pink" />
-        <div className="absolute top-1/3 right-10 size-[360px] rounded-full bg-dsee-300/40 blur-2xl animate-aurora-lavender" />
+        {/* Subtle atmospheric ambient glow matching #191970 */}
+        <div className="absolute -bottom-32 -right-32 size-[460px] rounded-full bg-[#191970]/50 blur-2xl" />
+        <div className="absolute -top-24 -left-24 size-[400px] rounded-full bg-[#191970]/60 blur-2xl" />
+        <div className="absolute top-1/3 right-10 size-[360px] rounded-full bg-[#191970]/40 blur-2xl" />
       </div>
 
       {/* 3D Isometric Floating Documents Composition (aspect-preserved overlay) */}
@@ -512,21 +498,17 @@ function AuthLayout({ children }: { children: ReactNode }) {
 }
 
 export function SignInPage() {
-  const { user, signIn } = useSession()
-  const db = useDb()
+  const { user, signIn, signOut } = useSession()
   const navigate = useNavigate()
   const location = useLocation()
   const state = (location.state ?? {}) as { from?: string | { pathname?: string }; signedOut?: boolean }
 
   const emailId = useId()
   const passwordId = useId()
-  const roleId = useId()
   const rememberId = useId()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [portalId, setPortalId] = useState('')
-  const [facultyOrigin, setFacultyOrigin] = useState<'CESS' | 'IDS'>('CESS')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
   const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({})
@@ -536,11 +518,16 @@ export function SignInPage() {
   const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin')
   const [regName, setRegName] = useState('')
   const [regEmail, setRegEmail] = useState('')
+  const [regPassword, setRegPassword] = useState('')
+  const regPasswordId = useId()
   const [regIdNumber, setRegIdNumber] = useState('')
   const [regRole, setRegRole] = useState<Role>('student')
   const [regOrigin, setRegOrigin] = useState<'CESS' | 'IDS'>('CESS')
   const [regDept, setRegDept] = useState('BSEd English')
-  const [regErrors, setRegErrors] = useState<{ name?: string; email?: string; dept?: string }>({})
+  const [regErrors, setRegErrors] = useState<{ name?: string; email?: string; dept?: string; password?: string }>({})
+  const [roleFocused, setRoleFocused] = useState(false)
+  const [originFocused, setOriginFocused] = useState(false)
+  const [deptFocused, setDeptFocused] = useState(false)
   const [regBusy, setRegBusy] = useState(false)
   const [regFeedback, setRegFeedback] = useState<{
     type: 'success' | 'pending' | 'error'
@@ -550,75 +537,33 @@ export function SignInPage() {
 
   const fromPath = typeof state.from === 'string' ? state.from : state.from?.pathname
 
-  if (user) return <Navigate to={fromPath ?? homeFor(user.role)} replace />
-
-  const handleRoleChange = (selectedId: string) => {
-    setPortalId(selectedId)
-    if (selectedId === 'faculty') {
-      const account = db.users.find(
-        (u) => u.role === 'faculty' && u.active && u.origin === facultyOrigin,
-      )
-      if (account) {
-        setEmail(account.email)
-        setPassword(DEMO_PASSWORD)
-        setErrors({})
-      }
-      return
-    }
-    const option = PORTAL_OPTIONS.find((o) => o.id === selectedId)
-    if (option) {
-      const account = db.users.find(
-        (u) => u.role === option.role && u.active && (!option.origin || u.origin === option.origin),
-      )
-      if (account) {
-        setEmail(account.email)
-        setPassword(DEMO_PASSWORD)
-        setErrors({})
-      }
-    }
-  }
-
-  const handleFacultyOriginChange = (origin: 'CESS' | 'IDS') => {
-    setFacultyOrigin(origin)
-    const account = db.users.find((u) => u.role === 'faculty' && u.active && u.origin === origin)
-    if (account) {
-      setEmail(account.email)
-      setPassword(DEMO_PASSWORD)
-      setErrors({})
-    }
-  }
+  // Only auto-redirect if explicitly routed here from an attempted protected route
+  if (user && state.from) return <Navigate to={fromPath!} replace />
 
   const handleEmailChange = (nextEmail: string) => {
     setEmail(nextEmail)
-    const matched = db.users.find((u) => u.email.toLowerCase() === nextEmail.trim().toLowerCase())
-    if (matched) {
-      if (matched.role === 'faculty') {
-        setPortalId('faculty')
-        if (matched.origin === 'IDS' || matched.origin === 'CESS') {
-          setFacultyOrigin(matched.origin)
-        }
-        return
-      }
-      const option = PORTAL_OPTIONS.find(
-        (o) => o.role === matched.role && (!o.origin || o.origin === matched.origin),
-      )
-      if (option) setPortalId(option.id)
-    }
+    if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }))
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     const next: typeof errors = {}
-    if (!email.trim()) next.email = 'Please enter your institutional email address.'
-    if (!password) next.password = 'Please enter your password.'
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail) {
+      next.email = 'Please enter your university Gmail address.'
+    } else if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+      next.email = 'Only official university Gmail accounts (@msunaawan.edu.ph) are accepted.'
+    }
+    if (!password) {
+      next.password = 'Please enter your password.'
+    }
     setErrors(next)
     if (Object.keys(next).length) return
     setBusy(true)
     try {
-      const selectedOption = PORTAL_OPTIONS.find((o) => o.id === portalId)
-      const u = await api.signIn(email, password, selectedOption?.role)
+      const u = await api.signIn(cleanEmail, password, rememberMe)
       signIn(u)
-      navigate(fromPath ?? homeFor(u.role), { replace: true })
+      navigate(homeFor(u.role), { replace: true })
     } catch (err) {
       setErrors({ form: friendlyError(err) })
     } finally {
@@ -629,12 +574,13 @@ export function SignInPage() {
   const submitRegister = async (e: FormEvent) => {
     e.preventDefault()
     setRegFeedback(null)
-    const errs: { name?: string; email?: string; dept?: string } = {}
+    const errs: { name?: string; email?: string; dept?: string; password?: string } = {}
     if (!regName.trim()) errs.name = 'Please enter your full name.'
     if (!regEmail.trim()) errs.email = 'Please enter your institutional email.'
     else if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(regEmail.trim())) {
       errs.email = 'Email must be an official @msunaawan.edu.ph address.'
     }
+    if (regPassword.length < 8) errs.password = 'Choose a password of at least 8 characters.'
     if (!regDept.trim()) errs.dept = 'Please specify your department or degree program.'
     setRegErrors(errs)
     if (Object.keys(errs).length) {
@@ -643,31 +589,21 @@ export function SignInPage() {
 
     setRegBusy(true)
     try {
-      const res = await api.registerUser({
+      const result = await api.registerUser({
         name: regName,
         email: regEmail,
+        password: regPassword,
         idNumber: regIdNumber,
         requestedRole: regRole,
         department: regDept,
         origin: regOrigin,
       })
 
-      if (res.status === 'activated') {
-        setRegFeedback({
-          type: 'success',
-          title: '🎉 Masterlist Match Confirmed!',
-          message: `Your record was verified on the official semester masterlist. Your account has been activated automatically as ${ROLE_LABEL[res.user.role]} (${res.user.department}). You can now sign in!`,
-        })
-        setEmail(regEmail)
-        setPassword(DEMO_PASSWORD)
-        setAuthMode('signin')
-      } else {
-        setRegFeedback({
-          type: 'pending',
-          title: '⏳ Submitted to College Secretary',
-          message: `Your email address is not currently on the pre-loaded semester masterlist. Your registration has been submitted to the College Secretary (Ms. Carmela Ortiz) for manual verification. You will be able to access the system once approved.`,
-        })
-      }
+      setRegFeedback({
+        type: 'pending',
+        title: 'Submitted to College Secretary',
+        message: result.message,
+      })
     } catch (err) {
       setRegFeedback({
         type: 'error',
@@ -691,6 +627,26 @@ export function SignInPage() {
               Your documents, one clear path.
             </p>
 
+            {user && (
+              <Callout tone="brand" className="mt-5" title={`Currently signed in as ${user.name}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span>Role: <strong className="capitalize">{user.role}</strong> ({user.department ?? user.origin})</span>
+                  <div className="flex items-center gap-3">
+                    <Link to={homeFor(user.role)} className="font-semibold underline hover:text-brand-900">
+                      Go to Dashboard &rarr;
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => signOut()}
+                      className="font-semibold text-rose-700 underline hover:text-rose-900 cursor-pointer"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              </Callout>
+            )}
+
             {regFeedback && (
               <Callout
                 tone={regFeedback.type === 'success' ? 'success' : regFeedback.type === 'pending' ? 'warning' : 'danger'}
@@ -703,7 +659,7 @@ export function SignInPage() {
 
             {state.signedOut && !errors.form && !regFeedback && (
               <Callout tone="success" icon={ShieldCheck} className="mt-5">
-                You’ve signed out. See you next time!
+                You’ve been signed out securely. Your session has ended.
               </Callout>
             )}
             {errors.form && (
@@ -712,12 +668,15 @@ export function SignInPage() {
               </Callout>
             )}
 
-            <form onSubmit={submit} noValidate className="mt-7 space-y-4">
-          {/* Field 1: Institutional Email */}
+            <form onSubmit={submit} noValidate className="space-y-4">
+          {/* Field 1: University Gmail Account */}
           <div>
-            <label htmlFor={emailId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
-              Institutional Email
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label htmlFor={emailId} className="block text-xs font-semibold text-[#1E1035]">
+                University Gmail Account
+              </label>
+              <span className="text-[11px] font-medium text-purple-700">@msunaawan.edu.ph only</span>
+            </div>
             <div className="relative">
               <Mail
                 className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-purple-800/80"
@@ -729,7 +688,7 @@ export function SignInPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => handleEmailChange(e.target.value)}
-                placeholder="Enter your institutional email"
+                placeholder="username@msunaawan.edu.ph"
                 aria-invalid={!!errors.email}
                 aria-describedby={errors.email ? `${emailId}-error` : undefined}
                 className={cn(
@@ -787,110 +746,6 @@ export function SignInPage() {
                 <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
                 {errors.password}
               </p>
-            )}
-          </div>
-
-          {/* Field 3 (Optional): Role / Portal */}
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <label htmlFor={roleId} className="text-xs font-semibold text-[#1E1035]">
-                Role / Portal
-              </label>
-              <span className="text-[11px] font-medium text-[#6B7280]">Optional</span>
-            </div>
-            <div className="relative">
-              <Shield
-                className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-purple-800/80"
-                aria-hidden="true"
-              />
-              <select
-                id={roleId}
-                value={portalId}
-                onChange={(e) => handleRoleChange(e.target.value)}
-                className={cn(
-                  'h-11 w-full appearance-none rounded-full bg-[#F1ECF9] pl-11 pr-10 text-sm ring-1 ring-inset ring-purple-300/85 transition-all',
-                  'hover:ring-purple-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700',
-                  portalId ? 'text-[#1E1035]' : 'text-[#6B7280]',
-                  'bg-[length:16px] bg-[right_0.9rem_center] bg-no-repeat',
-                  "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23581C87' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")]",
-                )}
-              >
-                <option value="">Select role portal to autofill…</option>
-                {PORTAL_OPTIONS.map((opt) => (
-                  <option key={opt.id} value={opt.id} className="text-[#1E1035]">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Sub-selector: Faculty Unit Affiliation (CESS vs IDS) */}
-            {portalId === 'faculty' && (
-              <div className="mt-3 rounded-2xl border border-purple-200/90 bg-purple-50/70 p-3.5 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xs font-bold uppercase tracking-wider text-purple-900">
-                    Faculty Unit & Document Routing:
-                  </span>
-                  <span className="text-2xs font-medium text-purple-700">
-                    {facultyOrigin === 'IDS' ? 'Routes via IDS Principal' : 'Standard College Route'}
-                  </span>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Faculty Unit Affiliation">
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={facultyOrigin === 'CESS'}
-                    onClick={() => handleFacultyOriginChange('CESS')}
-                    className={cn(
-                      'flex flex-col items-start rounded-xl p-2.5 text-left text-xs transition-all',
-                      facultyOrigin === 'CESS'
-                        ? 'bg-purple-800 text-white shadow-xs'
-                        : 'bg-white text-purple-900 ring-1 ring-purple-200 hover:bg-purple-100/50',
-                    )}
-                  >
-                    <span className="font-bold flex items-center gap-1">🏛️ CESS Faculty</span>
-                    <span
-                      className={cn(
-                        'text-2xs mt-0.5',
-                        facultyOrigin === 'CESS' ? 'text-purple-200' : 'text-purple-600',
-                      )}
-                    >
-                      College of Education and Social Sciences
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={facultyOrigin === 'IDS'}
-                    onClick={() => handleFacultyOriginChange('IDS')}
-                    className={cn(
-                      'flex flex-col items-start rounded-xl p-2.5 text-left text-xs transition-all',
-                      facultyOrigin === 'IDS'
-                        ? 'bg-purple-800 text-white shadow-xs'
-                        : 'bg-white text-purple-900 ring-1 ring-purple-200 hover:bg-purple-100/50',
-                    )}
-                  >
-                    <span className="font-bold flex items-center gap-1">🏫 IDS Faculty</span>
-                    <span
-                      className={cn(
-                        'text-2xs mt-0.5',
-                        facultyOrigin === 'IDS' ? 'text-purple-200' : 'text-purple-600',
-                      )}
-                    >
-                      Integrated Developmental School
-                    </span>
-                  </button>
-                </div>
-                <p className="mt-2 flex items-start gap-1.5 text-2xs text-purple-700">
-                  <Info className="size-3 shrink-0 text-purple-600 mt-0.5" />
-                  <span>
-                    {facultyOrigin === 'IDS'
-                      ? 'IDS route includes review by the IDS Principal before the College Dean.'
-                      : 'CESS route routes directly from Department Chairperson to the College Dean.'}
-                  </span>
-                </p>
-              </div>
             )}
           </div>
 
@@ -971,6 +826,15 @@ export function SignInPage() {
 
             <form onSubmit={submitRegister} noValidate className="mt-6 space-y-3.5">
               <div>
+                <label htmlFor={regPasswordId} className="mb-1.5 block text-xs font-semibold text-ink-900">Create password</label>
+                <input id={regPasswordId} type="password" autoComplete="new-password" required minLength={8} value={regPassword}
+                  onChange={(event) => { setRegPassword(event.target.value); setRegErrors((previous) => ({ ...previous, password: undefined })) }}
+                  aria-invalid={!!regErrors.password} aria-describedby={regErrors.password ? `${regPasswordId}-error` : undefined}
+                  className="h-11 w-full rounded-full bg-purple-50 px-4 text-sm ring-1 ring-inset ring-purple-300 focus:ring-2 focus:ring-purple-700" />
+                {regErrors.password && <p id={`${regPasswordId}-error`} role="alert" className="mt-1 text-xs text-danger-700">{regErrors.password}</p>}
+              </div>
+
+              <div>
                 <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Full Name</label>
                 <input
                   type="text"
@@ -1038,46 +902,150 @@ export function SignInPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Role</label>
-                  <select
-                    value={regRole}
-                    onChange={(e) => setRegRole(e.target.value as Role)}
-                    className="h-10 w-full rounded-full bg-[#F1ECF9] px-3 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
-                  >
-                    <option value="student">Student</option>
-                    <option value="faculty">Faculty Member</option>
-                  </select>
+                  <div className="group relative">
+                    <select
+                      value={regRole}
+                      onChange={(e) => {
+                        setRoleFocused(false)
+                        e.currentTarget.blur()
+                        const nextRole = e.target.value as Role
+                        setRegRole(nextRole)
+                        if (regOrigin === 'IDS') {
+                          setRegDept(nextRole === 'faculty' ? 'Integrated Developmental School' : 'IDS Grade 12 - STEM')
+                        } else {
+                          setRegDept(nextRole === 'faculty' ? 'Department of Secondary and Elementary Education' : 'BSEd English')
+                        }
+                      }}
+                      onFocus={() => setRoleFocused(true)}
+                      onBlur={() => setRoleFocused(false)}
+                      className="h-10 w-full appearance-none rounded-full bg-[#F1ECF9] pl-3.5 pr-8 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 cursor-pointer"
+                    >
+                      <option value="student">Student</option>
+                      <option value="faculty">Faculty Member</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                      <ChevronDown
+                        className={cn(
+                          'size-3.5 text-purple-700 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+                          !roleFocused && 'group-hover:translate-y-0.5',
+                        )}
+                        style={{
+                          transform: roleFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transformOrigin: 'center',
+                        }}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Unit / School</label>
-                  <select
-                    value={regOrigin}
-                    onChange={(e) => setRegOrigin(e.target.value as Origin)}
-                    className="h-10 w-full rounded-full bg-[#F1ECF9] px-3 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700"
-                  >
-                    <option value="CESS">CESS Main Campus</option>
-                    <option value="IDS">IDS Developmental School</option>
-                  </select>
+                  <div className="group relative">
+                    <select
+                      value={regOrigin}
+                      onChange={(e) => {
+                        setOriginFocused(false)
+                        e.currentTarget.blur()
+                        const nextOrigin = e.target.value as Origin
+                        setRegOrigin(nextOrigin)
+                        if (nextOrigin === 'IDS') {
+                          setRegDept(regRole === 'faculty' ? 'Integrated Developmental School' : 'IDS Grade 12 - STEM')
+                        } else {
+                          setRegDept(regRole === 'faculty' ? 'Department of Secondary and Elementary Education' : 'BSEd English')
+                        }
+                      }}
+                      onFocus={() => setOriginFocused(true)}
+                      onBlur={() => setOriginFocused(false)}
+                      className="h-10 w-full appearance-none rounded-full bg-[#F1ECF9] pl-3.5 pr-8 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 cursor-pointer"
+                    >
+                      <option value="CESS">CESS Main Campus</option>
+                      <option value="IDS">IDS Developmental School</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                      <ChevronDown
+                        className={cn(
+                          'size-3.5 text-purple-700 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+                          !originFocused && 'group-hover:translate-y-0.5',
+                        )}
+                        style={{
+                          transform: originFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transformOrigin: 'center',
+                        }}
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-[#1E1035]">Department / Degree Program</label>
-                <input
-                  type="text"
-                  value={regDept}
-                  onChange={(e) => {
-                    setRegDept(e.target.value)
-                    if (regErrors.dept) setRegErrors((prev) => ({ ...prev, dept: undefined }))
-                  }}
-                  placeholder="e.g. BSEd English, BEEd, or IDS High School"
-                  required
-                  aria-invalid={!!regErrors.dept}
-                  className={cn(
-                    'h-10 w-full rounded-full bg-[#F1ECF9] px-4 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 transition-all',
-                    regErrors.dept && 'bg-danger-50/50 ring-danger-500 focus:ring-danger-500',
-                  )}
-                />
+                <div className="group relative">
+                  <select
+                    value={regDept}
+                    onChange={(e) => {
+                      setDeptFocused(false)
+                      e.currentTarget.blur()
+                      setRegDept(e.target.value)
+                      if (regErrors.dept) setRegErrors((prev) => ({ ...prev, dept: undefined }))
+                    }}
+                    onFocus={() => setDeptFocused(true)}
+                    onBlur={() => setDeptFocused(false)}
+                    className={cn(
+                      'h-10 w-full appearance-none rounded-full bg-[#F1ECF9] pl-3.5 pr-8 text-xs text-[#1E1035] ring-1 ring-inset ring-purple-300/85 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-700 cursor-pointer transition-all',
+                      regErrors.dept && 'bg-danger-50/50 ring-danger-500 focus:ring-danger-500',
+                    )}
+                  >
+                    {regOrigin === 'CESS' ? (
+                      regRole === 'faculty' ? (
+                        <>
+                          <option value="Department of Secondary and Elementary Education">
+                            Department of Secondary and Elementary Education (DSEE)
+                          </option>
+                          <option value="Department of Social Sciences and Humanities">
+                            Department of Social Sciences and Humanities (DSSH)
+                          </option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="BSEd English">BSEd English</option>
+                          <option value="BSEd Filipino">BSEd Filipino</option>
+                          <option value="BSEd Social Studies">BSEd Social Studies</option>
+                          <option value="BSEd Science">BSEd Science</option>
+                          <option value="BSEd Mathematics">BSEd Mathematics</option>
+                          <option value="BEEd General Curriculum">BEEd General Curriculum</option>
+                          <option value="BA Social Sciences">BA Social Sciences</option>
+                        </>
+                      )
+                    ) : regRole === 'faculty' ? (
+                      <>
+                        <option value="Integrated Developmental School">Integrated Developmental School (IDS Faculty)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="IDS Grade 12 - STEM">IDS Grade 12 - STEM</option>
+                        <option value="IDS Grade 12 - HUMSS">IDS Grade 12 - HUMSS</option>
+                        <option value="IDS Grade 12 - TVL / GAS">IDS Grade 12 - TVL / GAS</option>
+                        <option value="IDS Grade 11 - Senior High School">IDS Grade 11 - Senior High School</option>
+                        <option value="IDS Grade 7-10 - Junior High School">IDS Grade 7-10 - Junior High School</option>
+                      </>
+                    )}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                    <ChevronDown
+                      className={cn(
+                        'size-3.5 text-purple-700 transform-gpu transition-all duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
+                        !deptFocused && 'group-hover:translate-y-0.5',
+                      )}
+                      style={{
+                        transform: deptFocused ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transformOrigin: 'center',
+                      }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
                 {regErrors.dept && (
                   <p role="alert" className="mt-1 flex items-center gap-1.5 pl-3 text-xs font-medium text-danger-700">
                     <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
@@ -1097,7 +1065,6 @@ export function SignInPage() {
                     'active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer',
                   )}
                 >
-                  <Sparkles className="size-4" />
                   <span>{regBusy ? 'Verifying with Masterlist…' : 'Verify & Register Account'}</span>
                 </button>
               </div>
@@ -1119,28 +1086,159 @@ export function SignInPage() {
             </form>
           </>
         )}
+
       </div>
     </AuthLayout>
   )
 }
 
+function maskEmail(email: string): string {
+  const parts = email.split('@')
+  if (parts.length !== 2) return email
+  const [local, domain] = parts
+  if (local.length <= 2) return `${local[0]}****@${domain}`
+  return `${local[0]}****${local[local.length - 1]}@${domain}`
+}
+
 export function ForgotPasswordPage() {
   const emailId = useId()
-  const [email, setEmail] = useState('')
+  const newPassId = useId()
+  const confirmPassId = useId()
+
+  const [recovery] = useState(() => new URLSearchParams(window.location.search))
+  const recoveryToken = recovery.get('token')
+  const [step, setStep] = useState<'email' | 'code' | 'new_password' | 'success'>(recoveryToken ? 'new_password' : 'email')
+  const [email, setEmail] = useState(recovery.get('email') ?? '')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
 
-  const submit = async (e: FormEvent) => {
+  // 6-digit verification code states
+  const [digits, setDigits] = useState<string[]>(['', '', '', '', '', ''])
+  const [countdown, setCountdown] = useState(59)
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  // New password states
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+
+  // Countdown timer for code resend
+  useEffect(() => {
+    if (step !== 'code' || countdown <= 0) return
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [step, countdown])
+
+  // Focus first input on entering code step
+  useEffect(() => {
+    if (step === 'code') {
+      setTimeout(() => inputRefs.current[0]?.focus(), 100)
+    }
+  }, [step])
+
+  const handleEmailSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!email.trim()) return setError(MESSAGES.requiredField)
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail) return setError(MESSAGES.requiredField)
+    if (!/^[^@\s]+@msunaawan\.edu\.ph$/i.test(cleanEmail)) {
+      return setError('Please enter your official university Gmail address (ending with @msunaawan.edu.ph).')
+    }
+
     setBusy(true)
     setError(null)
     try {
-      await api.requestPasswordReset(email)
-      setSent(true)
+      await api.requestPasswordReset(cleanEmail)
+      setDigits(['', '', '', '', '', ''])
+      setCountdown(59)
+      setStep('code')
     } catch (err) {
       setError(friendlyError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDigitChange = (index: number, val: string) => {
+    const char = val.replace(/\D/g, '').slice(-1)
+    const nextDigits = [...digits]
+    nextDigits[index] = char
+    setDigits(nextDigits)
+
+    if (char && index < 5) {
+      inputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleDigitKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!digits[index] && index > 0) {
+        inputRefs.current[index - 1]?.focus()
+      } else {
+        const nextDigits = [...digits]
+        nextDigits[index] = ''
+        setDigits(nextDigits)
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      inputRefs.current[index - 1]?.focus()
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      inputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    const paste = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (!paste) return
+
+    const nextDigits = [...digits]
+    for (let i = 0; i < 6; i++) {
+      nextDigits[i] = paste[i] || ''
+    }
+    setDigits(nextDigits)
+    const nextFocusIdx = Math.min(paste.length, 5)
+    inputRefs.current[nextFocusIdx]?.focus()
+  }
+
+  const handleResend = async () => {
+    if (countdown > 0 || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api.requestPasswordReset(email.trim())
+      setCountdown(59)
+      setDigits(['', '', '', '', '', ''])
+      inputRefs.current[0]?.focus()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleContinueWithCode = (e: FormEvent) => {
+    e.preventDefault()
+    if (digits.join('').length === 6) {
+      setError(null)
+      setStep('new_password')
+    }
+  }
+
+  const handlePasswordSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setPasswordError(null)
+    if (newPassword.length < 8) return setPasswordError('Password must be at least 8 characters.')
+    if (newPassword !== confirmPassword) return setPasswordError('Passwords do not match.')
+
+    setBusy(true)
+    try {
+      await api.confirmPasswordReset(email.trim(), recoveryToken || digits.join(''), newPassword, confirmPassword)
+      setStep('success')
+    } catch (err) {
+      setPasswordError(friendlyError(err))
     } finally {
       setBusy(false)
     }
@@ -1149,36 +1247,24 @@ export function ForgotPasswordPage() {
   return (
     <AuthLayout>
       <div className="w-full animate-fade-up">
-        <Link
-          to="/sign-in"
-          className="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 hover:underline"
-        >
-          <ArrowLeft className="size-3.5" aria-hidden="true" /> Back to Sign In
-        </Link>
-        {sent ? (
-          <div>
-            <span className="grid size-12 place-items-center rounded-2xl bg-success-50 text-success-600 ring-1 ring-success-100">
-              <MailCheck className="size-6" aria-hidden="true" />
-            </span>
-            <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Check your email</h1>
-            <p className="mt-2 text-sm leading-relaxed text-[#6B7280]">
-              If <strong className="text-[#1E1035]">{email}</strong> belongs to a CESS DocuFlow account, we’ve sent a link to set a new
-              password. Please also check your spam folder.
-            </p>
-            <ButtonLink to="/sign-in" variant="secondary" className="mt-6 rounded-full">
-              Return to Sign In
-            </ButtonLink>
-          </div>
-        ) : (
+        {step === 'email' && (
           <>
+            <Link
+              to="/sign-in"
+              className="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 hover:underline"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden="true" /> Back to Sign In
+            </Link>
+
             <span className="grid size-12 place-items-center rounded-2xl bg-purple-50 text-purple-700 ring-1 ring-purple-100">
               <KeyRound className="size-6" aria-hidden="true" />
             </span>
             <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Reset your password</h1>
             <p className="mt-1.5 text-sm text-[#6B7280]">
-              Enter your institutional email and we’ll send you a link to create a new password.
+              Enter your institutional email and we’ll send you a 6-digit verification code to create a new password.
             </p>
-            <form onSubmit={submit} noValidate className="mt-6 space-y-4">
+
+            <form onSubmit={handleEmailSubmit} noValidate className="mt-6 space-y-4">
               <div>
                 <label htmlFor={emailId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
                   Institutional Email
@@ -1210,6 +1296,7 @@ export function ForgotPasswordPage() {
                   </p>
                 )}
               </div>
+
               <button
                 type="submit"
                 disabled={busy}
@@ -1221,10 +1308,203 @@ export function ForgotPasswordPage() {
                   'disabled:cursor-not-allowed disabled:opacity-60',
                 )}
               >
-                {busy ? 'Sending…' : 'Send Reset Link'}
+                {busy ? 'Sending code…' : 'Send Verification Code'}
               </button>
             </form>
           </>
+        )}
+
+        {step === 'code' && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setStep('email')
+                setError(null)
+              }}
+              className="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 hover:underline"
+            >
+              <ArrowLeft className="size-3.5" aria-hidden="true" /> Change Email
+            </button>
+
+            <span className="grid size-12 place-items-center rounded-2xl bg-purple-50 text-purple-700 ring-1 ring-purple-100">
+              <KeyRound className="size-6" aria-hidden="true" />
+            </span>
+            <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Enter verification code</h1>
+            <p className="mt-1.5 text-sm text-[#6B7280]">
+              We sent a 6-digit verification code to <strong className="text-[#1E1035]">{maskEmail(email)}</strong>
+            </p>
+
+            <form onSubmit={handleContinueWithCode} noValidate className="mt-6">
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-[#1E1035]">
+                  6-Digit Code
+                </label>
+                <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+                  {digits.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={(el) => {
+                        inputRefs.current[idx] = el
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleDigitChange(idx, e.target.value)}
+                      onKeyDown={(e) => handleDigitKeyDown(idx, e)}
+                      onPaste={idx === 0 ? handlePaste : undefined}
+                      aria-label={`Digit ${idx + 1}`}
+                      className={cn(
+                        'size-11 sm:size-12 rounded-xl text-center text-lg sm:text-xl font-bold transition-all duration-150',
+                        'border border-purple-200/90 bg-[#F5F3FA] text-[#1E1035] hover:border-purple-300 focus:border-purple-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600/30',
+                      )}
+                    />
+                  ))}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between text-xs text-[#6B7280]">
+                  <span>Didn't get the code?</span>
+                  {countdown > 0 ? (
+                    <span className="font-medium text-[#6B7280]">
+                      Resend in 0:{String(countdown).padStart(2, '0')}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      className="font-bold text-purple-700 hover:text-purple-900 hover:underline"
+                    >
+                      Resend
+                    </button>
+                  )}
+                </div>
+
+                {error && <p role="alert" className="mt-3 text-sm text-danger-700">{error}</p>}
+              </div>
+
+              <button
+                type="submit"
+                disabled={digits.join('').length < 6 || busy}
+                aria-busy={busy}
+                className={cn(
+                  'mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-8 text-sm font-bold text-white transition-all duration-200',
+                  'bg-gradient-to-r from-[#7C3AED] to-[#6B21A8] shadow-[0_8px_20px_-6px_rgba(124,58,237,0.65)]',
+                  'hover:-translate-y-0.5 hover:from-purple-700 hover:to-purple-800',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+              >
+                Continue
+              </button>
+            </form>
+          </>
+        )}
+
+        {step === 'new_password' && (
+          <>
+            <span className="grid size-12 place-items-center rounded-2xl bg-purple-50 text-purple-700 ring-1 ring-purple-100">
+              <Lock className="size-6" aria-hidden="true" />
+            </span>
+            <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Create new password</h1>
+            <p className="mt-1.5 text-sm text-[#6B7280]">
+              Enter a secure new password for <strong className="text-[#1E1035]">{email}</strong>
+            </p>
+
+            <form onSubmit={handlePasswordSubmit} noValidate className="mt-6 space-y-4">
+              <div>
+                <label htmlFor={newPassId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
+                  New Password
+                </label>
+                <div className="relative">
+                  <Lock
+                    className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-purple-700/70"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id={newPassId}
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password"
+                    className="h-11 w-full rounded-full bg-[#F5F3FA] pl-11 pr-11 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-200/80 transition-all placeholder:text-[#6B7280]/75 hover:ring-purple-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#1E1035]"
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor={confirmPassId} className="mb-1.5 block text-xs font-semibold text-[#1E1035]">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <Lock
+                    className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-purple-700/70"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id={confirmPassId}
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="h-11 w-full rounded-full bg-[#F5F3FA] pl-11 pr-11 text-sm text-[#1E1035] ring-1 ring-inset ring-purple-200/80 transition-all placeholder:text-[#6B7280]/75 hover:ring-purple-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#1E1035]"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {passwordError && (
+                <p role="alert" className="flex items-center gap-1.5 pl-3 text-xs font-medium text-danger-700">
+                  <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
+                  {passwordError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={busy}
+                aria-busy={busy}
+                className={cn(
+                  'inline-flex h-11 w-full items-center justify-center gap-2 rounded-full px-8 text-sm font-bold text-white transition-all duration-200',
+                  'bg-gradient-to-r from-[#7C3AED] to-[#6B21A8] shadow-[0_8px_20px_-6px_rgba(124,58,237,0.65)]',
+                  'hover:-translate-y-0.5 hover:from-purple-700 hover:to-purple-800',
+                  'disabled:cursor-not-allowed disabled:opacity-60',
+                )}
+              >
+                {busy ? 'Updating…' : 'Save New Password'}
+              </button>
+            </form>
+          </>
+        )}
+
+        {step === 'success' && (
+          <div>
+            <span className="grid size-12 place-items-center rounded-2xl bg-success-50 text-success-600 ring-1 ring-success-100">
+              <ShieldCheck className="size-6" aria-hidden="true" />
+            </span>
+            <h1 className="mt-4 font-display text-2xl font-bold text-[#1E1035]">Password reset successful</h1>
+            <p className="mt-2 text-sm leading-relaxed text-[#6B7280]">
+              Your password has been securely updated. You can now sign in with your official university email and your new password.
+            </p>
+            <ButtonLink to="/sign-in" variant="primary" className="mt-6 w-full justify-center rounded-full">
+              Return to Sign In
+            </ButtonLink>
+          </div>
         )}
       </div>
     </AuthLayout>

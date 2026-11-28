@@ -3,23 +3,32 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
+  Download,
   Eye,
   FileCheck2,
   FileText,
+  Folder,
+  FolderOpen,
+  Link2,
+  Lock,
+  MessageSquare,
   PackageCheck,
   Paperclip,
+  PenLine,
   RotateCcw,
   Send,
+  ShieldAlert,
   UploadCloud,
   UserCheck,
   X,
   XCircle,
-  Lock,
 } from 'lucide-react'
 import { useState, type ChangeEvent, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
+import { DocumentNumberField } from '../../components/DocumentNumberField'
+import { SignDocumentDialog, SignatureList } from '../../components/DocumentSignatures'
 import {
   AttachmentList,
   DelayedBadge,
@@ -28,9 +37,9 @@ import {
   StatusBadge,
   WaitingTime,
   formatSize,
-  sessionFiles,
 } from '../../components/documents'
-import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
+import { Checkbox, Field, InfoTooltip, Input, Select, Textarea } from '../../components/form'
+import { saveUploadedFile } from '../../lib/storedFiles'
 import { useToast } from '../../components/Toast'
 import {
   Badge,
@@ -52,14 +61,20 @@ import {
   requesterMessage,
   revisionLabel,
 } from '../../content/language'
+import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
+import { documentNumberError } from '../../data/documentNumbers'
+import { canSignDocument } from '../../data/documentSignatures'
 import { ACCEPTED_EXT, MAX_FILE_MB, reviewOptions, type NewFile, type ReviewKind } from '../../data/engine'
-import { canView, isDelayed, typeOf, userById } from '../../data/selectors'
+import { daysWaiting, isDelayed, typeOf, userById } from '../../data/selectors'
+import { feedbackForDocument } from '../../data/serviceFeedback'
 import { api, useDb } from '../../data/store'
-import type { ExternalOfficeId } from '../../data/types'
+import { EXTERNAL_RETURN_OUTCOMES, type ExternalOfficeId, type ExternalReturnOutcome } from '../../data/types'
 import { formatDate, formatDateTime, plural } from '../../lib/time'
+import { checkDocumentAccess, downloadPermittedDocument, generateNonPublicSecureLink } from '../../lib/documentSecurity'
 
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
   const user = useUser()
   const db = useDb()
   const toast = useToast()
@@ -69,6 +84,7 @@ export function DocumentDetailPage() {
 
   // Sub-dialog states
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
+  const [isSignatureOpen, setIsSignatureOpen] = useState(false)
   const [previewAttachmentId, setPreviewAttachmentId] = useState<string | undefined>()
   const [isResubmitOpen, setIsResubmitOpen] = useState(false)
   const [isCheckOpen, setIsCheckOpen] = useState(false)
@@ -80,10 +96,12 @@ export function DocumentDetailPage() {
   // Resubmit form state
   const [resubmitTitle, setResubmitTitle] = useState('')
   const [resubmitDesc, setResubmitDesc] = useState('')
+  const [resubmitCustomType, setResubmitCustomType] = useState('')
+  const [resubmitDocumentNumber, setResubmitDocumentNumber] = useState('')
   const [resubmitNote, setResubmitNote] = useState('')
   const [resubmitFiles, setResubmitFiles] = useState<{ name: string; sizeKb: number; fileObj?: File }[]>([])
   const [resubmitBusy, setResubmitBusy] = useState(false)
-  const [resubmitErrors, setResubmitErrors] = useState<{ title?: string; general?: string }>({})
+  const [resubmitErrors, setResubmitErrors] = useState<{ title?: string; general?: string; customType?: string; description?: string; documentNumber?: string }>({})
 
   // Secretary Content Verification form state (REQ-REQT-4, REQ-REQT-5)
   const [checkDecision, setCheckDecision] = useState<'complete' | 'return' | 'reject'>('complete')
@@ -98,14 +116,18 @@ export function DocumentDetailPage() {
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewErrors, setReviewErrors] = useState<{ remarks?: string }>({})
 
-  // External Office form state
+  // External Office form state (Record transfer to HRMO, Registrar, Budget, etc.)
   const [externalOffice, setExternalOffice] = useState<ExternalOfficeId>(db.externalOffices[0]?.id ?? 'hrmo')
+  const [externalTransferDate, setExternalTransferDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [externalHandedBy, setExternalHandedBy] = useState(user.name)
+  const [externalReference, setExternalReference] = useState('')
   const [externalRemarks, setExternalRemarks] = useState('')
   const [externalBusy, setExternalBusy] = useState(false)
   const [externalErrors, setExternalErrors] = useState<{ handedBy?: string }>({})
 
-  // External Return form state
+  // External Return form state (Record return date, outcome, notes)
+  const [extReturnDate, setExtReturnDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [extReturnOutcome, setExtReturnOutcome] = useState<ExternalReturnOutcome>('signed')
   const [extReturnRemarks, setExtReturnRemarks] = useState('')
   const [extReturnBusy, setExtReturnBusy] = useState(false)
 
@@ -115,13 +137,22 @@ export function DocumentDetailPage() {
   const [releaseBusy, setReleaseBusy] = useState(false)
   const [releaseErrors, setReleaseErrors] = useState<{ receivedBy?: string }>({})
 
-  if (!doc || !canView(user, doc)) {
+  // Folder state
+  const [isMoveFolderOpen, setIsMoveFolderOpen] = useState(false)
+  const [targetFolderId, setTargetFolderId] = useState(doc?.folderId ?? '')
+  const [moveFolderBusy, setMoveFolderBusy] = useState(false)
+
+  // Non-public link dialog state
+  const [isSecureLinkDialogOpen, setIsSecureLinkDialogOpen] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
+
+  if (!doc) {
     return (
       <Card className="mx-auto mt-8 max-w-lg p-8 text-center">
         <AlertCircle className="mx-auto size-10 text-danger-500" />
         <h2 className="mt-4 text-lg font-bold text-ink-900">Document Not Found</h2>
         <p className="mt-2 text-sm text-ink-600">
-          This document could not be found, or you do not have permission to view it.
+          This document could not be found or has been deleted.
         </p>
         <div className="mt-6">
           <ButtonLink to="/app" variant="secondary">
@@ -132,13 +163,53 @@ export function DocumentDetailPage() {
     )
   }
 
+  const access = checkDocumentAccess(user, doc)
+  if (!access.permitted) {
+    return (
+      <Card className="mx-auto mt-8 max-w-lg p-8 text-center ring-1 ring-danger-200">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-danger-50 text-danger-600 ring-1 ring-danger-100">
+          <ShieldAlert className="size-8" />
+        </div>
+        <h2 className="mt-4 text-lg font-bold text-ink-950">Document Access Restricted</h2>
+        <p className="mt-2 text-xs leading-relaxed text-ink-600">
+          {access.reason}
+        </p>
+        <div className="mt-5 rounded-xl bg-ink-50 p-3.5 text-left text-xs text-ink-700 ring-1 ring-inset ring-ink-100">
+          <span className="font-semibold block text-ink-900 mb-1">Permitted Stakeholders:</span>
+          <ul className="list-disc pl-4 space-y-1 text-2xs text-ink-600">
+            <li>Original Document Requester / Owner</li>
+            <li>Designated Reviewing Offices in the active workflow</li>
+            <li>College Secretary & Institutional Records Officers</li>
+          </ul>
+        </div>
+        <div className="mt-6 flex justify-center gap-3">
+          <ButtonLink to="/app/my-documents" variant="secondary">
+            View Permitted Documents
+          </ButtonLink>
+          <ButtonLink to="/app" variant="primary">
+            Dashboard
+          </ButtonLink>
+        </div>
+      </Card>
+    )
+  }
+
   const docType = typeOf(db, doc)
+  const isCustom = isCustomDocumentType(doc.typeId)
   const requester = userById(db, doc.requesterId)
   const delayed = isDelayed(db, doc)
   const isDocRequester = doc.requesterId === user.id
   const isReqUser = isRequester(user.role) || isDocRequester
   const userAudience: 'requester' | 'staff' = isDocRequester ? 'requester' : isReqUser ? 'requester' : 'staff'
   const message = requesterMessage(doc, delayed, db)
+
+  // Estimated turnaround target date based on standard SLA days
+  const estimatedCompletionDate =
+    docType && doc.submittedAt
+      ? new Date(
+          new Date(doc.submittedAt).getTime() + (docType.processingDays[1] || 5) * 24 * 60 * 60 * 1000,
+        ).toISOString()
+      : null
 
   // Action authorizations
   const canResubmit = isDocRequester && doc.status === 'returned'
@@ -159,6 +230,37 @@ export function DocumentDetailPage() {
     user.role === 'secretary' && doc.status === 'with_external'
 
   const canSecretaryRelease = user.role === 'secretary' && doc.status === 'ready'
+  const canSign = canSignDocument(user, doc)
+  const signatures = doc.signatures ?? []
+
+  const canOrganizeFolder =
+    isDocRequester ||
+    user.role === 'secretary' ||
+    user.role === 'dean' ||
+    user.role === 'chairperson' ||
+    user.role === 'ids_principal'
+
+  const currentFolder = (db.folders || []).find((f) => f.id === doc.folderId)
+
+  const handleMoveFolder = async (e: FormEvent) => {
+    e.preventDefault()
+    setMoveFolderBusy(true)
+    try {
+      await api.moveDocumentToFolder(user, doc.id, targetFolderId || null)
+      toast.success(
+        'Folder Assignment Saved',
+        targetFolderId
+          ? 'Document successfully organized into the selected folder.'
+          : 'Document moved to root repository (unassigned).',
+      )
+      setIsMoveFolderOpen(false)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update folder assignment.'
+      toast.error('Update Failed', msg)
+    } finally {
+      setMoveFolderBusy(false)
+    }
+  }
 
   const currentAttachments = doc.attachments.filter((a) => a.revision === doc.revision)
 
@@ -168,6 +270,8 @@ export function DocumentDetailPage() {
     if (!canResubmit) return
     setResubmitTitle(doc.title)
     setResubmitDesc(doc.description)
+    setResubmitCustomType(doc.customTypeName ?? '')
+    setResubmitDocumentNumber(doc.documentNumber ?? '')
     setResubmitNote('')
     setResubmitFiles([])
     setResubmitErrors({})
@@ -211,7 +315,7 @@ export function DocumentDetailPage() {
       return
     }
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a file smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a file smaller than ${MAX_FILE_MB} MB.`)
       return
     }
     setResubmitFiles((prev) => [...prev, { name: file.name, sizeKb, fileObj: file }])
@@ -230,7 +334,7 @@ export function DocumentDetailPage() {
       return
     }
     if (sizeKb > MAX_FILE_MB * 1024) {
-      toast.error('File Too Large', 'Please upload a file smaller than 10 MB.')
+      toast.error('File Too Large', `Please upload a file smaller than ${MAX_FILE_MB} MB.`)
       return
     }
     setReleaseSignedFile({ name: file.name, sizeKb, fileObj: file })
@@ -240,12 +344,19 @@ export function DocumentDetailPage() {
   const handleResubmitSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setResubmitErrors({})
-    const errs: { title?: string; general?: string } = {}
+    const errs: typeof resubmitErrors = {}
+    const numberError = documentNumberError(resubmitDocumentNumber, docType?.documentNumberRequired)
+    if (numberError) errs.documentNumber = numberError
     if (!resubmitTitle.trim()) {
       errs.title = 'Please enter a document title.'
     }
     if (resubmitFiles.length === 0 && !resubmitNote.trim()) {
       errs.general = 'Please attach at least one corrected file or explain what you revised.'
+    }
+    if (isCustom) {
+      const typeError = customDocumentTypeError(resubmitCustomType)
+      if (typeError) errs.customType = typeError
+      if (!resubmitDesc.trim()) errs.description = 'Enter the purpose or description of the custom document.'
     }
     if (Object.keys(errs).length > 0) {
       setResubmitErrors(errs)
@@ -254,22 +365,18 @@ export function DocumentDetailPage() {
     }
     setResubmitBusy(true)
     try {
-      const payloadFiles: NewFile[] = resubmitFiles.map((f) => ({
+      const payloadFiles: NewFile[] = await Promise.all(resubmitFiles.map(async (f) => ({
         name: f.name,
         sizeKb: f.sizeKb,
-      }))
-      const updated = await api.resubmit(user, doc.id, {
+        fileUrl: f.fileObj ? await saveUploadedFile(f.fileObj) : undefined,
+      })))
+      await api.resubmit(user, doc.id, {
         title: resubmitTitle.trim(),
         description: resubmitDesc.trim(),
+        customTypeName: isCustom ? resubmitCustomType : undefined,
+        documentNumber: resubmitDocumentNumber,
         note: resubmitNote.trim(),
         files: payloadFiles,
-      })
-      // Save object URLs
-      resubmitFiles.forEach((f, idx) => {
-        const attach = updated.attachments[updated.attachments.length - resubmitFiles.length + idx]
-        if (f.fileObj && attach) {
-          sessionFiles.set(attach.id, URL.createObjectURL(f.fileObj))
-        }
       })
       toast.success(
         'Document Resubmitted',
@@ -379,7 +486,9 @@ export function DocumentDetailPage() {
     try {
       await api.sendToExternal(user, doc.id, {
         office: externalOffice,
+        transferDate: externalTransferDate,
         handedBy: externalHandedBy,
+        referenceNumber: externalReference,
         remarks: externalRemarks,
       })
       toast.success('Office Transfer Recorded', `Document recorded as sent to ${externalOfficeLabel(externalOffice, db)}.`)
@@ -397,6 +506,8 @@ export function DocumentDetailPage() {
     setExtReturnBusy(true)
     try {
       await api.recordExternalReturn(user, doc.id, {
+        returnDate: extReturnDate,
+        outcome: extReturnOutcome,
         remarks: extReturnRemarks,
       })
       toast.success('Return Recorded', 'Document return recorded. It is now back with the College Secretary.')
@@ -432,18 +543,12 @@ export function DocumentDetailPage() {
     }
     setReleaseBusy(true)
     try {
-      const updated = await api.recordRelease(user, doc.id, {
+      await api.recordRelease(user, doc.id, {
         receivedBy: releaseReceivedBy,
-        signedFile: releaseSignedFile
-          ? { name: releaseSignedFile.name, sizeKb: releaseSignedFile.sizeKb }
+        signedFile: releaseSignedFile?.fileObj
+          ? { name: releaseSignedFile.name, sizeKb: releaseSignedFile.sizeKb, fileUrl: await saveUploadedFile(releaseSignedFile.fileObj) }
           : undefined,
       })
-      if (releaseSignedFile?.fileObj) {
-        const lastAtt = updated.attachments[updated.attachments.length - 1]
-        if (lastAtt) {
-          sessionFiles.set(lastAtt.id, URL.createObjectURL(releaseSignedFile.fileObj))
-        }
-      }
       toast.success('Document Released & Archived', 'Document release recorded and moved to the read-only archive.')
       setIsReleaseOpen(false)
     } catch (err: unknown) {
@@ -456,8 +561,8 @@ export function DocumentDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top back navigation */}
-      <div className="flex items-center justify-between">
+      {/* Top back navigation & security actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -465,8 +570,240 @@ export function DocumentDetailPage() {
         >
           <ArrowLeft className="size-4" aria-hidden /> Back to Documents
         </button>
-        <span className="text-xs text-ink-500 font-mono">Control Ref: {controlNumber(doc)}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {isDocRequester && isRequester(user.role) && doc.status === 'released' && (
+            <ButtonLink size="sm" variant="secondary" icon={MessageSquare} to={`/app/service-feedback?document=${encodeURIComponent(doc.id)}`}>
+              {feedbackForDocument(db, user.id, doc.id) ? 'View evaluation receipt' : 'Evaluate this service'}
+            </ButtonLink>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={Link2}
+            onClick={() => setIsSecureLinkDialogOpen(true)}
+            title="View & copy non-public authenticated link"
+          >
+            Non-Public Link
+          </Button>
+          <span className="text-xs text-ink-500 font-mono">Control Ref: {controlNumber(doc)}</span>
+        </div>
       </div>
+
+      {/* Permission Verification & Non-Public Access Indicator Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-white shadow-xs">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex size-8 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/30 shrink-0">
+            <Lock className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-white flex flex-wrap items-center gap-2">
+              Non-Public Institutional Record
+              <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-400/30">
+                Permission Verified
+              </span>
+            </p>
+            <p className="text-[11px] text-slate-300 truncate">
+              Access Scope: <strong>{access.scopeLabel}</strong> · Non-public authenticated links enforced
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsSecureLinkDialogOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20 transition active:scale-95 ring-1 ring-white/15"
+        >
+          <Link2 className="size-3.5 text-emerald-300" />
+          Get Non-Public Link
+        </button>
+      </div>
+
+      {/* Submission Confirmation Banner (REQ-SUB-5, REQ-SUB-6, REQ-REC-1, REQ-REC-2) */}
+      {searchParams.get('submitted') === 'true' && (
+        <div className="rounded-2xl border-2 border-success-200 bg-gradient-to-r from-success-50/90 to-emerald-50/50 p-5 shadow-xs">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-success-600 text-white shadow-xs">
+                <CheckCircle2 className="size-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-extrabold text-success-950">
+                    Request Submission Confirmed
+                  </h3>
+                  <Badge tone="success" dot={false}>Saved & Active</Badge>
+                  <Badge tone="brand" dot={false}>Status: Submitted</Badge>
+                </div>
+                <p className="text-xs text-ink-700 leading-relaxed">
+                  Your document request was successfully recorded under unique Control Number{' '}
+                  <strong className="font-mono text-success-900 bg-white/80 px-1.5 py-0.5 rounded border border-success-200">
+                    {controlNumber(doc)}
+                  </strong>
+                  . Origin has been established as <strong>{doc.origin}</strong> from your account affiliation, and timestamp{' '}
+                  <strong>{formatDateTime(doc.submittedAt)}</strong> has been officially sealed.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requester Progress Detail View for Own Requests */}
+      {isDocRequester && (
+        <div className="space-y-4">
+          {/* Prominent Return Reasons Card for Returned Requests */}
+          {doc.status === 'returned' && (
+            <div className="rounded-2xl border-2 border-danger-300 bg-danger-50/90 p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-danger-600 text-white shadow-xs">
+                    <AlertCircle className="size-6" />
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-extrabold text-danger-950">
+                        Action Needed: Document Returned for Revision
+                      </h3>
+                      <Badge tone="danger" dot={false}>Unlocked for Resubmission</Badge>
+                    </div>
+                    <p className="text-xs text-danger-900 leading-relaxed">
+                      Your document was returned by{' '}
+                      <strong>{doc.returnInfo?.office ?? 'the reviewing authority'}</strong>
+                      {doc.returnInfo?.by ? ` (${doc.returnInfo.by})` : ''} on{' '}
+                      <strong>{doc.returnInfo?.at ? formatDateTime(doc.returnInfo.at) : 'recently'}</strong>.
+                      Please review the correction details below, make required revisions, and resubmit.
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  size="md"
+                  variant="primary"
+                  icon={RotateCcw}
+                  onClick={handleOpenResubmit}
+                  className="shadow-sm shrink-0"
+                >
+                  Fix Details & Resubmit Request
+                </Button>
+              </div>
+
+              {/* Specific Return Remarks Box */}
+              <div className="mt-4 rounded-xl bg-white p-4 ring-1 ring-danger-200 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-danger-800">
+                  <span>Official Return Remarks / Instructions:</span>
+                </div>
+                <p className="text-sm font-semibold text-ink-950 whitespace-pre-wrap">
+                  {doc.returnInfo?.reasons || 'Please update your attached forms and address reviewer comments.'}
+                </p>
+
+                {doc.returnInfo?.missing && doc.returnInfo.missing.length > 0 && (
+                  <div className="pt-2 border-t border-danger-100">
+                    <p className="text-xs font-bold text-danger-900 mb-1">Flagged Incomplete or Missing Forms:</p>
+                    <ul className="list-disc list-inside space-y-0.5 text-xs text-danger-800 font-medium">
+                      {doc.returnInfo.missing.map((mid) => (
+                        <li key={mid}>
+                          {docType?.requirements.find((r) => r.id === mid)?.label ?? mid}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Permitted Stage and Complete Timestamps Overview Card */}
+          <div className="rounded-2xl border border-brand-200 bg-white p-5 shadow-2xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex size-7 items-center justify-center rounded-lg bg-brand-100 text-brand-700 font-bold text-xs">
+                  ✓
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-ink-950">
+                    Requester Progress & Routing Status
+                  </h3>
+                  <p className="text-2xs text-ink-500">
+                    Verified stage, holding office, and sealed timestamps for your request
+                  </p>
+                </div>
+              </div>
+              <StatusBadge doc={doc} audience="requester" db={db} />
+            </div>
+
+            {/* Timestamps Grid */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+              <div className="rounded-xl bg-ink-50/70 p-3 border border-ink-100">
+                <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Submitted Timestamp</span>
+                <span className="mt-0.5 font-bold text-ink-900 block font-mono text-2xs">{formatDateTime(doc.submittedAt)}</span>
+                <span className="text-3xs text-ink-500">Official sealed timestamp</span>
+              </div>
+              <div className="rounded-xl bg-ink-50/70 p-3 border border-ink-100">
+                <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Holding Office Arrival</span>
+                <span className="mt-0.5 font-bold text-ink-900 block font-mono text-2xs">
+                  {doc.officeSince ? formatDateTime(doc.officeSince) : formatDateTime(doc.submittedAt)}
+                </span>
+                <span className="text-3xs text-ink-500">Waiting {plural(daysWaiting(doc), 'day')}</span>
+              </div>
+              <div className="rounded-xl bg-ink-50/70 p-3 border border-ink-100">
+                <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Estimated Completion</span>
+                <span className="mt-0.5 font-bold text-brand-900 block text-2xs">
+                  {estimatedCompletionDate ? formatDate(estimatedCompletionDate) : '3–5 working days'}
+                </span>
+                <span className="text-3xs text-brand-700">Standard institutional SLA</span>
+              </div>
+              <div className="rounded-xl bg-ink-50/70 p-3 border border-ink-100">
+                <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Permitted Stage</span>
+                <span className="mt-0.5 font-bold text-ink-900 block truncate text-2xs">
+                  {currentStep?.label ?? locationLabel(doc, db)}
+                </span>
+                <span className="text-3xs text-ink-500">Stage {doc.routeIndex + 1} of {doc.route.length}</span>
+              </div>
+            </div>
+
+            {/* Permitted Stages Progress Stepper */}
+            <div className="mt-4 pt-3 border-t border-ink-100">
+              <span className="block text-2xs font-bold uppercase tracking-wider text-ink-500 mb-2">
+                Official Routing Stages ({doc.origin} Path):
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+                {doc.route.map((step, idx) => {
+                  const isPast = idx < doc.routeIndex
+                  const isCurrent = idx === doc.routeIndex
+                  const isReturnedStep = doc.status === 'returned' && isCurrent
+                  const isDone = doc.status === 'released' || (doc.status === 'ready' && idx === doc.route.length - 1)
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`rounded-lg p-2.5 text-xs transition-all border ${
+                        isDone || isPast
+                          ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900'
+                          : isReturnedStep
+                          ? 'border-danger-300 bg-danger-50/70 text-danger-900 ring-2 ring-danger-200'
+                          : isCurrent
+                          ? 'border-brand-300 bg-brand-50/70 text-brand-950 ring-2 ring-brand-200'
+                          : 'border-ink-200 bg-ink-50/50 text-ink-500'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-2xs">
+                        <span className={`flex size-4 items-center justify-center rounded-full text-3xs ${
+                          isDone || isPast ? 'bg-emerald-600 text-white' : isCurrent ? 'bg-brand-600 text-white' : 'bg-ink-200 text-ink-700'
+                        }`}>
+                          {isDone || isPast ? '✓' : idx + 1}
+                        </span>
+                        <span className="truncate">{step.label ?? OFFICE_LABEL[step.office]}</span>
+                      </div>
+                      <p className="mt-1 text-3xs truncate">
+                        {isDone || isPast ? 'Completed' : isReturnedStep ? 'Returned for Revision' : isCurrent ? 'Active Stage' : 'Upcoming'}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Document Summary Card */}
       <Card className="overflow-hidden">
@@ -474,8 +811,8 @@ export function DocumentDetailPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 max-w-2xl">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="brand" dot={false}>
-                  {docType?.name}
+                <Badge tone="brand" dot={false} className="max-w-full">
+                  <span className="whitespace-normal wrap-anywhere">{docType?.name}</span>
                 </Badge>
                 <Badge tone="neutral" dot={false}>
                   {revisionLabel(doc.revision)}
@@ -515,7 +852,7 @@ export function DocumentDetailPage() {
               </h1>
 
               {doc.description && (
-                <p className="mt-2 text-sm leading-relaxed text-ink-700">{doc.description}</p>
+                <p className="mt-2 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-ink-700">{doc.description}</p>
               )}
             </div>
 
@@ -540,6 +877,7 @@ export function DocumentDetailPage() {
                 ? 'warning'
                 : 'brand'
             }
+            defaultOpen={doc.status === 'returned' || doc.status === 'rejected'}
             title={message.title}
           >
             <p>{message.body}</p>
@@ -605,6 +943,102 @@ export function DocumentDetailPage() {
             </div>
           )}
 
+          {/* External Office Transfer Status Card (REQ-EXT-1, REQ-EXT-2, REQ-EXT-3) */}
+          {doc.status === 'with_external' && (
+            <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/70 p-4 shadow-2xs">
+              <div className="flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+                  <Building2 className="size-4.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-ink-950">
+                        Transferred to {doc.externalOffice ? externalOfficeLabel(doc.externalOffice, db) : 'External Office'}
+                      </h4>
+                      <span className="inline-flex items-center rounded-md bg-brand-100 px-2 py-0.5 text-2xs font-bold text-brand-800 ring-1 ring-inset ring-brand-300">
+                        External University Office
+                      </span>
+                    </div>
+                    {doc.externalTransfer?.referenceNumber && (
+                      <span className="font-mono text-xs font-semibold text-ink-700 bg-white px-2.5 py-0.5 rounded border border-brand-200">
+                        Ref: {doc.externalTransfer.referenceNumber}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-ink-700">
+                    <div>
+                      <span className="font-semibold text-ink-500">Transfer Date:</span>{' '}
+                      <span className="font-medium text-ink-900">
+                        {doc.externalTransfer?.transferDate
+                          ? formatDate(doc.externalTransfer.transferDate)
+                          : formatDate(doc.officeSince)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-ink-500">Handed Over By:</span>{' '}
+                      <span className="font-medium text-ink-900">{doc.externalTransfer?.handedBy ?? 'College Secretary'}</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-ink-500">Waiting Time:</span>{' '}
+                      <span className="font-medium text-ink-900">{plural(daysWaiting(doc), 'day')}</span>
+                    </div>
+                  </div>
+                  {doc.externalTransfer?.notes && (
+                    <div className="mt-2 text-xs text-ink-700 bg-white/80 p-2.5 rounded-lg border border-brand-100">
+                      <span className="font-semibold text-ink-800">Transfer Notes: </span>
+                      {doc.externalTransfer.notes}
+                    </div>
+                  )}
+                  {canSecretaryRecordExternalReturn && (
+                    <div className="mt-3 flex items-center justify-end">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setExtReturnDate(new Date().toISOString().slice(0, 10))
+                          setExtReturnOutcome('signed')
+                          setExtReturnRemarks('')
+                          setIsExternalReturnOpen(true)
+                        }}
+                        icon={CheckCircle2}
+                      >
+                        Record Return from {doc.externalOffice ? externalOfficeLabel(doc.externalOffice, db) : 'External Office'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Historical External Transfer Summary (if completed) */}
+          {doc.status !== 'with_external' && doc.externalTransfer && doc.externalTransfer.returnedAt && (
+            <div className="mt-4 rounded-xl border border-ink-200 bg-ink-50/70 p-3.5 text-xs text-ink-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Building2 className="size-4 text-brand-600 shrink-0" />
+                  <span>
+                    <strong>External Office Transfer:</strong> Returned from {doc.externalTransfer.officeName} on{' '}
+                    {formatDate(doc.externalTransfer.returnDate ?? doc.externalTransfer.returnedAt)}.
+                  </span>
+                </div>
+                <Badge tone="success">
+                  Outcome: {doc.externalTransfer.returnOutcomeLabel ?? 'Completed'}
+                </Badge>
+              </div>
+              {doc.externalTransfer.referenceNumber && (
+                <p className="mt-1 pl-6 text-[11px] text-ink-500 font-mono">
+                  Reference: {doc.externalTransfer.referenceNumber}
+                </p>
+              )}
+              {doc.externalTransfer.returnNotes && (
+                <p className="mt-1 pl-6 text-[11px] text-ink-600">
+                  Notes: {doc.externalTransfer.returnNotes}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Automatic Completeness & Content Verification Status Strip (REQ-REQT-3, REQ-REQT-4) */}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="flex items-start gap-3 rounded-xl bg-success-50/50 p-3.5 ring-1 ring-inset ring-success-100">
@@ -639,14 +1073,60 @@ export function DocumentDetailPage() {
                 </p>
                 <p className="mt-0.5 text-ink-600">
                   {doc.contentVerification
-                    ? `${doc.contentVerification.verifiedBy} · ${formatDateTime(doc.contentVerification.at)}${
-                        doc.contentVerification.remarks ? ` — “${doc.contentVerification.remarks}”` : ''
-                      }`
+                    ? `${doc.contentVerification.verifiedBy} · ${formatDateTime(doc.contentVerification.at)}`
                     : 'Awaiting content check before routing.'}
                 </p>
               </div>
             </div>
           </div>
+
+          {/* Detailed Content Verification Record (REQ-REQT-4) */}
+          {doc.contentVerification && (
+            <div className="mt-3 rounded-xl border border-ink-200 bg-white p-3.5 shadow-2xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2
+                    className={`size-4 ${
+                      doc.contentVerification.result === 'complete' ? 'text-success-600' : 'text-danger-600'
+                    }`}
+                  />
+                  <span className="text-xs font-bold uppercase tracking-wider text-ink-900">
+                    Content Verification Record
+                  </span>
+                </div>
+                <Badge
+                  tone={doc.contentVerification.result === 'complete' ? 'success' : 'danger'}
+                  dot={false}
+                >
+                  {doc.contentVerification.result === 'complete' ? 'Verified Complete' : 'Returned for Corrections'}
+                </Badge>
+              </div>
+              <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3 text-xs">
+                <div>
+                  <span className="text-ink-500 font-medium block">Verified By</span>
+                  <span className="font-semibold text-ink-900">{doc.contentVerification.verifiedBy}</span>
+                </div>
+                <div>
+                  <span className="text-ink-500 font-medium block">Date & Time</span>
+                  <span className="font-semibold text-ink-900">{formatDateTime(doc.contentVerification.at)}</span>
+                </div>
+                <div>
+                  <span className="text-ink-500 font-medium block">Recorded Result</span>
+                  <span className="font-semibold text-ink-900">
+                    {doc.contentVerification.result === 'complete'
+                      ? 'Complete — Logged & Routed'
+                      : 'Returned with Feedback'}
+                  </span>
+                </div>
+              </div>
+              {doc.contentVerification.remarks && (
+                <div className="mt-2.5 rounded-lg bg-ink-50 p-2.5 text-xs text-ink-700 border border-ink-100">
+                  <span className="font-semibold text-ink-900">Remarks: </span>
+                  <span>{doc.contentVerification.remarks}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Toolbar for Authorized Roles */}
           {(canResubmit ||
@@ -654,7 +1134,8 @@ export function DocumentDetailPage() {
             isReviewerForDoc ||
             canSecretaryFinalize ||
             canSecretaryRecordExternalReturn ||
-            canSecretaryRelease) && (
+            canSecretaryRelease ||
+            canSign) && (
             <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-200">
               <div className="flex-1">
                 <p className="text-xs font-bold uppercase tracking-wide text-brand-800">
@@ -676,6 +1157,7 @@ export function DocumentDetailPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {canSign && <Button variant="secondary" onClick={() => setIsSignatureOpen(true)} icon={PenLine}>Apply electronic signature</Button>}
                 {canResubmit && (
                   <Button onClick={handleOpenResubmit} icon={RotateCcw}>
                     Resubmit Corrected Document
@@ -702,7 +1184,9 @@ export function DocumentDetailPage() {
                     <Button
                       onClick={() => {
                         setExternalOffice(db.externalOffices[0]?.id ?? 'hrmo')
+                        setExternalTransferDate(new Date().toISOString().slice(0, 10))
                         setExternalHandedBy(user.name)
+                        setExternalReference('')
                         setExternalRemarks('')
                         setIsExternalOpen(true)
                       }}
@@ -715,7 +1199,15 @@ export function DocumentDetailPage() {
                 )}
 
                 {canSecretaryRecordExternalReturn && (
-                  <Button onClick={() => setIsExternalReturnOpen(true)} icon={CheckCircle2}>
+                  <Button
+                    onClick={() => {
+                      setExtReturnDate(new Date().toISOString().slice(0, 10))
+                      setExtReturnOutcome('signed')
+                      setExtReturnRemarks('')
+                      setIsExternalReturnOpen(true)
+                    }}
+                    icon={CheckCircle2}
+                  >
                     Record Return from External Office
                   </Button>
                 )}
@@ -729,16 +1221,67 @@ export function DocumentDetailPage() {
             </div>
           )}
 
-          {/* Document Metadata Grid (REQ-REC-1, REQ-TRK-2) */}
+          {/* Document Metadata Grid (REQ-REC-1, REQ-REC-2, REQ-TRK-2) */}
           <div className="mt-6 border-t border-ink-100 pt-6">
             <DefinitionList
               items={[
                 {
                   label: 'Control Number & Revision',
                   value: <span className="font-mono font-bold text-brand-900">{controlNumber(doc)}</span>,
-                  hint: doc.encodedBySecretary
-                    ? 'Walk-in document encoded by the College Secretary'
-                    : `Origin: ${doc.origin}`,
+                  hint: `Revision ${String(doc.revision).padStart(2, '0')}${doc.encodedBySecretary ? ' · Walk-in encoded by College Secretary' : ''}`,
+                },
+                {
+                  label: 'Repository Folder',
+                  value: (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {currentFolder ? (
+                        <div className="flex items-center gap-1.5 font-semibold text-ink-900">
+                          <Folder className="size-4 text-brand-600" />
+                          <span>{currentFolder.name}</span>
+                          <Badge tone="brand" dot={false} className="capitalize text-3xs">
+                            {currentFolder.category}
+                          </Badge>
+                        </div>
+                      ) : (
+                        <span className="text-ink-500 italic">Unassigned (Root Repository)</span>
+                      )}
+                      {canOrganizeFolder && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetFolderId(doc.folderId ?? '')
+                            setIsMoveFolderOpen(true)
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
+                        >
+                          <FolderOpen className="size-3" /> Change Folder
+                        </button>
+                      )}
+                    </div>
+                  ),
+                  hint: currentFolder?.purpose || 'Custom repository folder classification',
+                },
+                {
+                  label: 'Document Type',
+                  value: <span className="wrap-anywhere">{docType?.name ?? '—'}</span>,
+                  hint: `Audience: ${docType?.audience === 'student' ? 'Students' : 'Faculty'}`,
+                },
+                {
+                  label: 'Document Number',
+                  value: <span className="wrap-anywhere">{doc.documentNumber ?? 'None provided'}</span>,
+                },
+                {
+                  label: 'Document Title',
+                  value: <span className="font-semibold text-ink-900">{doc.title}</span>,
+                },
+                {
+                  label: 'Institutional Origin',
+                  value: (
+                    <Badge tone={doc.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                      {doc.origin === 'IDS' ? 'IDS (Integrated Developmental School)' : 'CESS (College of Education and Social Sciences)'}
+                    </Badge>
+                  ),
+                  hint: 'Derived from account and affiliation',
                 },
                 {
                   label: 'Requester',
@@ -746,12 +1289,9 @@ export function DocumentDetailPage() {
                   hint: requester?.email,
                 },
                 {
-                  label: 'Date & Time Submitted',
-                  value: formatDateTime(doc.submittedAt),
-                },
-                {
-                  label: 'Last Updated Time',
-                  value: formatDateTime(doc.updatedAt),
+                  label: 'Current Status',
+                  value: <StatusBadge doc={doc} audience={isReqUser ? 'requester' : 'staff'} db={db} />,
+                  hint: doc.status === 'submitted' ? 'Awaiting College Secretary content verification' : undefined,
                 },
                 {
                   label: 'Current Office Location',
@@ -759,11 +1299,25 @@ export function DocumentDetailPage() {
                   hint: `Arrived on ${formatDate(doc.officeSince)} (${plural(doc.routeIndex, 'step')} completed)`,
                 },
                 {
+                  label: 'Date & Time Received',
+                  value: formatDateTime(doc.submittedAt),
+                  hint: 'Sealed automatic timestamp',
+                },
+                {
+                  label: 'Last Updated Time',
+                  value: formatDateTime(doc.updatedAt),
+                },
+                {
                   label: 'Standard Processing Time',
                   value: docType
                     ? `${docType.processingDays[0]} to ${docType.processingDays[1]} working days`
                     : '—',
                   hint: delayed ? 'Past the standard turnaround threshold (Delayed)' : 'Within normal timeframe',
+                },
+                {
+                  label: 'Estimated Turnaround Target',
+                  value: estimatedCompletionDate ? formatDate(estimatedCompletionDate) : '—',
+                  hint: docType ? `Target completion within ${docType.processingDays[1]} working days` : undefined,
                 },
               ]}
             />
@@ -786,8 +1340,93 @@ export function DocumentDetailPage() {
             </span>
           </div>
         </div>
+
+        {/* Automated Checklist Verification Result (REQ-REQT-2, REQ-REQT-3) */}
+        {docType && docType.requirements.length > 0 && (
+          <div className="mb-5 rounded-xl border border-brand-200 bg-brand-50/30 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <FileCheck2 className="size-4 text-brand-700" />
+                <span className="text-xs font-bold uppercase tracking-wider text-brand-900">
+                  Automated Checklist Verification Result — {docType.name}
+                </span>
+              </div>
+              <Badge tone="success" dot={false}>
+                Checklist Completeness: Passed
+              </Badge>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {docType.requirements.map((req) => {
+                const attached = currentAttachments.find((a) => a.requirementId === req.id)
+                return (
+                  <div
+                    key={req.id}
+                    className={`flex flex-wrap items-center justify-between gap-2 rounded-lg p-2.5 text-xs ring-1 ring-inset ${
+                      attached
+                        ? 'bg-white text-ink-900 ring-success-200'
+                        : req.required
+                        ? 'bg-danger-50/50 text-danger-900 ring-danger-200'
+                        : 'bg-ink-50/50 text-ink-600 ring-ink-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {attached ? (
+                        <CheckCircle2 className="size-4 shrink-0 text-success-600" />
+                      ) : (
+                        <span className="size-4 grid place-items-center rounded-full bg-ink-200 text-ink-600 text-[10px] font-bold">
+                          -
+                        </span>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-ink-900">{req.label}</span>
+                          <Badge tone={req.required ? 'brand' : 'neutral'} dot={false} className="text-[10px] py-0 px-1.5">
+                            {req.required ? 'Required' : 'Optional'}
+                          </Badge>
+                        </div>
+                        {req.source && <p className="text-[11px] text-ink-500 mt-0.5">Source: {req.source}</p>}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      {attached ? (
+                        <span className="inline-flex items-center gap-1.5 font-mono text-2xs font-semibold text-success-800 bg-success-50 px-2 py-0.5 rounded border border-success-200">
+                          <FileText className="size-3 text-success-600" />
+                          {attached.name} ({formatSize(attached.sizeKb)})
+                        </span>
+                      ) : (
+                        <span className="text-2xs text-ink-400 italic">
+                          {req.required ? 'Missing required attachment' : 'Not attached (Optional)'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <p className="mt-3 text-2xs text-ink-500 italic">
+              Checked automatically against document type checklist before reaching College Secretary. Content verification focuses on document accuracy.
+            </p>
+          </div>
+        )}
+
         <AttachmentList db={db} doc={doc} />
       </Card>
+
+      {signatures.length > 0 && (
+        <Card className="space-y-4 p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="document-signatures" tabIndex={-1} className="scroll-mt-20 text-base font-bold">Electronic signatures</h2>
+            <Button variant="secondary" size="sm" icon={Eye} onClick={() => {
+              setPreviewAttachmentId('overview')
+              setIsPreviewModalOpen(true)
+            }}>View signed summary</Button>
+          </div>
+          <SignatureList signatures={signatures} />
+        </Card>
+      )}
 
       {/* Section 2: Institutional Review Route Journey */}
       <Card className="p-6">
@@ -834,7 +1473,20 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2.5 text-xs text-ink-700 border border-slate-200">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-ink-900">Control Number:</span>
+              <span className="font-mono font-medium text-brand-700">{controlNumber(doc)}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-ink-900">Revision:</span>
+              <span className="rounded bg-brand-100 px-2 py-0.5 font-bold text-brand-800">
+                Rev {doc.revision} → Rev {doc.revision + 1}
+              </span>
+            </div>
+          </div>
+
           <Field label="Document Title" required error={resubmitErrors.title}>
             <Input
               type="text"
@@ -845,6 +1497,41 @@ export function DocumentDetailPage() {
               }}
             />
           </Field>
+
+          <DocumentNumberField
+            value={resubmitDocumentNumber}
+            required={docType?.documentNumberRequired}
+            disabled={resubmitBusy}
+            error={resubmitErrors.documentNumber}
+            onChange={(value) => {
+              setResubmitDocumentNumber(value)
+              if (resubmitErrors.documentNumber) setResubmitErrors((previous) => ({ ...previous, documentNumber: undefined }))
+            }}
+          />
+
+          {isCustom && (
+            <>
+              <Field label="Custom document type" required error={resubmitErrors.customType}>
+                <Input
+                  maxLength={CUSTOM_DOCUMENT_TYPE_LIMIT}
+                  value={resubmitCustomType}
+                  onChange={(event) => {
+                    setResubmitCustomType(event.target.value)
+                    if (resubmitErrors.customType) setResubmitErrors((previous) => ({ ...previous, customType: undefined }))
+                  }}
+                />
+              </Field>
+              <Field label="Description or purpose" required error={resubmitErrors.description}>
+                <Textarea
+                  value={resubmitDesc}
+                  onChange={(event) => {
+                    setResubmitDesc(event.target.value)
+                    if (resubmitErrors.description) setResubmitErrors((previous) => ({ ...previous, description: undefined }))
+                  }}
+                />
+              </Field>
+            </>
+          )}
 
           <Field
             label="What changes did you make?"
@@ -865,7 +1552,7 @@ export function DocumentDetailPage() {
 
           <div>
             <label className="block text-sm font-semibold text-ink-800">Attach Corrected Files</label>
-            <div className="mt-2">
+            <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-4">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100">
                 <Paperclip className="size-3.5" aria-hidden /> Attach File
                 <input
@@ -892,15 +1579,31 @@ export function DocumentDetailPage() {
                 ))}
               </ul>
             )}
+            {currentAttachments.length > 0 && (
+              <div className="mt-3 rounded-lg bg-ink-50/70 p-2.5 text-xs border border-ink-100">
+                <span className="font-semibold text-ink-800">Files on Record (Revision {doc.revision}):</span>
+                <ul className="mt-1.5 space-y-1 text-ink-600">
+                  {currentAttachments.map((a) => (
+                    <li key={a.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <FileText className="size-3.5 text-ink-400 shrink-0" />
+                        <span className="truncate">{a.name}</span>
+                      </div>
+                      <span className="text-ink-400 text-[11px] shrink-0 ml-2">({formatSize(a.sizeKb)})</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </form>
       </Dialog>
 
-      {/* 2. Secretary Content Verification & Completeness Check Dialog (REQ-REQT-4, REQ-REQT-5, REQ-REQT-6) */}
+      {/* 2. Secretary Content Verification & Completeness Check Dialog */}
       <Dialog
         open={isCheckOpen}
         onClose={() => setIsCheckOpen(false)}
-        size="lg"
+        size="xl"
         title="Verify Content & Log Submission"
         description="The automatic completeness checker has verified that all required attachments are present. Review the uploaded files for content correctness, then mark Complete to log and route, Return if content issues are found, or Disapprove / Reject if the submission is invalid."
         busy={checkBusy}
@@ -924,12 +1627,12 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
-          {/* Automatic Completeness Check Result Banner (REQ-REQT-4) */}
-          <div className="flex items-center justify-between rounded-xl bg-success-50 p-3.5 text-xs text-success-700 ring-1 ring-inset ring-success-100">
+        <form className="space-y-6">
+          {/* Automatic Completeness Check Result Banner */}
+          <div className="flex items-center justify-between rounded-xl bg-success-50 p-4 text-xs text-success-700 ring-1 ring-inset ring-success-100">
             <div className="flex items-center gap-2 font-semibold">
               <FileCheck2 className="size-4 shrink-0" />
-              <span>Automatic Completeness Check Result: All required attachments are present</span>
+              <span>{isCustom ? 'Review the custom document type, purpose, and any supporting files.' : 'Automatic Completeness Check Result: All required attachments are present'}</span>
             </div>
             <Badge tone="success" dot={false}>
               Auto-Check Passed
@@ -955,17 +1658,30 @@ export function DocumentDetailPage() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPreviewAttachmentId(a.id)
-                        setIsPreviewModalOpen(true)
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
-                      title="Inspect and read document content before deciding"
-                    >
-                      <Eye className="size-3.5 text-brand-600" /> Preview Content
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewAttachmentId(a.id)
+                          setIsPreviewModalOpen(true)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
+                        title="Inspect and read document content before deciding"
+                      >
+                        <Eye className="size-3.5 text-brand-600" /> Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const result = await downloadPermittedDocument(user, doc, a, docType?.name)
+                          if (!result.success) toast.error('Download unavailable', result.error)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-ink-50 px-3 py-1.5 text-xs font-semibold text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 transition-colors"
+                        title="Download file for offline inspection"
+                      >
+                        <Download className="size-3.5" /> Download
+                      </button>
+                    </div>
                   </li>
                 )
               })}
@@ -975,7 +1691,7 @@ export function DocumentDetailPage() {
           {/* Verification Result Selector */}
           <div>
             <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-ink-500">
-              Content Verification Result (REQ-REQT-4)
+              Content Verification Result
             </p>
             <Segmented
               label="Verification Result"
@@ -985,14 +1701,19 @@ export function DocumentDetailPage() {
                 setCheckErrors({})
               }}
               options={[
-                { value: 'complete', label: 'Complete — Content is Correct' },
-                { value: 'return', label: 'Return — Content Has Issues' },
-                { value: 'reject', label: 'Disapprove / Reject Submission' },
+                { value: 'complete', label: 'Complete', icon: CheckCircle2 },
+                { value: 'return', label: 'Return for Issues', icon: RotateCcw },
+                { value: 'reject', label: 'Disapprove', icon: XCircle },
               ]}
             />
+            <p className="mt-2 text-xs text-ink-600">
+              {checkDecision === 'complete' && 'All content and required attachments are accurate and meet institutional standards.'}
+              {checkDecision === 'return' && 'Document has content issues and will be returned to the requester for correction.'}
+              {checkDecision === 'reject' && 'Submission is invalid or disapproved; will not proceed further.'}
+            </p>
           </div>
 
-          {checkDecision === 'return' && docType && (
+          {checkDecision === 'return' && docType && docType.requirements.length > 0 && (
             <div className="space-y-2 rounded-xl bg-danger-50/40 p-3.5 ring-1 ring-inset ring-danger-100">
               <p className="text-xs font-bold text-danger-800">
                 Optional: Flag specific attachments that contain incorrect or incomplete information
@@ -1032,7 +1753,7 @@ export function DocumentDetailPage() {
             error={checkErrors.reasons}
             hint={
               checkDecision === 'return'
-                ? 'Required (REQ-REQT-5): Explain what information inside the document or attachments is incorrect or incomplete.'
+                ? 'Required: Explain what information inside the document or attachments is incorrect or incomplete.'
                 : checkDecision === 'reject'
                 ? 'Required: Explain why this submission is disapproved/rejected. The requester will receive this notification.'
                 : 'Optional note recorded with your content verification.'
@@ -1057,10 +1778,11 @@ export function DocumentDetailPage() {
         </form>
       </Dialog>
 
-      {/* 3. Reviewing Office Action Dialog (REQ-ROUTE-5, REQ-ROUTE-6) */}
+      {/* 3. Reviewing Office Action Dialog */}
       <Dialog
         open={isReviewOpen}
         onClose={() => setIsReviewOpen(false)}
+        size="lg"
         title={`Review Document — ${currentStep?.label ?? OFFICE_LABEL[user.role as keyof typeof OFFICE_LABEL]}`}
         description="Record your decision on this document. You can endorse it, approve it, return it for revisions, or disapprove/reject it."
         busy={reviewBusy}
@@ -1087,7 +1809,7 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-6">
           {/* Pre-Action Document Inspection */}
           <div className="flex items-center justify-between rounded-xl bg-brand-50/70 p-3.5 ring-1 ring-inset ring-brand-200 text-xs">
             <div className="flex items-center gap-2.5">
@@ -1241,7 +1963,7 @@ export function DocumentDetailPage() {
         open={isExternalOpen}
         onClose={() => setIsExternalOpen(false)}
         title="Record Transfer to External Office"
-        description="Record the transfer of physical or electronic documents to an external university office so its location and waiting days remain visible."
+        description="Record the transfer of physical or electronic documents to an external university office (HRMO, Registrar, Budget/Accounting) with transfer date, hand-off person, and reference numbers."
         busy={externalBusy}
         footer={
           <>
@@ -1268,23 +1990,43 @@ export function DocumentDetailPage() {
             </Select>
           </Field>
 
-          <Field label="Handed Over By" required error={externalErrors.handedBy}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Transfer Date" required>
+              <Input
+                type="date"
+                value={externalTransferDate}
+                onChange={(e) => setExternalTransferDate(e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Handed Over By" required error={externalErrors.handedBy}>
+              <Input
+                type="text"
+                value={externalHandedBy}
+                onChange={(e) => {
+                  setExternalHandedBy(e.target.value)
+                  if (externalErrors.handedBy) setExternalErrors({})
+                }}
+              />
+            </Field>
+          </div>
+
+          <Field label="Notes / Reference Number" optional hint="Tracking slip, transmittal number, or endorsement memo reference">
             <Input
               type="text"
-              value={externalHandedBy}
-              onChange={(e) => {
-                setExternalHandedBy(e.target.value)
-                if (externalErrors.handedBy) setExternalErrors({})
-              }}
+              value={externalReference}
+              onChange={(e) => setExternalReference(e.target.value)}
+              placeholder="e.g. HRMO-2026-0891 or Transmittal Slip #42"
             />
           </Field>
 
-          <Field label="Transfer Remarks" optional>
+          <Field label="Transfer Notes & Instructions" optional>
             <Textarea
               rows={2}
               value={externalRemarks}
               onChange={(e) => setExternalRemarks(e.target.value)}
-              placeholder="e.g. Sent for verification of service credits..."
+              placeholder="e.g. Sent for verification of service credits and step increment endorsement..."
             />
           </Field>
         </form>
@@ -1295,7 +2037,7 @@ export function DocumentDetailPage() {
         open={isExternalReturnOpen}
         onClose={() => setIsExternalReturnOpen(false)}
         title="Record Return from External Office"
-        description="Record that the document has been returned by the external office back to the College Secretary."
+        description="Record that the document has returned from the external office back to the College Secretary, including return date and processing outcome."
         busy={extReturnBusy}
         footer={
           <>
@@ -1309,18 +2051,42 @@ export function DocumentDetailPage() {
         }
       >
         <form className="space-y-4">
-          <Field label="Return Remarks" optional>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Return Date" required>
+              <Input
+                type="date"
+                value={extReturnDate}
+                onChange={(e) => setExtReturnDate(e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Outcome / Result" required>
+              <Select
+                value={extReturnOutcome}
+                onChange={(e) => setExtReturnOutcome(e.target.value as ExternalReturnOutcome)}
+              >
+                {EXTERNAL_RETURN_OUTCOMES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+
+          <Field label="Return Notes & Findings" optional>
             <Textarea
               rows={3}
               value={extReturnRemarks}
               onChange={(e) => setExtReturnRemarks(e.target.value)}
-              placeholder="e.g. Processed and signed by HRMO representative..."
+              placeholder="e.g. Processed and signed by HRMO representative; service record verified."
             />
           </Field>
         </form>
       </Dialog>
 
-      {/* 6. Secretary Release Dialog (REQ-REL-1..4) */}
+      {/* 6. Secretary Release Dialog */}
       <Dialog
         open={isReleaseOpen}
         onClose={() => setIsReleaseOpen(false)}
@@ -1338,9 +2104,9 @@ export function DocumentDetailPage() {
           </>
         }
       >
-        <form className="space-y-4">
+        <form className="space-y-6">
           <Field
-            label="Name of Person Who Received Document (REQ-REL-2)"
+            label="Name of Person Who Received Document"
             required
             error={releaseErrors.receivedBy}
             hint="Enter the full name of the student, faculty member, or authorized representative."
@@ -1356,15 +2122,13 @@ export function DocumentDetailPage() {
             />
           </Field>
 
-          {/* REQ-REL-4: Attach scanned copy of final signed document */}
+          {/* Attach scanned copy of final signed document */}
           <div>
-            <label className="block text-sm font-semibold text-ink-800">
-              Scanned Copy of Final Signed Document (REQ-REL-4)
-            </label>
-            <p className="mt-0.5 text-xs text-ink-500">
-              Attach a scanned PDF or image of the final signed document for the permanent archive record.
-            </p>
-            <div className="mt-2">
+            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink-800">
+              <span>Scanned Copy of Final Signed Document</span>
+              <InfoTooltip content="Attach a scanned PDF or image of the final signed document for the permanent archive record." />
+            </div>
+            <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-4">
               {releaseSignedFile ? (
                 <div className="flex items-center justify-between rounded-lg bg-success-50/60 px-3 py-2 text-xs ring-1 ring-success-200">
                   <span className="flex items-center gap-2 font-semibold text-ink-900">
@@ -1381,7 +2145,7 @@ export function DocumentDetailPage() {
                   </button>
                 </div>
               ) : (
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3.5 py-2 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-50 shadow-xs transition-colors">
                   <UploadCloud className="size-4" aria-hidden /> Attach Scanned Signed Document
                   <input
                     type="file"
@@ -1395,6 +2159,107 @@ export function DocumentDetailPage() {
           </div>
         </form>
       </Dialog>
+
+      {/* Move / Assign Document to Folder Dialog */}
+      <Dialog
+        open={isMoveFolderOpen}
+        onClose={() => setIsMoveFolderOpen(false)}
+        title="Organize Document into Folder"
+        description="Assign this document request to a dedicated folder to categorize it for accreditation, departmental reviews, or special portfolios."
+        busy={moveFolderBusy}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setIsMoveFolderOpen(false)}
+              disabled={moveFolderBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMoveFolder}
+              loading={moveFolderBusy}
+              icon={Folder}
+            >
+              Save Folder
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleMoveFolder} className="space-y-4">
+          <Field label="Repository Folder" hint="Choose a custom folder to organize this document, or leave unassigned">
+            <Select
+              value={targetFolderId}
+              onChange={(e) => setTargetFolderId(e.target.value)}
+            >
+              <option value="">-- None (Root Repository) --</option>
+              {(db.folders || []).map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f.category})
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </form>
+      </Dialog>
+
+      {/* Non-Public Secure Link Dialog */}
+      <Dialog
+        open={isSecureLinkDialogOpen}
+        onClose={() => setIsSecureLinkDialogOpen(false)}
+        title="Non-Public Authenticated Link"
+        description="Time-limited session token link for permitted document participants"
+        footer={
+          <Button variant="secondary" onClick={() => setIsSecureLinkDialogOpen(false)}>
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <div className="rounded-xl bg-brand-50 p-3.5 ring-1 ring-brand-100 text-brand-950 space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-brand-900">
+              <Lock className="size-4 text-brand-700" />
+              Non-Public Institutional Document Protection
+            </p>
+            <p className="text-[11px] leading-relaxed text-brand-800">
+              This document is protected by role-based permission verification. Anyone opening this link must sign in with an authorized account (requester, reviewing office, or college records administrator). Public scraping or unauthenticated direct access is blocked.
+            </p>
+          </div>
+
+          <Field label="Authenticated Time-Limited Link (15-Minute Token)">
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={generateNonPublicSecureLink(doc, user).url}
+                className="font-mono text-xs bg-ink-50 select-all"
+              />
+              <Button
+                type="button"
+                variant={copiedLink ? 'primary' : 'secondary'}
+                onClick={() => {
+                  const info = generateNonPublicSecureLink(doc, user)
+                  navigator.clipboard.writeText(info.url)
+                  setCopiedLink(true)
+                  setTimeout(() => setCopiedLink(false), 2500)
+                  toast.success('Non-Public Link Copied', 'Token link copied. Valid for 15 minutes for permitted accounts.')
+                }}
+                className="shrink-0"
+              >
+                {copiedLink ? 'Copied!' : 'Copy Link'}
+              </Button>
+            </div>
+          </Field>
+
+          <div className="rounded-lg bg-ink-50 p-3 text-ink-600 space-y-1">
+            <p className="font-semibold text-ink-800">Security Parameters:</p>
+            <p>• Access Scope: <strong>{access.scopeLabel}</strong></p>
+            <p>• Token Expiration: <strong>15 minutes from generation</strong></p>
+            <p>• Access Policy: <strong>Permission-checked upon each view & download</strong></p>
+          </div>
+        </div>
+      </Dialog>
+
+      {isSignatureOpen && <SignDocumentDialog key={doc.id} doc={doc} user={user} onClose={() => setIsSignatureOpen(false)} />}
 
       {/* 5. In-App Document & Attachment Previewer Modal (Zero-download inspection) */}
       {isPreviewModalOpen && doc && (

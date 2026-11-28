@@ -9,10 +9,14 @@ import {
   FileCheck2,
   FileText,
   Hourglass,
+  Link2,
+  Lock,
   Paperclip,
   RotateCcw,
   Search,
   SearchX,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -23,9 +27,10 @@ import {
   OFFICE_LABEL,
   STATUS_FILTER_LABEL,
   controlNumber,
-  downloadGeneratedPdf,
+  externalOfficeLabel,
   historyTitle,
   historyTone,
+  locationLabel,
   locationLabelForStaff,
   revisionLabel,
   statusView,
@@ -33,10 +38,14 @@ import {
 } from '../content/language'
 import { buildRoute, lastSubmittedAt } from '../data/engine'
 import { byNewest, byOldest, daysWaiting, isDelayed, typeOf, userById } from '../data/selectors'
+import { isCustomDocumentType } from '../data/customDocumentTypes'
 import type { Attachment, Database, DocRecord, HistoryEntry, OfficeId, RouteStep, Status } from '../data/types'
 import { formatDate, formatDateTime, plural, timeAgo } from '../lib/time'
 import { Input, Select } from './form'
-import { Avatar, Badge, EmptyState, cn } from './ui'
+import { Avatar, Badge, EmptyState, Tooltip, cn } from './ui'
+import { useUser } from '../app/session'
+import { useToast } from './Toast'
+import { downloadPermittedDocument, generateNonPublicSecureLink } from '../lib/documentSecurity'
 
 /* ------------------------------------------------------------------------ */
 /* Status                                                                    */
@@ -49,9 +58,11 @@ export function StatusBadge({ doc, audience, db }: { doc: DocRecord; audience: '
 
 export function DelayedBadge({ audience }: { audience: 'requester' | 'staff' }) {
   return (
-    <Badge tone="warning" dot={false} className="shrink-0 gap-1.5 whitespace-nowrap">
-      <Hourglass className="size-3 shrink-0" aria-hidden />
-      <span>{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
+    <Badge tone="warning" dot={false} className="whitespace-nowrap shrink-0">
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <Hourglass className="size-3 shrink-0" aria-hidden />
+        <span>{audience === 'requester' ? 'Taking longer than usual' : 'Delayed'}</span>
+      </span>
     </Badge>
   )
 }
@@ -107,7 +118,31 @@ export function useDocumentFilters(db: Database, docs: DocRecord[], initialSort:
         }
         if (!q) return true
         const req = userById(db, d.requesterId)
-        const hay = [controlNumber(d), d.title, typeOf(db, d)?.name, req?.name].join(' ').toLowerCase()
+        const type = typeOf(db, d)
+        const folder = db.folders?.find((f) => f.id === d.folderId)
+        const officeName = d.currentOffice ? (OFFICE_LABEL[d.currentOffice] ?? '') : ''
+        const locationStr = locationLabel(d, db)
+        const statusLabel = STATUS_FILTER_LABEL[d.status] ?? d.status
+
+        const hay = [
+          controlNumber(d),
+          d.id,
+          d.title,
+          d.description ?? '',
+          type?.name ?? '',
+          type?.summary ?? '',
+          folder?.name ?? '',
+          folder?.category ?? '',
+          req?.name ?? '',
+          req?.email ?? '',
+          req?.department ?? '',
+          d.origin,
+          statusLabel,
+          officeName,
+          locationStr,
+        ]
+          .join(' ')
+          .toLowerCase()
         return hay.includes(q)
       })
       .sort(filters.sort === 'oldest' ? byOldest : byNewest)
@@ -126,7 +161,7 @@ export function useDocumentFilters(db: Database, docs: DocRecord[], initialSort:
   return { filters, setFilters, result, active, clear }
 }
 
-const ALL_INTERNAL_OFFICES: OfficeId[] = ['secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
+const ALL_INTERNAL_OFFICES: OfficeId[] = ['secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
 
 export function FilterBar({
   db,
@@ -151,10 +186,19 @@ export function FilterBar({
 }) {
   const types = db.documentTypes.filter((t) => audience === 'all' || t.audience === audience)
   const statusList = statuses ?? (Object.keys(STATUS_FILTER_LABEL) as Status[])
+  const activeCount = [
+    !!filters.q,
+    !!filters.status,
+    !!filters.type,
+    !!filters.origin,
+    !!filters.office,
+    !!(filters.dateFrom || filters.dateTo),
+  ].filter(Boolean).length
+
   return (
-    <div className="space-y-3.5 border-b border-ink-100 px-6 py-5">
-      <div className="flex flex-wrap items-end gap-3.5">
-        <div className="relative min-w-[220px] flex-1">
+    <div className="w-full min-w-0 space-y-3.5 border-b border-ink-100 p-3 sm:px-6 sm:py-5">
+      <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 sm:gap-3.5">
+        <div className="relative w-full min-w-0 flex-1 sm:w-auto sm:min-w-[220px]">
           <label htmlFor="doc-search" className="mb-1 block text-xs font-semibold text-ink-600">
             Search
           </label>
@@ -166,7 +210,7 @@ export function FilterBar({
               value={filters.q}
               onChange={(e) => setFilters({ ...filters, q: e.target.value })}
               placeholder={searchLabel}
-              className="pl-10 pr-4"
+              className="w-full pl-10 pr-4"
             />
           </div>
         </div>
@@ -184,7 +228,7 @@ export function FilterBar({
           <option value="">All document types</option>
           {types.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.name}
+              {audience === 'all' && isCustomDocumentType(t.id) ? `Others (${t.audience === 'student' ? 'Students' : 'Faculty'})` : t.name}
             </option>
           ))}
         </FilterSelect>
@@ -223,23 +267,23 @@ export function FilterBar({
       </div>
 
       {showDateRange && (
-        <div className="flex flex-wrap items-end gap-3 pt-1">
-          <label className="block">
+        <div className="flex w-full min-w-0 flex-wrap items-end gap-2.5 pt-1 sm:gap-3.5">
+          <label className="block w-full min-w-0 sm:w-auto">
             <span className="mb-1 block text-xs font-semibold text-ink-600">Submitted from date</span>
             <Input
               type="date"
               value={filters.dateFrom}
               onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-              className="h-9 w-40 text-xs"
+              className="h-10 w-full min-w-0 text-sm sm:w-44"
             />
           </label>
-          <label className="block">
+          <label className="block w-full min-w-0 sm:w-auto">
             <span className="mb-1 block text-xs font-semibold text-ink-600">Submitted to date</span>
             <Input
               type="date"
               value={filters.dateTo}
               onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-              className="h-9 w-40 text-xs"
+              className="h-10 w-full min-w-0 text-sm sm:w-44"
             />
           </label>
           {(filters.dateFrom || filters.dateTo || filters.office || filters.status || filters.type || filters.origin || filters.q) && (
@@ -257,11 +301,132 @@ export function FilterBar({
                   dateTo: '',
                 })
               }
-              className="h-9 rounded-lg px-2.5 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-50/70 px-3.5 text-sm font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
             >
               Reset filters
             </button>
           )}
+        </div>
+      )}
+
+      {/* Active Filter Chips with Individual Clear Controls across Queues and Repositories */}
+      {activeCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-ink-100 text-xs">
+          <div className="flex items-center gap-1.5 font-semibold text-ink-600">
+            <SlidersHorizontal className="size-3.5 text-brand-600" />
+            <span>Active Filters ({activeCount}):</span>
+          </div>
+
+          {filters.q && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>Search: “{filters.q}”</span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, q: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove search filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {filters.status && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>Status: {STATUS_FILTER_LABEL[filters.status] || filters.status}</span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, status: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove status filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {filters.type && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>Type: {types.find((t) => t.id === filters.type)?.name || filters.type}</span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, type: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove document type filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {filters.origin && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>Origin: {filters.origin}</span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, origin: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove origin filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {filters.office && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>
+                Office:{' '}
+                {filters.office.startsWith('ext:')
+                  ? db.externalOffices.find((e) => `ext:${e.id}` === filters.office)?.shortLabel || filters.office
+                  : OFFICE_LABEL[filters.office as OfficeId] || filters.office}
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, office: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove office filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          {(filters.dateFrom || filters.dateTo) && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 font-medium text-brand-800 ring-1 ring-inset ring-brand-200">
+              <span>
+                Date: {filters.dateFrom ? formatDate(filters.dateFrom) : 'Start'} to{' '}
+                {filters.dateTo ? formatDate(filters.dateTo) : 'Latest'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilters({ ...filters, dateFrom: '', dateTo: '' })}
+                className="text-brand-600 hover:text-danger-600 ml-0.5"
+                aria-label="Remove date range filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              setFilters({
+                ...filters,
+                q: '',
+                status: '',
+                type: '',
+                origin: '',
+                office: '',
+                dateFrom: '',
+                dateTo: '',
+              })
+            }
+            className="text-xs font-bold text-brand-700 hover:text-danger-700 hover:underline ml-1"
+          >
+            Clear all filters
+          </button>
         </div>
       )}
     </div>
@@ -270,9 +435,9 @@ export function FilterBar({
 
 function FilterSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: ReactNode }) {
   return (
-    <label className="block">
+    <label className="block w-full min-w-0 sm:w-auto">
       <span className="mb-1 block text-xs font-semibold text-ink-600">{label}</span>
-      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 min-w-[150px]">
+      <Select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 w-full min-w-0 sm:min-w-[150px]">
         {children}
       </Select>
     </label>
@@ -437,13 +602,15 @@ export function DocumentList({
                     <div className="mt-0.5 text-[11px] text-ink-400">Updated {timeAgo(d.updatedAt)}</div>
                   </td>
                   <td className="min-w-[190px] px-6 py-4.5">
-                    <div className="font-medium text-ink-800">{audience === 'requester' && d.status === 'returned' ? 'With you' : locationLabelForStaff(d, db)}</div>
+                    <div className="font-medium text-ink-800">
+                      {audience === 'requester' ? locationLabel(d, db) : locationLabelForStaff(d, db)}
+                    </div>
                     {showWaiting && (d.status === 'with_office' || d.status === 'with_external' || d.status === 'submitted') && (
                       <div className="mt-0.5 text-xs text-ink-500">Waiting {plural(daysWaiting(d), 'day')}</div>
                     )}
                   </td>
                   <td className="whitespace-nowrap min-w-[170px] px-6 py-4.5">
-                    <div className="flex flex-col items-start gap-1.5">
+                    <div className="inline-flex flex-wrap items-center gap-1.5">
                       <StatusBadge doc={d} audience={audience} db={db} />
                       {delayed && <DelayedBadge audience={audience} />}
                     </div>
@@ -456,28 +623,68 @@ export function DocumentList({
       </div>
 
       {/* Mobile cards */}
-      <ul className="divide-y divide-ink-100 md:hidden">
+      <ul className="w-full min-w-0 max-w-full divide-y divide-ink-100 overflow-hidden md:hidden">
         {docs.map((d) => {
           const type = typeOf(db, d)
           const req = userById(db, d.requesterId)
+          const highlight = audience === 'requester' && (d.status === 'returned' || d.status === 'ready')
           return (
-            <li key={d.id}>
-              <Link to={`/app/documents/${d.id}`} className="block px-4 py-4 hover:bg-brand-50/70">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-ink-900">{d.title}</p>
-                    <p className="mt-0.5 text-xs text-ink-500">
+            <li
+              key={d.id}
+              className={cn(
+                'w-full min-w-0 max-w-full overflow-hidden transition-colors',
+                highlight && d.status === 'returned' && 'bg-danger-50/30',
+                highlight && d.status === 'ready' && 'bg-success-50/40',
+              )}
+            >
+              <Link to={`/app/documents/${d.id}`} className="block w-full min-w-0 max-w-full px-3 py-3.5 hover:bg-brand-50/70 sm:px-4 sm:py-4">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="font-mono text-xs font-bold text-brand-900 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-200">
+                    {controlNumber(d)}
+                  </span>
+                  <Badge tone="neutral" dot={false}>
+                    {revisionLabel(d.revision)}
+                  </Badge>
+                  {d.encodedBySecretary && (
+                    <Badge tone="brand" dot={false}>
+                      Walk-in
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="mt-1.5 flex w-full min-w-0 items-start justify-between gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1 break-words">
+                    <p className="font-bold text-ink-950 break-words">{d.title}</p>
+                    <p className="mt-0.5 text-xs text-ink-500 break-words">
                       {type?.name}
                       {showRequester && req ? ` · ${req.name}` : ''}
                     </p>
                   </div>
                   <ArrowRight className="mt-1 size-4 shrink-0 text-ink-400" aria-hidden />
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+
+                <div className="mt-2.5 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
                   <StatusBadge doc={d} audience={audience} db={db} />
                   {isDelayed(db, d) && <DelayedBadge audience={audience} />}
-                  <span className="text-xs text-ink-500">Submitted {formatDate(lastSubmittedAt(d))}</span>
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100/70 pt-2 text-2xs text-ink-500">
+                  <div className="font-medium text-ink-700">
+                    <span className="text-ink-400">Location: </span>
+                    {audience === 'requester' ? locationLabel(d, db) : locationLabelForStaff(d, db)}
+                  </div>
+                  <div className="text-right">
+                    <span>Submitted {formatDate(lastSubmittedAt(d))}</span>
+                    <span className="ml-1.5 text-ink-400">· Updated {timeAgo(d.updatedAt)}</span>
+                  </div>
+                </div>
+
+                {audience === 'requester' && d.status === 'returned' && d.returnInfo && (
+                  <div className="mt-2.5 rounded-lg border border-danger-200 bg-danger-50/90 p-2.5 text-xs text-danger-900">
+                    <span className="font-bold">Return reason: </span>
+                    <span>{d.returnInfo.reasons}</span>
+                  </div>
+                )}
               </Link>
             </li>
           )
@@ -588,13 +795,17 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
       s.stage === 'check'
         ? 'Content & Completeness Check (College Secretary)'
         : s.stage === 'final'
-          ? 'Release & Archive (College Secretary)'
+          ? (doc.status === 'with_external' && doc.externalOffice
+              ? `External Office: ${externalOfficeLabel(doc.externalOffice, db)}`
+              : 'Release & Archive (College Secretary)')
           : s.label ?? OFFICE_LABEL[s.office]
     const help =
       s.stage === 'check'
         ? 'Automatic completeness check passed; the College Secretary verifies document content.'
         : s.stage === 'final'
-          ? 'The College Secretary prepares and releases the signed document.'
+          ? (doc.status === 'with_external' && doc.externalOffice
+              ? `Transferred to ${externalOfficeLabel(doc.externalOffice, db)} for university processing.`
+              : 'The College Secretary prepares and releases the signed document.')
           : OFFICE_HELP[s.office]
     let state: 'done' | 'current' | 'next' | 'returned' | 'rejected' = i < doc.routeIndex ? 'done' : i === doc.routeIndex ? 'current' : 'next'
     if (done) state = 'done'
@@ -748,10 +959,14 @@ export function RouteProgress({ doc, db }: { doc: DocRecord; db?: Database }) {
                         </span>
                         <div className="min-w-0 flex-1 pt-0.5">
                           <p className="text-xs font-semibold text-brand-900">
-                            Currently under review at this office
+                            {doc.status === 'with_external'
+                              ? `Currently with ${doc.externalOffice ? externalOfficeLabel(doc.externalOffice, db) : 'External Office'}`
+                              : 'Currently under review at this office'}
                           </p>
                           <p className="text-[11px] text-ink-500">
-                            Awaiting recorded review decision or release action
+                            {doc.status === 'with_external'
+                              ? 'Awaiting recorded return from external university office'
+                              : 'Awaiting recorded review decision or release action'}
                           </p>
                         </div>
                       </div>
@@ -804,34 +1019,38 @@ export function ProcessingHistory({ doc }: { doc: DocRecord }) {
 /* Attachments (REQ-REC-6, REQ-REL-4)                                        */
 /* ------------------------------------------------------------------------ */
 
-/** Object URLs for files attached in this browser session. */
-export const sessionFiles = new Map<string, string>()
 
 export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
+  const user = useUser()
+  const toast = useToast()
   const [selectedAttachId, setSelectedAttachId] = useState<string | undefined>()
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const type = typeOf(db, doc)
-  const requester = userById(db, doc.requesterId)
   const byRev = new Map<number, Attachment[]>()
   for (const a of doc.attachments) byRev.set(a.revision, [...(byRev.get(a.revision) ?? []), a])
   const revs = [...byRev.keys()].sort((a, b) => b - a)
   if (doc.attachments.length === 0) return <p className="text-sm text-ink-500">No files are attached to this request.</p>
 
-  const handleSampleDownload = (a: Attachment) => {
-    const req = type?.requirements.find((r) => r.id === a.requirementId)
-    downloadGeneratedPdf(a.name, `Audit E-Copy: ${a.name}`, [
-      `Control Number: ${controlNumber(doc)}`,
-      `Document Title: ${doc.title}`,
-      `Document Type: ${type?.name ?? doc.typeId}`,
-      `Origin: ${doc.origin}`,
-      `Requester: ${requester?.name ?? 'Unknown'} (${requester?.department ?? ''})`,
-      `Attachment Category: ${a.isSignedCopy ? 'Final Signed Release Copy (REQ-REL-4)' : (req?.label ?? 'Supporting Attachment')}`,
-      `Uploaded By: ${a.uploadedBy}`,
-      `Uploaded At: ${formatDateTime(a.uploadedAt)}`,
-      `Revision: ${revisionLabel(a.revision)}`,
-      '',
-      'This official electronic copy was exported from CESS DocuFlow for review and institutional audit.',
-    ])
+  const handleAttachmentDownload = async (a: Attachment) => {
+    const res = await downloadPermittedDocument(user, doc, a, type?.name)
+    if (!res.success) {
+      toast.error('Download Blocked', res.error || 'You do not have permission to download this document.')
+    } else {
+      toast.info('Document Downloaded', `Retrieved ${a.name} under verified permissions.`)
+    }
+  }
+
+  const handleCopyLink = (a: Attachment) => {
+    try {
+      const linkInfo = generateNonPublicSecureLink(doc, user, a.id)
+      navigator.clipboard.writeText(linkInfo.url)
+      toast.success(
+        'Non-Public Secure Link Copied',
+        `Authenticated token link copied (valid for ${linkInfo.expiresInMinutes} mins). Recipient must have permission to open this record.`,
+      )
+    } catch (err: unknown) {
+      toast.error('Unable to Copy Link', err instanceof Error ? err.message : 'Permission check failed.')
+    }
   }
 
   return (
@@ -864,32 +1083,48 @@ export function AttachmentList({ db, doc }: { db: Database; doc: DocRecord }) {
                           Final Signed Copy
                         </Badge>
                       )}
+                      <span className="inline-flex items-center gap-1 rounded bg-ink-50 px-2 py-0.5 text-[10px] font-semibold text-ink-600 ring-1 ring-inset ring-ink-200">
+                        <Lock className="size-2.5 text-ink-500" /> Non-Public Protected
+                      </span>
                     </div>
                     <p className="truncate text-xs text-ink-500">
                       {a.isSignedCopy ? 'Scanned signed document attached upon release' : (req ? req.label : 'Additional file')} · {formatSize(a.sizeKb)} · added {timeAgo(a.uploadedAt)} by {a.uploadedBy}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedAttachId(a.id)
-                        setIsPreviewOpen(true)
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
-                      title="Preview this document on screen"
-                    >
-                      <Eye className="size-3.5 text-brand-600" aria-hidden /> Preview
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSampleDownload(a)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-ink-50 p-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-colors"
-                      title="Download PDF Copy"
-                      aria-label={`Download ${a.name}`}
-                    >
-                      <Download className="size-3.5" aria-hidden />
-                    </button>
+                    <Tooltip content="Copy authenticated non-public link (15-min token)">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLink(a)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-ink-50 p-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-colors"
+                        aria-label={`Copy secure non-public link for ${a.name}`}
+                      >
+                        <Link2 className="size-3.5 text-brand-600" aria-hidden />
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Preview this document on screen">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAttachId(a.id)
+                          setIsPreviewOpen(true)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100 transition-colors"
+                        aria-label="Preview this document on screen"
+                      >
+                        <Eye className="size-3.5 text-brand-600" aria-hidden /> Preview
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Download permitted copy (Permission Verified)">
+                      <button
+                        type="button"
+                        onClick={() => handleAttachmentDownload(a)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-ink-50 p-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 hover:text-ink-900 transition-colors"
+                        aria-label={`Download ${a.name}`}
+                      >
+                        <Download className="size-3.5" aria-hidden />
+                      </button>
+                    </Tooltip>
                   </div>
                 </li>
               )

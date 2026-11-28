@@ -143,7 +143,7 @@ const SessionModel = {
       throw new Error(`Failed to validate user session: ${error.message}`);
     }
 
-    if (!row) {
+    if (!row || row.role === 'password_reset') {
       return { valid: false, status: 401, reason: 'Invalid or unrecognized session token.' };
     }
 
@@ -282,6 +282,128 @@ const SessionModel = {
     }
 
     return mapRowToSession(data);
+  },
+
+  /**
+   * PB-03: Persist SHA-256 hashed password-reset token & OTP code in PostgreSQL (`user_session`)
+   * so reset links and 6-digit codes survive Vercel Serverless cold starts and multi-instance scaling.
+   */
+  async createPasswordResetTokens({ userId, email, rawToken, otpCode, expiresAt, ttlMs }) {
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const nowIso = new Date().toISOString();
+    const expiresIso = new Date(expiresAt).toISOString();
+    const groupId = crypto.randomBytes(8).toString('hex');
+
+    // Revoke any prior unused password_reset tokens for this user without touching active login sessions
+    await supabaseClient
+      .from(TABLE)
+      .update({ is_revoked: true, revoked_at: nowIso })
+      .eq('user_id', userId)
+      .eq('role', 'password_reset')
+      .eq('is_revoked', false);
+
+    const rows = [];
+    if (rawToken) {
+      rows.push({
+        session_id: `prst_tok_${crypto.randomBytes(12).toString('hex')}`,
+        token_hash: hashToken(`pwd_reset:${rawToken}`),
+        user_id: userId,
+        email: cleanEmail,
+        role: 'password_reset',
+        origin: groupId,
+        remember_me: false,
+        ttl_ms: Number(ttlMs) || 15 * 60 * 1000,
+        created_at: nowIso,
+        last_active_at: nowIso,
+        expires_at: expiresIso,
+        is_revoked: false,
+        revoked_at: null,
+      });
+    }
+    if (otpCode) {
+      rows.push({
+        session_id: `prst_otp_${crypto.randomBytes(12).toString('hex')}`,
+        token_hash: hashToken(`pwd_reset_otp:${cleanEmail}:${otpCode}`),
+        user_id: userId,
+        email: cleanEmail,
+        role: 'password_reset',
+        origin: groupId,
+        remember_me: false,
+        ttl_ms: Number(ttlMs) || 15 * 60 * 1000,
+        created_at: nowIso,
+        last_active_at: nowIso,
+        expires_at: expiresIso,
+        is_revoked: false,
+        revoked_at: null,
+      });
+    }
+
+    if (rows.length === 0) return { persisted: false };
+
+    const { error } = await supabaseClient.from(TABLE).insert(rows);
+    if (error) {
+      throw new Error(`Failed to persist password reset tokens: ${error.message}`);
+    }
+    return { persisted: true, groupId };
+  },
+
+  /**
+   * PB-03: Lookup a persisted password-reset token or 6-digit OTP code from PostgreSQL.
+   */
+  async lookupPasswordResetToken({ rawToken, email = null }) {
+    if (!rawToken || typeof rawToken !== 'string') return null;
+    const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+
+    const candidateHashes = [hashToken(`pwd_reset:${rawToken}`)];
+    if (cleanEmail) {
+      candidateHashes.push(hashToken(`pwd_reset_otp:${cleanEmail}:${rawToken}`));
+    }
+
+    for (const candidateHash of candidateHashes) {
+      const { data: row, error } = await supabaseClient
+        .from(TABLE)
+        .select('*')
+        .eq('token_hash', candidateHash)
+        .eq('role', 'password_reset')
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Failed to lookup password reset token: ${error.message}`);
+      }
+      if (row) {
+        return {
+          email: String(row.email || '').trim().toLowerCase(),
+          userId: row.user_id,
+          createdAt: new Date(row.created_at).getTime(),
+          expiresAt: new Date(row.expires_at).getTime(),
+          used: Boolean(row.is_revoked),
+          groupId: row.origin,
+          persisted: true,
+        };
+      }
+    }
+
+    return null;
+  },
+
+  /**
+   * PB-03: Mark all persisted password-reset tokens for a user as used (single-use enforcement).
+   */
+  async consumePasswordResetTokens(userId) {
+    if (!userId) return 0;
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabaseClient
+      .from(TABLE)
+      .update({ is_revoked: true, revoked_at: nowIso })
+      .eq('user_id', userId)
+      .eq('role', 'password_reset')
+      .eq('is_revoked', false)
+      .select('session_id');
+
+    if (error) {
+      throw new Error(`Failed to consume password reset tokens: ${error.message}`);
+    }
+    return Array.isArray(data) ? data.length : 0;
   },
 
   /**

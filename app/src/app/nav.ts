@@ -1,14 +1,22 @@
 import {
   Archive,
+  BarChart3,
   BookOpen,
+  Building2,
   ClipboardCheck,
+  ClipboardList,
+  FileSpreadsheet,
   Files,
   FolderOpen,
+  GraduationCap,
   LayoutDashboard,
   Mail,
   Megaphone,
+  MessageSquare,
+  MessagesSquare,
   PackageCheck,
   Settings,
+  UserRound,
   Users,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
@@ -29,11 +37,49 @@ export interface NavSection {
   items: NavItem[]
 }
 
-const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty and Subjects', icon: BookOpen }
+export function visibleNoticesCount(db: Database, u: User): number {
+  const now = new Date().toISOString()
+  const isPublisher = u.role === 'secretary' || u.role === 'dean'
+  return db.notices.filter((n) => {
+    if (!isPublisher) {
+      if ((n.status ?? 'published') !== 'published') return false
+      const pubDate = n.publishDate || n.postedAt
+      if (pubDate > now) return false
+      if (n.expiryDate && n.expiryDate < now) return false
+      const aud = n.targetAudience ?? 'all'
+      if (aud !== 'all') {
+        if (aud === 'students' && u.role !== 'student') return false
+        if (aud === 'faculty' && u.role !== 'faculty') return false
+        if (
+          aud === 'reviewers' &&
+          !['chairperson', 'dean', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor'].includes(u.role)
+        )
+          return false
+        if (aud === 'staff' && !['secretary', 'admin', 'faculty'].includes(u.role)) return false
+      }
+    }
+    return !n.readBy.includes(u.id)
+  }).length
+}
+
+const directory: NavItem = { to: '/app/faculty-directory', label: 'Faculty Directory', icon: GraduationCap }
+const consultations: NavItem = {
+  to: '/app/consultations',
+  label: 'Consultations',
+  icon: MessagesSquare,
+}
+const syllabiNav: NavItem = { to: '/app/syllabi', label: 'Course Syllabi', icon: BookOpen }
+const tosNav: NavItem = { to: '/app/tos', label: 'Table of Specifications', icon: FileSpreadsheet }
+const classRecords: NavItem = { to: '/app/class-records', label: 'Faculty Class Records', icon: ClipboardList }
+const facultyProfile: NavItem = { to: '/app/faculty-profile', label: 'My Faculty Profile', icon: UserRound }
+const profileOverview: NavItem = { to: '/app/faculty-profiles', label: 'Faculty Profile Overview', icon: Users }
+const serviceFeedback: NavItem = { to: '/app/service-feedback', label: 'Service Feedback', icon: MessageSquare }
+const feedbackResults: NavItem = { to: '/app/feedback-results', label: 'Service Feedback Results', icon: BarChart3 }
 const notices: NavItem = {
   to: '/app/notices',
-  label: 'Notices and Minutes',
+  label: 'Notices & Announcements',
   icon: Megaphone,
+  count: (db, u) => visibleNoticesCount(db, u),
 }
 
 export function navFor(role: Role): NavSection[] {
@@ -51,14 +97,17 @@ export function navFor(role: Role): NavSection[] {
             },
             {
               to: '/app/my-documents',
-              label: 'Document Repository',
+              label: 'My Documents',
               icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
+              countTone: 'brand',
             },
+            consultations,
           ],
         },
         {
           heading: 'College information',
-          items: [directory],
+          items: [notices, directory, serviceFeedback],
         },
       ]
     case 'faculty':
@@ -74,14 +123,34 @@ export function navFor(role: Role): NavSection[] {
             },
             {
               to: '/app/my-documents',
-              label: 'Document Repository',
+              label: 'My Documents',
               icon: FolderOpen,
+              count: (db, u) => visibleDocuments(db, u).filter((d) => d.status === 'ready').length,
+              countTone: 'brand',
             },
+            consultations,
+            {
+              to: '/app/syllabi',
+              label: 'Course Syllabi',
+              icon: BookOpen,
+              count: (db, u) => {
+                const myFac = db.faculty.find(
+                  (f) =>
+                    f.userId === u.id ||
+                    f.name.toLowerCase() === u.name.toLowerCase(),
+                )
+                if (!myFac) return 0
+                return myFac.subjects.filter((s) => !s.syllabusFile).length
+              },
+              countTone: 'warning',
+            },
+            tosNav,
+            classRecords,
           ],
         },
         {
           heading: 'College information',
-          items: [directory],
+          items: [notices, directory, facultyProfile, serviceFeedback],
         },
       ]
     case 'secretary':
@@ -90,21 +159,26 @@ export function navFor(role: Role): NavSection[] {
         {
           heading: 'Your tasks',
           items: [
+            consultations,
             { to: '/app/requirements-check', label: 'Check Requirements', icon: ClipboardCheck, count: (db) => secretaryQueues(db).toCheck.length, countTone: 'warning' },
-            { to: '/app/release', label: 'Approved and Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
+            { to: '/app/release', label: 'Ready to Release', icon: PackageCheck, count: (db) => { const q = secretaryQueues(db); return q.toProcess.length + q.ready.length }, countTone: 'brand' },
+            { to: '/app/external-offices', label: 'External Offices', icon: Building2, count: (db) => secretaryQueues(db).external.length, countTone: 'warning' },
           ],
         },
         {
           heading: 'Records',
           items: [
             { to: '/app/documents', label: 'All Documents', icon: Files },
+            syllabiNav,
+            tosNav,
+            classRecords,
             { to: '/app/archive', label: 'Archive', icon: Archive },
-            { to: '/app/email-log', label: 'Email Log', icon: Mail, count: (db) => db.notifications.filter((n) => n.result === 'failed').length, countTone: 'danger' },
+            { to: '/app/email-log', label: 'Email Log', icon: Mail },
           ],
         },
         {
           heading: 'College information',
-          items: [notices, directory],
+          items: [notices, directory, profileOverview, feedbackResults],
         },
         {
           heading: 'Administration',
@@ -136,11 +210,12 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
+            consultations,
           ],
         },
         {
           heading: 'College information',
-          items: [directory],
+          items: [notices, syllabiNav, tosNav, classRecords, directory, profileOverview, feedbackResults],
         },
       ]
     case 'dean':
@@ -159,15 +234,17 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
+            consultations,
           ],
         },
         {
           heading: 'College information',
-          items: [{ ...notices, count: (db, u) => db.notices.filter((n) => !n.readBy.includes(u.id)).length }, directory],
+          items: [notices, syllabiNav, tosNav, classRecords, directory, profileOverview, feedbackResults],
         },
       ]
     case 'chairperson':
     case 'ovcaa':
+    case 'vcaf':
     case 'chancellor':
       return [
         {
@@ -184,7 +261,15 @@ export function navFor(role: Role): NavSection[] {
               label: 'Document Repository',
               icon: FolderOpen,
             },
+            consultations,
+            syllabiNav,
+            tosNav,
+            ...(role === 'chairperson' ? [classRecords] : []),
           ],
+        },
+        {
+          heading: 'College information',
+          items: [notices, directory],
         },
       ]
   }
@@ -198,6 +283,7 @@ export function homeFor(role: Role): string {
     role === 'chairperson' ||
     role === 'ids_principal' ||
     role === 'ovcaa' ||
+    role === 'vcaf' ||
     role === 'chancellor' ||
     role === 'dean'
   )
