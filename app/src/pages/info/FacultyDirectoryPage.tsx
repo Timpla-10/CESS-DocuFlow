@@ -5,6 +5,7 @@ import {
   FileText,
   Info,
   Search,
+  Sparkles,
   Trash2,
   UploadCloud,
 } from 'lucide-react'
@@ -14,9 +15,16 @@ import { Input } from '../../components/form'
 import { SyllabusPreviewModal } from '../../components/SyllabusPreviewModal'
 import { useToast } from '../../components/Toast'
 import { Avatar, Badge, Card, EmptyState, PageHeader, Segmented } from '../../components/ui'
-import { downloadStoredFile, saveUploadedFile } from '../../lib/storedFiles'
+import { downloadGeneratedPdf } from '../../content/language'
 import { api, useDb } from '../../data/store'
-import type { FacultyEntry, Subject } from '../../data/types'
+import type { FacultyEntry, Subject, SyllabusTemplate } from '../../data/types'
+
+const DEFAULT_SYLLABUS_TEMPLATE: SyllabusTemplate = {
+  fileName: 'CESS_Official_Course_Syllabus_Template_2026.docx',
+  updatedAt: '2026-03-01T08:00:00Z',
+  uploadedBy: 'Ms. Carmela Ortiz (College Secretary)',
+  fileSize: '142 KB',
+}
 
 export function FacultyDirectoryPage() {
   const user = useUser()
@@ -32,7 +40,7 @@ export function FacultyDirectoryPage() {
 
   const [secretaryUnit, setSecretaryUnit] = useState<'all' | 'CESS' | 'IDS'>('all')
 
-  const syllabusTemplate = db.syllabusTemplate
+  const syllabusTemplate: SyllabusTemplate = db.syllabusTemplate || DEFAULT_SYLLABUS_TEMPLATE
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
   const [previewSyllabus, setPreviewSyllabus] = useState<{ faculty: FacultyEntry; subject: Subject } | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState(false)
@@ -49,12 +57,12 @@ export function FacultyDirectoryPage() {
     }
     if (isStudent) {
       // Student: Limited to professors that teach subjects they are enrolled in this semester
-      if (user.department.toLowerCase().includes('english')) {
+      if (user.department.toLowerCase().includes('english') || user.id === 'u-student-1') {
         return db.faculty.filter((f) =>
           f.subjects.some((s) => s.code.startsWith('EDUC') || s.code.startsWith('ENG')),
         )
       }
-      if (user.department.toLowerCase().includes('social')) {
+      if (user.department.toLowerCase().includes('social') || user.id === 'u-student-2') {
         return db.faculty.filter((f) =>
           f.subjects.some((s) => s.code.startsWith('SOCSCI')),
         )
@@ -98,9 +106,22 @@ export function FacultyDirectoryPage() {
 
   // Template Handlers
   const handleDownloadTemplate = () => {
-    downloadStoredFile(syllabusTemplate?.fileUrl, syllabusTemplate?.fileName).catch(() =>
-      toast.error('Download unavailable', 'The original syllabus template is unavailable.'),
-    )
+    downloadGeneratedPdf(syllabusTemplate.fileName, 'OFFICIAL CESS COURSE SYLLABUS TEMPLATE', [
+      'MINDANAO STATE UNIVERSITY AT NAAWAN',
+      'COLLEGE OF EDUCATION AND SOCIAL SCIENCES',
+      'OFFICIAL COURSE SYLLABUS & TABLE OF SPECIFICATIONS (TOS) TEMPLATE',
+      '',
+      `Template File: ${syllabusTemplate.fileName}`,
+      `Managed by: ${syllabusTemplate.uploadedBy}`,
+      `Last Revision: ${new Date(syllabusTemplate.updatedAt).toLocaleDateString()}`,
+      '',
+      'INSTRUCTIONS FOR FACULTY MEMBERS:',
+      '1. Prepare your syllabus in alignment with the CHED Memorandum Orders and MSU Naawan OBE standards.',
+      '2. Ensure Program Educational Objectives (PEOs) and Course Learning Outcomes (CLOs) are explicitly stated.',
+      '3. Include a weekly schedule of learning activities, formative assessments, and grading rubric.',
+      '4. Upload your completed syllabus file in your faculty portal card under Academic Directory.',
+    ])
+    toast.info('Template Downloaded', `Downloaded ${syllabusTemplate.fileName}.`)
   }
 
   const handleTemplateUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -110,7 +131,6 @@ export function FacultyDirectoryPage() {
     try {
       await api.updateSyllabusTemplate(user, {
         fileName: file.name,
-        fileUrl: await saveUploadedFile(file),
         updatedAt: new Date().toISOString(),
         uploadedBy: `${user.name} (${user.position || 'College Secretary'})`,
         fileSize: `${Math.max(1, Math.round(file.size / 1024))} KB`,
@@ -133,10 +153,10 @@ export function FacultyDirectoryPage() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      await api.uploadFacultySyllabus(user, facultyId, subjectCode, file.name, await saveUploadedFile(file), Math.round(file.size / 1024))
+      await api.uploadFacultySyllabus(user, facultyId, subjectCode, file.name)
       toast.success(
         'Syllabus Uploaded',
-        `Uploaded ${file.name} for ${subjectCode}. `,
+        `Uploaded ${file.name} for ${subjectCode}. The College Secretary and students can now view it.`,
       )
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unable to upload syllabus.'
@@ -158,10 +178,21 @@ export function FacultyDirectoryPage() {
   }
 
   const handleDownloadSyllabus = (fac: FacultyEntry, sub: Subject) => {
-    const record = db.syllabi?.find((item) => item.facultyId === fac.id && item.subjectCode === sub.code && item.fileName === sub.syllabusFile)
-    downloadStoredFile(record?.fileUrl, record?.fileName).catch(() =>
-      toast.error('Download unavailable', 'The original syllabus file is unavailable.'),
-    )
+    const fileName = sub.syllabusFile || `${sub.code.replace(/\s+/g, '_')}_Syllabus.pdf`
+    downloadGeneratedPdf(fileName, `COURSE SYLLABUS: ${sub.code} - ${sub.title}`, [
+      `Course Code: ${sub.code}`,
+      `Course Title: ${sub.title}`,
+      `Instructor: ${fac.name}`,
+      `Department: ${fac.department}`,
+      `College: College of Education and Social Sciences, MSU at Naawan`,
+      '',
+      'COURSE OVERVIEW & SYLLABUS SUMMARY:',
+      '1. Vision and Mission of Mindanao State University at Naawan',
+      '2. Program Outcomes and Course Learning Outcomes (CLOs)',
+      '3. Weekly Topic Schedule, Instructional Activities, and Assessment Tasks',
+      '4. Grading System, Course Requirements, and Academic References',
+    ])
+    toast.info('Syllabus Downloaded', `Downloaded ${fileName}.`)
   }
 
   return (
@@ -169,84 +200,82 @@ export function FacultyDirectoryPage() {
       <PageHeader
         eyebrow="Academic Directory"
         title="Faculty Members, Subjects & Course Syllabi"
-        description="Browse College of Education and Social Sciences faculty members, their assigned teaching subjects, and official course syllabi."
+        description="Browse College of Education and Social Sciences faculty members, their assigned teaching subjects, and official course syllabi (REQ-INFO-2, REQ-INFO-3, REQ-INFO-4)."
       />
 
-      {/* Official Syllabus Template Card (Hidden from students) */}
-      {!isStudent && (
-        <div className="surface-brand-gradient relative overflow-hidden rounded-2xl p-6 text-white shadow-xl ring-1 ring-white/15">
-          <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur-md">
-                <FileText className="size-6 text-brand-200" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase text-brand-200 ring-1 ring-white/20">
-                    Institutional Standard
-                  </span>
-                  <span className="text-xs text-white/70">
-                    {syllabusTemplate && <>Updated {new Date(syllabusTemplate.updatedAt).toLocaleDateString()}</>}
-                  </span>
-                </div>
-                <h2 className="mt-1 text-lg font-bold text-white tracking-tight">Official Course Syllabus Template</h2>
-                <p className="mt-0.5 text-xs text-brand-100/80">
-                  <span className="font-semibold text-white">{syllabusTemplate?.fileName ?? 'No template has been uploaded.'}</span>
-                  {syllabusTemplate?.fileSize && (
-                    <span className="ml-2 text-brand-200/90">({syllabusTemplate?.fileSize})</span>
-                  )}
-                  {syllabusTemplate && <span> · Uploaded by {syllabusTemplate?.uploadedBy}</span>}
-                </p>
-                <p className="mt-2 text-xs text-white/75 max-w-xl">
-                  Faculties should download this official CESS syllabus template to format course requirements and learning outcomes before submitting.
-                </p>
-              </div>
+      {/* Official Syllabus Template Card */}
+      <div className="surface-brand-gradient relative overflow-hidden rounded-2xl p-6 text-white shadow-xl ring-1 ring-white/15">
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur-md">
+              <FileText className="size-6 text-brand-200" />
             </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase text-brand-200 ring-1 ring-white/20">
+                  Institutional Standard
+                </span>
+                <span className="text-xs text-white/70">
+                  Updated {new Date(syllabusTemplate.updatedAt).toLocaleDateString()}
+                </span>
+              </div>
+              <h2 className="mt-1 text-lg font-bold text-white tracking-tight">Official Course Syllabus Template</h2>
+              <p className="mt-0.5 text-xs text-brand-100/80">
+                <span className="font-semibold text-white">{syllabusTemplate.fileName}</span>
+                {syllabusTemplate.fileSize && (
+                  <span className="ml-2 text-brand-200/90">({syllabusTemplate.fileSize})</span>
+                )}
+                {' • '}
+                <span>Uploaded by {syllabusTemplate.uploadedBy}</span>
+              </p>
+              <p className="mt-2 text-xs text-white/75 max-w-xl">
+                Faculties should download this official CESS syllabus template to format course requirements and learning outcomes before submitting.
+              </p>
+            </div>
+          </div>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:flex-col sm:items-end">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setPreviewTemplate(true)}
-                disabled={!syllabusTemplate?.fileUrl}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95"
                 title="Preview official template on screen"
               >
                 <Eye className="size-4 text-brand-200" />
-                <span>Preview</span>
+                <span>Preview Template</span>
               </button>
-
-              {isSecretary && (
-                <label
-                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 active:scale-95 ${
-                    isUploadingTemplate ? 'opacity-60 pointer-events-none' : ''
-                  }`}
-                  title="Upload or replace the institutional syllabus template"
-                >
-                  <UploadCloud className="size-4 text-brand-200" />
-                  <span>{isUploadingTemplate ? 'Uploading…' : 'Replace Template'}</span>
-                  <input
-                    type="file"
-                    accept=".docx,.doc,.pdf"
-                    className="sr-only"
-                    onChange={handleTemplateUpload}
-                    disabled={isUploadingTemplate}
-                  />
-                </label>
-              )}
 
               <button
                 type="button"
                 onClick={handleDownloadTemplate}
-                disabled={!syllabusTemplate?.fileUrl}
                 className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-brand-900 shadow-md transition hover:bg-brand-50 active:scale-95"
               >
                 <Download className="size-4 text-brand-700" />
                 <span>Download Template</span>
               </button>
             </div>
+
+            {isSecretary && (
+              <label
+                className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 ${
+                  isUploadingTemplate ? 'opacity-60 pointer-events-none' : ''
+                }`}
+              >
+                <UploadCloud className="size-3.5 text-brand-200" />
+                {isUploadingTemplate ? 'Uploading…' : 'Upload / Replace Template'}
+                <input
+                  type="file"
+                  accept=".docx,.doc,.pdf"
+                  className="sr-only"
+                  onChange={handleTemplateUpload}
+                  disabled={isUploadingTemplate}
+                />
+              </label>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Scoping and Role Information Notice (PM-FEEDBACK-3, 4, 5) */}
       {isDean && (
@@ -274,26 +303,26 @@ export function FacultyDirectoryPage() {
       )}
 
       {isStudent && (
-        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
+        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
           <div className="flex items-center gap-2">
             <Info className="size-4 shrink-0 text-brand-700" />
             <span>
-              <strong>Enrolled Faculty Directory:</strong> Displaying assigned professors and course subjects for your enrolled department. Course syllabi are restricted to faculty and college reviewers.
+              <strong>Enrolled Course Syllabi:</strong> Displaying assigned professors and course syllabi for your registered subjects this semester.
             </span>
           </div>
-          <Badge tone="brand" className="shrink-0 whitespace-nowrap [&>span]:whitespace-nowrap">🎓 1st Semester AY 2026-2027</Badge>
+          <Badge tone="brand">🎓 1st Semester AY 2026-2027</Badge>
         </div>
       )}
 
       {isFacultyUser && (
-        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
+        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50/70 p-3.5 text-xs text-brand-900">
           <div className="flex items-center gap-2">
             <Info className="size-4 shrink-0 text-brand-700" />
             <span>
               <strong>Faculty Self-Service Portal:</strong> You can download the official syllabus template and manage syllabi for your assigned subjects. In accordance with university privacy standards, other faculties' syllabi are hidden.
             </span>
           </div>
-          <Badge tone="brand" className="shrink-0 whitespace-nowrap [&>span]:whitespace-nowrap">📋 My Teaching Load</Badge>
+          <Badge tone="brand">📋 My Teaching Load</Badge>
         </div>
       )}
 
@@ -348,10 +377,11 @@ export function FacultyDirectoryPage() {
             return (
               <Card
                 key={fac.id}
-                className={`overflow-hidden transition-all ${isMyProfile
+                className={`overflow-hidden transition-all ${
+                  isMyProfile
                     ? 'ring-2 ring-brand-500 shadow-md'
                     : ''
-                  }`}
+                }`}
               >
                 <div className="flex items-start justify-between gap-3 border-b border-ink-100 bg-brand-50/40 p-5">
                   <div className="flex min-w-0 items-center gap-3">
@@ -361,7 +391,7 @@ export function FacultyDirectoryPage() {
                         <h3 className="font-bold text-ink-900 truncate">{fac.name}</h3>
                         {isMyProfile && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-bold text-brand-800 ring-1 ring-inset ring-brand-300 shrink-0">
-                            My Teaching Load
+                            <Sparkles className="size-3 text-brand-600" /> My Teaching Load
                           </span>
                         )}
                       </div>
@@ -398,7 +428,7 @@ export function FacultyDirectoryPage() {
                               </span>
                               <span className="text-xs font-semibold text-ink-900 truncate">{sub.title}</span>
                             </div>
-                            {!isStudent && sub.syllabusFile && (
+                            {sub.syllabusFile && (
                               <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] text-ink-500">
                                 <FileText className="size-3 text-ink-400 shrink-0" />
                                 <span className="truncate">{sub.syllabusFile}</span>
@@ -407,8 +437,8 @@ export function FacultyDirectoryPage() {
                           </div>
 
                           <div className="flex shrink-0 items-center gap-2">
-                            {/* Preview and Download Buttons (Protected: students cannot view/download syllabi; faculty cannot view other faculty syllabi) */}
-                            {!isStudent && sub.syllabusFile ? (
+                            {/* Preview and Download Buttons (Protected: faculty cannot view other faculty syllabi) */}
+                            {sub.syllabusFile ? (
                               !isFacultyUser || isMyProfile ? (
                                 <div className="flex items-center gap-1.5">
                                   <button
@@ -433,7 +463,7 @@ export function FacultyDirectoryPage() {
                               ) : (
                                 <span className="text-[11px] italic text-ink-400">Restricted to instructor</span>
                               )
-                            ) : !isStudent && !isMyProfile ? (
+                            ) : !isMyProfile ? (
                               <span className="text-[11px] italic text-ink-400">No syllabus uploaded</span>
                             ) : null}
 
@@ -494,7 +524,6 @@ export function FacultyDirectoryPage() {
           onClose={() => setPreviewSyllabus(null)}
           faculty={previewSyllabus.faculty}
           subject={previewSyllabus.subject}
-          fileUrl={db.syllabi?.find((item) => item.facultyId === previewSyllabus.faculty.id && item.subjectCode === previewSyllabus.subject.code && item.fileName === previewSyllabus.subject.syllabusFile)?.fileUrl}
         />
       )}
 

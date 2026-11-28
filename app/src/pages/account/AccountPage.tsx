@@ -1,7 +1,6 @@
-import { Bell, KeyRound, LogOut, Save, Shield } from 'lucide-react'
+import { Bell, KeyRound, Save } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useSession, useUser } from '../../app/session'
+import { useUser } from '../../app/session'
 import { Field, Input } from '../../components/form'
 import { useToast } from '../../components/Toast'
 import { Avatar, Badge, Button, Card, CardHeader, DefinitionList, PageHeader } from '../../components/ui'
@@ -36,8 +35,6 @@ const PREF_OPTIONS: {
 
 export function AccountPage() {
   const user = useUser()
-  const { signOut } = useSession()
-  const navigate = useNavigate()
   const toast = useToast()
 
   const [notifPref, setNotifPref] = useState<NotificationPreference>(user.notificationPreference ?? 'both')
@@ -63,7 +60,7 @@ export function AccountPage() {
     }
   }
 
-  const handlePasswordSubmit = async (e: FormEvent) => {
+  const handlePasswordSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!currentPw) {
       setPwError('Please enter your current password.')
@@ -80,17 +77,13 @@ export function AccountPage() {
 
     setPwBusy(true)
     setPwError(null)
-    try {
-      await api.changePassword(currentPw, newPw, confirmPw)
+    setTimeout(() => {
+      setPwBusy(false)
       setCurrentPw('')
       setNewPw('')
       setConfirmPw('')
       toast.success('Password Updated', 'Your account password has been changed successfully.')
-    } catch (err) {
-      setPwError(err instanceof Error ? err.message : 'Unable to change your password.')
-    } finally {
-      setPwBusy(false)
-    }
+    }, 600)
   }
 
   return (
@@ -98,7 +91,7 @@ export function AccountPage() {
       <PageHeader
         eyebrow="My Account"
         title="Account & Notification Settings"
-        description="View your university account details, toggle your hybrid notification preferences, and update your security settings."
+        description="View your university account details, toggle your hybrid notification preferences (REQ-NOT-7), and update your security settings."
       />
 
       {/* Profile Overview */}
@@ -158,7 +151,7 @@ export function AccountPage() {
                 : []),
               { label: 'Department / Academic Program', value: user.department },
               { label: 'Official Position', value: user.position },
-              { label: 'University Email', value: user.email },
+              { label: 'University Email (REQ-AUTH-9)', value: user.email },
               {
                 label: 'Notification Delivery Mode',
                 value: NOTIFICATION_PREF_LABEL[user.notificationPreference ?? 'both'],
@@ -168,11 +161,11 @@ export function AccountPage() {
         </div>
       </Card>
 
-      {/* Hybrid Notification Preferences */}
+      {/* Hybrid Notification Preferences (REQ-NOT-7) */}
       <Card className="p-6">
         <CardHeader
           icon={Bell}
-          title="Hybrid Notification Preferences"
+          title="Hybrid Notification Preferences (REQ-NOT-7)"
           description="Choose how you want to receive alerts when a document is returned, ready for release, or pending for 3 days."
         />
 
@@ -262,34 +255,6 @@ export function AccountPage() {
             </Button>
           </div>
         </form>
-      </Card>
-
-      {/* Session & Security */}
-      <Card className="p-6">
-        <CardHeader
-          icon={Shield}
-          title="Active Session & Sign Out"
-          description="End your active session securely on this workstation."
-        />
-        <div className="mt-5 flex flex-col items-start justify-between gap-4 rounded-xl border border-ink-100 bg-ink-50/50 p-4 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-sm font-bold text-ink-900">Current Workstation Session</p>
-            <p className="mt-0.5 text-xs text-ink-500">
-              Signed in as {user.email} · Automatically expires after 30 minutes of inactivity.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              signOut()
-              navigate('/sign-in', { replace: true, state: { signedOut: true } })
-            }}
-            className="inline-flex items-center gap-2 rounded-xl border border-danger-200 bg-white px-4 py-2 text-xs font-bold text-danger-700 shadow-2xs transition-all hover:bg-danger-50 hover:border-danger-300 active:scale-95 cursor-pointer"
-          >
-            <LogOut className="size-4" aria-hidden="true" />
-            <span>Sign Out Securely</span>
-          </button>
-        </div>
       </Card>
     </div>
   )

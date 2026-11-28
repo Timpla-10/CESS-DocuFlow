@@ -62,6 +62,11 @@ export function plural(n: number, word: string, pluralWord = `${word}s`): string
   return `${n} ${n === 1 ? word : pluralWord}`
 }
 
+/** ISO string for "n days ago" plus optional hours — used for sample data. */
+export function ago(days: number, hours = 0): string {
+  return new Date(Date.now() - days * DAY - hours * 3_600_000).toISOString()
+}
+
 export function todayInputValue(): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
     new Date(),

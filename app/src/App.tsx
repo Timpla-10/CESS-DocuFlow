@@ -7,14 +7,7 @@ import { ToastProvider } from './components/Toast'
 import type { Role } from './data/types'
 import { AccessDeniedPage, NotFoundPage } from './pages/StatusPages'
 import { AccountPage } from './pages/account/AccountPage'
-import { ConsultationsPage } from './pages/consultations/ConsultationsPage'
-import { ClassRecordsPage } from './pages/classRecords/ClassRecordsPage'
-import { CLASS_RECORD_ROLES } from './data/classRecords'
-import { ACADEMIC_OVERVIEW_ROLES } from './data/academicScopes'
-import { FEEDBACK_REQUESTER_ROLES } from './data/serviceFeedback'
 import { DocumentDetailPage } from './pages/documents/DocumentDetailPage'
-import { FacultyProfilePage } from './pages/facultyProfiles/FacultyProfilePage'
-import { FacultyProfilesOverviewPage } from './pages/facultyProfiles/FacultyProfilesOverviewPage'
 import { FacultyDirectoryPage } from './pages/info/FacultyDirectoryPage'
 import { NoticesPage } from './pages/info/NoticesPage'
 import { ForgotPasswordPage, SessionExpiredPage, SignInPage } from './pages/public/AuthPages'
@@ -32,13 +25,9 @@ import { OverviewPage } from './pages/secretary/OverviewPage'
 import { ReleasePage } from './pages/secretary/ReleasePage'
 import { RequirementsCheckPage } from './pages/secretary/RequirementsCheckPage'
 import { SettingsPage } from './pages/secretary/SettingsPage'
-import { FeedbackResultsPage } from './pages/serviceFeedback/FeedbackResultsPage'
-import { ServiceFeedbackPage } from './pages/serviceFeedback/ServiceFeedbackPage'
 import { UserManagementPage } from './pages/secretary/UserManagementPage'
-import { SyllabusManagementPage } from './pages/syllabi/SyllabusManagementPage'
-import { TosManagementPage } from './pages/tos/TosManagementPage'
 
-const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor']
+const REVIEWER_ROLES: Role[] = ['chairperson', 'dean', 'ids_principal', 'ovcaa', 'chancellor']
 
 function Protected({ allowedRoles, children }: { allowedRoles?: Role[]; children: ReactNode }) {
   const { user } = useSession()
@@ -91,7 +80,7 @@ export default function App() {
               <Route
                 path="dashboard"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor', 'dean']}>
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'chancellor', 'dean']}>
                     <DashboardPage />
                   </Protected>
                 }
@@ -99,7 +88,7 @@ export default function App() {
               <Route
                 path="my-documents"
                 element={
-                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'vcaf', 'chancellor', 'dean', 'secretary']}>
+                  <Protected allowedRoles={['student', 'faculty', 'chairperson', 'ids_principal', 'ovcaa', 'chancellor', 'dean', 'secretary']}>
                     <MyDocumentsPage />
                   </Protected>
                 }
@@ -115,12 +104,6 @@ export default function App() {
 
               {/* Document Details (Available to all authorized roles) */}
               <Route path="documents/:id" element={<DocumentDetailPage />} />
-              <Route path="consultations/:requestId?" element={<ConsultationsPage />} />
-              <Route path="class-records" element={<Protected allowedRoles={CLASS_RECORD_ROLES}><ClassRecordsPage /></Protected>} />
-              <Route path="faculty-profile" element={<Protected allowedRoles={['faculty']}><FacultyProfilePage /></Protected>} />
-              <Route path="faculty-profiles/:ownerId?" element={<Protected allowedRoles={ACADEMIC_OVERVIEW_ROLES}><FacultyProfilesOverviewPage /></Protected>} />
-              <Route path="service-feedback" element={<Protected allowedRoles={FEEDBACK_REQUESTER_ROLES}><ServiceFeedbackPage /></Protected>} />
-              <Route path="feedback-results" element={<Protected allowedRoles={ACADEMIC_OVERVIEW_ROLES}><FeedbackResultsPage /></Protected>} />
 
               {/* College Secretary */}
               <Route
@@ -214,26 +197,6 @@ export default function App() {
                 }
               />
 
-              {/* Dedicated Course Syllabus Management Section (Students are not authorized) */}
-              <Route
-                path="syllabi"
-                element={
-                  <Protected allowedRoles={['faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
-                    <SyllabusManagementPage />
-                  </Protected>
-                }
-              />
-
-              {/* Dedicated Table of Specifications (TOS) Management Module (Students are not authorized) */}
-              <Route
-                path="tos"
-                element={
-                  <Protected allowedRoles={['faculty', 'chairperson', 'ids_principal', 'dean', 'secretary', 'ovcaa', 'vcaf', 'chancellor']}>
-                    <TosManagementPage />
-                  </Protected>
-                }
-              />
-
               {/* Shared College Information (Protected by RBAC) */}
               <Route
                 path="faculty-directory"
@@ -246,7 +209,7 @@ export default function App() {
               <Route
                 path="notices"
                 element={
-                  <Protected>
+                  <Protected allowedRoles={['secretary', 'dean']}>
                     <NoticesPage />
                   </Protected>
                 }

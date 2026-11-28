@@ -1,5 +1,4 @@
 {
-  "installCommand": "npm ci --include=dev",
   "rewrites": [
     {
       "source": "/(.*)",

@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, getDb, useDb } from '../data/store'
+import { getDb, useDb } from '../data/store'
 import type { User } from '../data/types'
-import { getAuthToken } from '../lib/authApi'
 
 /** Sign out after this long without activity (REQ-AUTH-6; exact length TBD in the SRS). */
 export const IDLE_LIMIT_MS = 30 * 60 * 1000
@@ -30,7 +29,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const [userId, setUserId] = useState<string | null>(() => {
     const s = readSession()
-    if (!s || !getAuthToken()) return null
+    if (!s) return null
     if (Date.now() - s.lastActive > IDLE_LIMIT_MS) {
       localStorage.removeItem(KEY)
       return null
@@ -48,13 +47,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(() => {
-    void api.signOut()
     localStorage.removeItem(KEY)
-    try {
-      sessionStorage.clear()
-    } catch {
-      /* ignore */
-    }
     setUserId(null)
   }, [])
 
@@ -69,7 +62,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const timer = window.setInterval(() => {
       const idle = Date.now() - lastActive.current
       if (idle > IDLE_LIMIT_MS) {
-        void api.signOut()
         localStorage.removeItem(KEY)
         setUserId(null)
         navigate('/session-expired', { replace: true })

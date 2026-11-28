@@ -13,7 +13,7 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useUser } from '../../app/session'
 import { Dialog } from '../../components/Dialog'
 import { Field, Input, Select } from '../../components/form'
@@ -21,10 +21,10 @@ import { useToast } from '../../components/Toast'
 import { Badge, Button, Card, CardHeader, EmptyState, PageHeader, Segmented, cn } from '../../components/ui'
 import { ROLE_LABEL } from '../../content/language'
 import { api, useDb } from '../../data/store'
-import type { NotificationPreference, Origin, PendingRegistration, Role, User, WhitelistEntry } from '../../data/types'
+import type { Origin, PendingRegistration, Role, User, WhitelistEntry } from '../../data/types'
 import { formatDate } from '../../lib/time'
 
-const ALL_ROLES: Role[] = ['student', 'faculty', 'secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
+const ALL_ROLES: Role[] = ['student', 'faculty', 'secretary', 'chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
 
 interface ParsedRow {
   idNumber: string
@@ -43,15 +43,6 @@ export function UserManagementPage() {
   const toast = useToast()
 
   // Active Tab: 'users' | 'masterlist' | 'pending'
-  const [accountLoadError, setAccountLoadError] = useState('')
-  useEffect(() => {
-    let mounted = true
-    api.refreshAccountManagement().catch((error) => {
-      if (mounted) setAccountLoadError(error instanceof Error ? error.message : 'Could not load accounts.')
-    })
-    return () => { mounted = false }
-  }, [])
-
   const [activeTab, setActiveTab] = useState<'users' | 'masterlist' | 'pending'>('users')
 
   // ---------------------------------------------------------------------------
@@ -71,7 +62,6 @@ export function UserManagementPage() {
   const [uOrigin, setUOrigin] = useState<Origin>('CESS')
   const [uDept, setUDept] = useState('')
   const [uPos, setUPos] = useState('')
-  const [uNotifPref, setUNotifPref] = useState<NotificationPreference>('both')
   const [userBusy, setUserBusy] = useState(false)
   const [userErrors, setUserErrors] = useState<Record<string, string>>({})
 
@@ -79,7 +69,7 @@ export function UserManagementPage() {
   // TAB 2: Masterlist & Whitelist Import State
   // ---------------------------------------------------------------------------
   const [importTargetRole, setImportTargetRole] = useState<'student' | 'faculty'>('student')
-  const [importTerm, setImportTerm] = useState('')
+  const [importTerm, setImportTerm] = useState('1st Sem AY 2026-2027')
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [fileName, setFileName] = useState('')
   const [importBusy, setImportBusy] = useState(false)
@@ -161,7 +151,6 @@ export function UserManagementPage() {
     setUOrigin('CESS')
     setUDept('BSEd English')
     setUPos('Student')
-    setUNotifPref('both')
     setUserErrors({})
     setIsUserModalOpen(true)
   }
@@ -174,7 +163,6 @@ export function UserManagementPage() {
     setUOrigin(u.origin ?? 'CESS')
     setUDept(u.department)
     setUPos(u.position)
-    setUNotifPref(u.notificationPreference ?? 'both')
     setUserErrors({})
     setIsUserModalOpen(true)
   }
@@ -215,7 +203,6 @@ export function UserManagementPage() {
         origin: uRole === 'student' || uRole === 'faculty' ? uOrigin : undefined,
         department: uDept.trim(),
         position: uPos.trim(),
-        notificationPreference: uNotifPref,
       })
       toast.success(
         editingUserId ? 'Account Updated' : 'Account Created',
@@ -352,11 +339,50 @@ export function UserManagementPage() {
     }
   }
 
-  const handleDownloadTemplate = (type: 'cess_student' | 'ids_student' | 'faculty') => {
-    const content = type === 'faculty'
-      ? 'Employee ID,Full Name,Institutional Email,Department,Unit,Position\n'
-      : 'ID Number,Full Name,Institutional Email,Department,Unit\n'
-    const dlName = type === 'faculty' ? 'Faculty_Roster.csv' : type === 'cess_student' ? 'CESS_Student_Masterlist.csv' : 'IDS_Student_Masterlist.csv'
+  const handleDownloadSample = (type: 'cess_student' | 'ids_student' | 'faculty') => {
+    let content = ''
+    let dlName = ''
+
+    if (type === 'cess_student') {
+      content = `ID Number,Full Name,Institutional Email,Department,Unit
+2023101,Clara Mae Mendoza,clara.mendoza@msunaawan.edu.ph,BSEd English,CESS
+2023102,Joshua David Tan,joshua.tan@msunaawan.edu.ph,BEEd General Curriculum,CESS
+2023104,Arvin Ramos,arvin.ramos@msunaawan.edu.ph,BA Social Sciences,CESS
+2024015,Althea Mae Soriano,althea.soriano@msunaawan.edu.ph,BSEd Filipino,CESS
+2024089,Kenneth Bryan Garcia,kenneth.garcia@msunaawan.edu.ph,BEEd General Curriculum,CESS
+2022340,Christian Jay Mercado,christian.mercado@msunaawan.edu.ph,BSEd Social Studies,CESS
+2024112,Princess Diane Gomez,princess.gomez@msunaawan.edu.ph,BSEd English,CESS
+2023205,Mark Anthony Villanueva,mark.villanueva@msunaawan.edu.ph,BA Social Sciences,CESS
+2024156,Bea Nicole Castro,bea.castro@msunaawan.edu.ph,BSEd Mathematics,CESS
+2023308,Lance Patrick Navarro,lance.navarro@msunaawan.edu.ph,BSEd Science,CESS`
+      dlName = 'MSUN_CESS_Student_Masterlist_Sample.csv'
+    } else if (type === 'ids_student') {
+      content = `ID Number,Full Name,Institutional Email,Department,Unit
+2024501,Samantha Cruz,samantha.cruz@msunaawan.edu.ph,IDS Grade 12 - STEM,IDS
+2024502,Danica Nicole Perez,danica.perez@msunaawan.edu.ph,IDS Grade 12 - HUMSS,IDS
+2024503,Miguel Luis Reyes,miguel.reyes@msunaawan.edu.ph,IDS Grade 11 - STEM,IDS
+2024504,Kristine Joy Torres,kristine.torres@msunaawan.edu.ph,IDS Grade 11 - HUMSS,IDS
+2024505,Angelo Gabriel Aquino,angelo.aquino@msunaawan.edu.ph,IDS Grade 10 - JHS,IDS
+2024506,Hannah Mae Delos Reyes,hannah.delosreyes@msunaawan.edu.ph,IDS Grade 10 - JHS,IDS
+2024507,Justin Carlo Bautista,justin.bautista@msunaawan.edu.ph,IDS Grade 9 - JHS,IDS
+2024508,Sofia Isabelle Lim,sofia.lim@msunaawan.edu.ph,IDS Grade 8 - JHS,IDS
+2024509,Ethan James Salvador,ethan.salvador@msunaawan.edu.ph,IDS Grade 7 - JHS,IDS
+2024510,Chloe Denise Vergara,chloe.vergara@msunaawan.edu.ph,IDS Grade 7 - JHS,IDS`
+      dlName = 'MSUN_IDS_Student_Masterlist_Sample.csv'
+    } else {
+      content = `Employee ID,Full Name,Institutional Email,Department,Unit,Position
+1018042,Dr. Elena Bautista,elena.bautista@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Associate Professor
+1020119,Mr. Gabriel Santos,gabriel.santos@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher II
+1015083,Dr. Corazon Morales,corazon.morales@msunaawan.edu.ph,Department of Social Sciences and Humanities,CESS,Professor
+1024003,Prof. Rhea Mendez,rhea.mendez@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Assistant Professor
+1025018,Engr. Daniel Ocampo,daniel.ocampo@msunaawan.edu.ph,Integrated Developmental School,IDS,Instructor
+1026002,Ms. Fatima Joy Alvarez,fatima.alvarez@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher I
+1019011,Prof. Ana Lim,ana.lim@msunaawan.edu.ph,Department of Secondary and Elementary Education,CESS,Assistant Professor
+1021045,Prof. Ben Aquino,ben.aquino@msunaawan.edu.ph,Department of Social Sciences and Humanities,CESS,Instructor
+1018092,Mr. Jose Dela Cruz,jose.delacruz@msunaawan.edu.ph,Integrated Developmental School,IDS,Teacher III`
+      dlName = 'MSUN_Faculty_Roster_Sample.csv'
+    }
+
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -366,7 +392,7 @@ export function UserManagementPage() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    toast.info('Template Downloaded', `Downloaded template: ${dlName}`)
+    toast.info('Sample Downloaded', `Downloaded template: ${dlName}`)
   }
 
   const handleDeleteWhitelist = async (entry: WhitelistEntry) => {
@@ -441,7 +467,6 @@ export function UserManagementPage() {
 
   return (
     <div className="space-y-8">
-      {accountLoadError && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-sm text-danger-800">{accountLoadError}</p>}
       <PageHeader
         eyebrow="System Administration (College Secretary)"
         title="User Management & Whitelist Masterlists"
@@ -563,10 +588,10 @@ export function UserManagementPage() {
               </div>
 
               <div>
-                <Select
+                <select
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
-                  className="h-9 text-xs"
+                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 >
                   <option value="all">All Roles ({db.users.length})</option>
                   {ALL_ROLES.map((r) => (
@@ -574,31 +599,31 @@ export function UserManagementPage() {
                       {ROLE_LABEL[r]}
                     </option>
                   ))}
-                </Select>
+                </select>
               </div>
 
               <div>
-                <Select
+                <select
                   value={originFilter}
                   onChange={(e) => setOriginFilter(e.target.value)}
-                  className="h-9 text-xs"
+                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 >
                   <option value="all">All Units (CESS & IDS)</option>
                   <option value="CESS">CESS Main Campus</option>
                   <option value="IDS">Integrated Developmental School (IDS)</option>
-                </Select>
+                </select>
               </div>
 
               <div>
-                <Select
+                <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="h-9 text-xs"
+                  className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 >
                   <option value="all">All Account Statuses</option>
                   <option value="active">Active Only</option>
                   <option value="deactivated">Deactivated Only</option>
-                </Select>
+                </select>
               </div>
             </div>
           </div>
@@ -634,17 +659,7 @@ export function UserManagementPage() {
                           <span className="font-semibold text-ink-800">{ROLE_LABEL[u.role]}</span>
                           {u.origin && <Badge tone="neutral">{u.origin}</Badge>}
                         </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
-                          <span>{u.position}</span>
-                          <span>·</span>
-                          <span className="font-medium text-ink-600">
-                            {u.notificationPreference === 'email_only'
-                              ? '📧 Email Only'
-                              : u.notificationPreference === 'in_system_only'
-                              ? '🔔 In-System Only'
-                              : '🔔+📧 Both'}
-                          </span>
-                        </div>
+                        <div className="mt-0.5 text-xs text-ink-500">{u.position}</div>
                       </td>
                       <td className="px-5 py-3.5 font-mono text-xs text-ink-600">{u.email}</td>
                       <td className="px-5 py-3.5 whitespace-nowrap">
@@ -686,20 +701,20 @@ export function UserManagementPage() {
             <CardHeader
               icon={UploadCloud}
               title="Import Official Semester Masterlist (CSV / Excel)"
-              description="Upload enrolled students or faculty rosters. Whitelisted individuals can activate their accounts using Forgot Password and their university email."
+              description="Upload enrolled students or faculty rosters. Whitelisted individuals are pre-authorized and activate instantly when signing in."
             />
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-ink-800">Masterlist Type</label>
-                  <Select
+                  <select
                     value={importTargetRole}
                     onChange={(e) => setImportTargetRole(e.target.value as 'student' | 'faculty')}
-                    className="h-10 text-sm"
+                    className="h-10 w-full rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-800 focus:border-brand-500 focus:outline-none"
                   >
                     <option value="student">Enrolled Students Masterlist</option>
                     <option value="faculty">Faculty & Academic Staff Roster</option>
-                  </Select>
+                  </select>
                 </div>
 
                 <div>
@@ -714,7 +729,7 @@ export function UserManagementPage() {
                 </div>
 
                 <div className="flex flex-col justify-end">
-                  <label className="mb-1 block text-xs font-semibold text-ink-700">Blank CSV Templates (7-Digit IDs)</label>
+                  <label className="mb-1 block text-xs font-semibold text-ink-700">Sample Templates (7-Digit IDs)</label>
                   <div className="flex gap-2">
                     {importTargetRole === 'student' ? (
                       <>
@@ -722,9 +737,9 @@ export function UserManagementPage() {
                           size="sm"
                           variant="secondary"
                           icon={Download}
-                          onClick={() => handleDownloadTemplate('cess_student')}
+                          onClick={() => handleDownloadSample('cess_student')}
                           className="flex-1 text-xs"
-                          title="Download blank CESS College Students CSV"
+                          title="Download sample CESS College Students CSV"
                         >
                           CESS Students
                         </Button>
@@ -732,9 +747,9 @@ export function UserManagementPage() {
                           size="sm"
                           variant="secondary"
                           icon={Download}
-                          onClick={() => handleDownloadTemplate('ids_student')}
+                          onClick={() => handleDownloadSample('ids_student')}
                           className="flex-1 text-xs"
-                          title="Download blank IDS High School Students CSV"
+                          title="Download sample IDS High School Students CSV"
                         >
                           IDS Students
                         </Button>
@@ -744,9 +759,9 @@ export function UserManagementPage() {
                         size="sm"
                         variant="secondary"
                         icon={Download}
-                        onClick={() => handleDownloadTemplate('faculty')}
+                        onClick={() => handleDownloadSample('faculty')}
                         className="w-full text-xs"
-                        title="Download blank Faculty & Staff CSV"
+                        title="Download sample Faculty & Staff CSV"
                       >
                         Faculty Roster CSV
                       </Button>
@@ -778,7 +793,7 @@ export function UserManagementPage() {
                       type="button"
                       onClick={(e) => {
                         e.preventDefault()
-                        handleDownloadTemplate('cess_student')
+                        handleDownloadSample('cess_student')
                       }}
                       className="underline hover:text-brand-900 font-medium"
                     >
@@ -789,7 +804,7 @@ export function UserManagementPage() {
                       type="button"
                       onClick={(e) => {
                         e.preventDefault()
-                        handleDownloadTemplate('ids_student')
+                        handleDownloadSample('ids_student')
                       }}
                       className="underline hover:text-brand-900 font-medium"
                     >
@@ -800,7 +815,7 @@ export function UserManagementPage() {
                       type="button"
                       onClick={(e) => {
                         e.preventDefault()
-                        handleDownloadTemplate('faculty')
+                        handleDownloadSample('faculty')
                       }}
                       className="underline hover:text-brand-900 font-medium"
                     >
@@ -894,15 +909,15 @@ export function UserManagementPage() {
                 </div>
 
                 <div>
-                  <Select
+                  <select
                     value={whitelistRoleFilter}
                     onChange={(e) => setWhitelistRoleFilter(e.target.value)}
-                    className="h-9 text-xs"
+                    className="h-9 w-full rounded-lg border border-ink-200 bg-white px-3 text-xs text-ink-800 focus:border-brand-500 focus:outline-none"
                   >
                     <option value="all">All Roles</option>
                     <option value="student">Students</option>
                     <option value="faculty">Faculty</option>
-                  </Select>
+                  </select>
                 </div>
               </div>
             </div>
@@ -1016,7 +1031,7 @@ export function UserManagementPage() {
                       </td>
                       <td className="px-5 py-4 font-mono text-xs text-ink-600">{p.email}</td>
                       <td className="px-5 py-4 text-xs text-ink-500 whitespace-nowrap">
-                        {p.submittedAt ? formatDate(p.submittedAt) : 'Date unavailable'}
+                        {formatDate(p.submittedAt)}
                       </td>
                       <td className="px-5 py-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
@@ -1043,7 +1058,7 @@ export function UserManagementPage() {
       <Dialog
         open={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
-        size="lg"
+        size="md"
         title={editingUserId ? 'Edit User Account & Role' : 'Create User Account'}
         description="Configure university email, assign official roles, and designate CESS or IDS origin."
         busy={userBusy}
@@ -1058,7 +1073,7 @@ export function UserManagementPage() {
           </>
         }
       >
-        <form onSubmit={handleSaveUser} className="space-y-5">
+        <form onSubmit={handleSaveUser} className="space-y-4">
           <Field label="Full Name" required error={userErrors.name}>
             <Input
               value={uName}
@@ -1084,7 +1099,7 @@ export function UserManagementPage() {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-4">
             <Field label="Official Role" required>
               <Select value={uRole} onChange={(e) => setURole(e.target.value as Role)}>
                 {ALL_ROLES.map((r) => (
@@ -1096,7 +1111,7 @@ export function UserManagementPage() {
             </Field>
 
             {(uRole === 'student' || uRole === 'faculty') && (
-              <Field label="Unit / Origin" hint="Designate campus affiliation for document routing." required>
+              <Field label="Unit / Origin (REQ-SUB-6)" required>
                 <Select value={uOrigin} onChange={(e) => setUOrigin(e.target.value as Origin)}>
                   <option value="CESS">CESS Main Campus</option>
                   <option value="IDS">Integrated Developmental School (IDS)</option>
@@ -1128,23 +1143,6 @@ export function UserManagementPage() {
               required
             />
           </Field>
-
-          <Field label="Notification Delivery Preference" hint="User can also change this anytime from their Account Settings.">
-            <Select
-              value={uNotifPref}
-              onChange={(e) => setUNotifPref(e.target.value as NotificationPreference)}
-            >
-              <option value="both">Both External Email &amp; In-System Bell (Default)</option>
-              <option value="email_only">External Email Only (In-System Bell Muted)</option>
-              <option value="in_system_only">In-System Bell Only (External Email Muted)</option>
-            </Select>
-          </Field>
-
-          {!editingUserId && (
-            <p className="rounded-lg bg-brand-50 p-3 text-sm text-brand-900">
-              The account holder can set their password using the reset link on the sign-in page.
-            </p>
-          )}
         </form>
       </Dialog>
 
@@ -1154,7 +1152,7 @@ export function UserManagementPage() {
       <Dialog
         open={!!approveDialogReg}
         onClose={() => setApproveDialogReg(null)}
-        size="lg"
+        size="md"
         title="Approve & Activate Account"
         description="Confirm or adjust the assigned role and department before activating this university user."
         busy={approveBusy}
@@ -1170,8 +1168,8 @@ export function UserManagementPage() {
         }
       >
         {approveDialogReg && (
-          <div className="space-y-5">
-            <div className="rounded-xl bg-ink-50 p-4 text-xs space-y-1.5 border border-ink-100">
+          <div className="space-y-4">
+            <div className="rounded-lg bg-ink-50 p-3 text-xs space-y-1">
               <div>
                 <span className="font-semibold text-ink-700">Applicant: </span>
                 <span className="text-ink-900 font-bold">{approveDialogReg.name}</span>
@@ -1236,7 +1234,7 @@ export function UserManagementPage() {
         }
       >
         {rejectDialogReg && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <p className="text-xs text-ink-600">
               Rejecting will notify <span className="font-bold">{rejectDialogReg.name}</span> ({rejectDialogReg.email}).
             </p>

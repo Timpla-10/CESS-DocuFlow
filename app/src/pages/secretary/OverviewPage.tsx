@@ -1,24 +1,19 @@
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   CheckSquare,
-  Clock,
   Inbox,
-  Lock,
   PackageCheck,
   RotateCcw,
-  Send,
-  ShieldAlert,
+  Route,
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useUser } from '../../app/session'
 import { DocumentList } from '../../components/documents'
-import { useToast } from '../../components/Toast'
 import {
   Badge,
-  Button,
   ButtonLink,
   Callout,
   Card,
@@ -27,92 +22,33 @@ import {
   PieChart,
   Segmented,
   StatCard,
-  Tooltip,
 } from '../../components/ui'
 import { OFFICE_LABEL, controlNumber, locationLabelForStaff } from '../../content/language'
-import { daysSince } from '../../data/engine'
 import { daysWaiting, isDelayed, secretaryQueues, typeOf, userById } from '../../data/selectors'
-import { api, useDb } from '../../data/store'
-import type { DocRecord, OfficeId } from '../../data/types'
-import { plural, timeAgo } from '../../lib/time'
+import { useDb } from '../../data/store'
+import type { OfficeId } from '../../data/types'
+import { formatDateTime, plural } from '../../lib/time'
 
 export function OverviewPage() {
-  const user = useUser()
   const db = useDb()
-  const toast = useToast()
-  const [currentTime] = useState(() => Date.now())
-
   const queues = secretaryQueues(db)
   const allDocs = db.documents
   const delayedDocs = allDocs.filter((d) => isDelayed(db, d))
+  const idsDocs = allDocs.filter((d) => d.origin === 'IDS' && !d.archived)
   const returnedDocs = allDocs.filter((d) => d.status === 'returned')
   const rejectedDocs = allDocs.filter((d) => d.status === 'rejected')
 
-  // PB-30: Aging (3+ days) and Overdue documents
-  const agingDocs = allDocs
-    .filter(
-      (d) =>
-        (d.status === 'with_office' || d.status === 'submitted') &&
-        (isDelayed(db, d) || daysWaiting(d) >= 3),
-    )
-    .sort((a, b) => daysWaiting(b) - daysWaiting(a))
-
   const [activeQueueTab, setActiveQueueTab] = useState<
-    'toCheck' | 'ready' | 'aging' | 'returned' | 'rejected'
+    'toCheck' | 'ready' | 'returned' | 'rejected' | 'ids'
   >('toCheck')
 
-  const [batchBusy, setBatchBusy] = useState(false)
-  const [sendingDocId, setSendingDocId] = useState<string | null>(null)
-
-  // PB-30: Batch automated 3-day follow-up reminders
-  const handleRunBatchFollowUps = async () => {
-    setBatchBusy(true)
-    try {
-      const sentCount = await api.triggerReminders(user)
-      if (sentCount > 0) {
-        toast.success(
-          '3-Day Follow-Ups Dispatched',
-          `Dispatched ${sentCount} automated reminder(s) to holding offices and requesters. Anti-duplicate intervals are updated.`,
-        )
-      } else {
-        toast.info(
-          'All Reminders Up-to-Date',
-          `No reminders needed at this time. All aging requests have already received updates within the ${db.settings.reminderEveryDays}-day anti-duplicate interval.`,
-        )
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to trigger follow-up reminders.'
-      toast.error('Follow-Up Error', msg)
-    } finally {
-      setBatchBusy(false)
-    }
-  }
-
-  // PB-30: Single document follow-up reminder with anti-duplicate validation
-  const handleSendDocReminder = async (doc: DocRecord) => {
-    setSendingDocId(doc.id)
-    try {
-      const officeName = await api.sendSingleReminder(user, doc.id)
-      toast.success(
-        'Follow-Up Sent',
-        `3-day follow-up reminder sent to ${officeName} and requester for ${controlNumber(doc)}. Anti-duplicate protection locked for ${db.settings.reminderEveryDays} days.`,
-      )
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Could not send reminder.'
-      toast.error('Reminder Blocked', msg)
-    } finally {
-      setSendingDocId(null)
-    }
-  }
-
   // Distribution by holding office with official institutional gradients
-  const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'vcaf', 'chancellor']
+  const offices: OfficeId[] = ['chairperson', 'ids_principal', 'dean', 'ovcaa', 'chancellor']
   const officeGradients: Record<OfficeId, [string, string]> = {
     chairperson: ['#8B5CF6', '#581C87'], // Royal Violet (DSSH): Violet-500 -> Violet-900
     ids_principal: ['#FB7185', '#BE185D'], // Official IDS Warm Rose Pink: Rose-400 -> Pink-700
     dean: ['#C084FC', '#6B21A8'], // Dean Amethyst Purple: Purple-400 -> Purple-800
     ovcaa: ['#60A5FA', '#1D4ED8'], // University Azure Blue: Blue-400 -> Blue-700
-    vcaf: ['#34D399', '#047857'], // University Emerald Green: Emerald-400 -> Emerald-700
     chancellor: ['#FBBF24', '#B45309'], // Chancellor Amber Gold: Amber-400 -> Amber-700
     secretary: ['#A78BFA', '#4C1D95'],
   }
@@ -204,127 +140,6 @@ export function OverviewPage() {
         />
       </div>
 
-      {/* PB-30: Dedicated Secretary Monitoring View for Aging & Overdue Requests with 3-Day Follow-Ups */}
-      <Card className="overflow-hidden border-2 border-amber-200 bg-amber-50/20">
-        <div className="border-b border-amber-200 bg-amber-50/70 p-4 sm:px-6 sm:py-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-white shadow-xs">
-                <ShieldAlert className="size-5" />
-              </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-bold text-ink-950">
-                    Aging & Overdue Requests Monitor
-                  </h2>
-                  <Badge tone={agingDocs.length > 0 ? 'warning' : 'success'} dot={false}>
-                    {agingDocs.length} Aging / Overdue
-                  </Badge>
-                  <span className="text-2xs font-semibold text-ink-500 bg-white px-2 py-0.5 rounded border border-ink-200">
-                    Throttled Every {db.settings.reminderEveryDays} Days
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs text-ink-600">
-                  Monitors requests that exceed standard turnaround times or have waited 3+ days at review offices. Dispatches automated follow-up reminders with anti-duplicate locks.
-                </p>
-              </div>
-            </div>
-
-            <Button
-              variant="primary"
-              size="sm"
-              icon={Send}
-              loading={batchBusy}
-              onClick={handleRunBatchFollowUps}
-              className="shadow-sm"
-            >
-              Run Automated 3-Day Follow-Ups
-            </Button>
-          </div>
-        </div>
-
-        {agingDocs.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-center text-sm text-ink-500">
-            <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
-            <span>All active documents are on-track and within standard turnaround times.</span>
-          </div>
-        ) : (
-          <div className="divide-y divide-ink-100">
-            {agingDocs.slice(0, 5).map((d) => {
-              const type = typeOf(db, d)
-              const req = userById(db, d.requesterId)
-              const overdue = isDelayed(db, d)
-              const days = daysWaiting(d)
-              const currentOfficeName = d.currentOffice ? OFFICE_LABEL[d.currentOffice] : 'Reviewing Office'
-
-              const docReminders = db.notifications.filter((n) => n.docId === d.id && n.kind === 'reminder')
-              const lastReminder = docReminders.length > 0 ? docReminders[docReminders.length - 1] : undefined
-              const daysSinceLast = lastReminder ? daysSince(lastReminder.at, currentTime) : 999
-              const isLocked = daysSinceLast < db.settings.reminderEveryDays
-
-              return (
-                <div key={d.id} className="p-4 sm:px-6 flex flex-wrap items-center justify-between gap-4 hover:bg-white/80 transition-colors">
-                  <div className="min-w-0 max-w-xl">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        to={`/app/documents/${d.id}`}
-                        className="font-bold text-ink-950 text-sm hover:text-brand-700 truncate"
-                      >
-                        {d.title}
-                      </Link>
-                      <Badge tone={overdue ? 'danger' : 'warning'} dot={false}>
-                        {overdue ? 'Turnaround Overdue' : 'Aging (3+ Days)'}
-                      </Badge>
-                      <span className="font-mono text-2xs text-ink-500 bg-white px-2 py-0.5 rounded border border-ink-200">
-                        {controlNumber(d)}
-                      </span>
-                    </div>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-600">
-                      <span>Type: <strong className="text-ink-800">{type?.name}</strong></span>
-                      <span>·</span>
-                      <span>Holding: <strong className="text-brand-900">{currentOfficeName}</strong></span>
-                      <span>·</span>
-                      <span>Requester: <strong className="text-ink-800">{req?.name}</strong> ({d.origin})</span>
-                      <span>·</span>
-                      <span className="flex items-center gap-1 font-semibold text-danger-700">
-                        <Clock className="size-3" /> Waiting {plural(days, 'day')} (SLA: {type ? `${type.processingDays[0]}–${type.processingDays[1]}d` : '3d'})
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    {lastReminder && isLocked ? (
-                      <div className="flex items-center gap-1.5 rounded-lg bg-ink-100 px-3 py-1.5 text-xs text-ink-700 ring-1 ring-inset ring-ink-200">
-                        <Lock className="size-3.5 text-ink-500" />
-                        <span>Follow-Up Sent {timeAgo(lastReminder.at)}</span>
-                        <span className="text-2xs text-ink-500 font-medium">
-                          (Next: in {db.settings.reminderEveryDays - daysSinceLast}d)
-                        </span>
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        icon={Send}
-                        loading={sendingDocId === d.id}
-                        onClick={() => handleSendDocReminder(d)}
-                      >
-                        Send 3-Day Follow-Up
-                      </Button>
-                    )}
-                    <ButtonLink to={`/app/documents/${d.id}`} variant="ghost" size="sm">
-                      Inspect
-                    </ButtonLink>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Card>
-
       {/* Two Column Layout: Focused Task Center (Left) & Office Distribution (Right) */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left 2 Cols: Unified Task Workstation */}
@@ -336,7 +151,7 @@ export function OverviewPage() {
                 <span className="text-xs font-bold uppercase tracking-wider text-ink-500">
                   Secretary Workstation Queues
                 </span>
-                <Segmented<'toCheck' | 'ready' | 'aging' | 'returned' | 'rejected'>
+                <Segmented<'toCheck' | 'ready' | 'returned' | 'rejected' | 'ids'>
                   label="Workstation Queue Tabs"
                   value={activeQueueTab}
                   onChange={setActiveQueueTab}
@@ -352,11 +167,6 @@ export function OverviewPage() {
                       count: queues.ready.length,
                     },
                     {
-                      value: 'aging',
-                      label: 'Aging & Overdue',
-                      count: agingDocs.length,
-                    },
-                    {
                       value: 'returned',
                       label: 'Returned',
                       count: returnedDocs.length,
@@ -365,6 +175,11 @@ export function OverviewPage() {
                       value: 'rejected',
                       label: 'Rejected',
                       count: rejectedDocs.length,
+                    },
+                    {
+                      value: 'ids',
+                      label: 'IDS Hand-Offs',
+                      count: idsDocs.length,
                     },
                   ]}
                 />
@@ -377,11 +192,9 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Tooltip content="Submissions awaiting initial review and manual document verification before routing" placement="top">
-                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
-                          Submissions Awaiting Content Verification
-                        </h3>
-                      </Tooltip>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Submissions Awaiting Content Verification
+                      </h3>
                       <p className="text-xs text-ink-500">
                         Automatic completeness check passed. Inspect attached document contents before logging and routing (oldest first).
                       </p>
@@ -417,11 +230,9 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Tooltip content="Documents with final approval ready for physical requester release or counter pickup" placement="top">
-                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
-                          Approved Documents Ready for Release
-                        </h3>
-                      </Tooltip>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Approved Documents Ready for Release
+                      </h3>
                       <p className="text-xs text-ink-500">
                         Documents with final Dean approval awaiting requester collection at the counter.
                       </p>
@@ -450,120 +261,15 @@ export function OverviewPage() {
               </div>
             )}
 
-            {/* TAB: Aging & Overdue Requests Monitor (PB-30) */}
-            {activeQueueTab === 'aging' && (
-              <div>
-                <div className="border-b border-ink-100 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <Tooltip content="Documents exceeding standard SLA or waiting 3+ days with review offices" placement="top">
-                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
-                          Aging & Overdue Office Requests
-                        </h3>
-                      </Tooltip>
-                      <p className="text-xs text-ink-500">
-                        Review holding offices, waiting time, and dispatch 3-day follow-up reminders.
-                      </p>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon={Send}
-                      loading={batchBusy}
-                      onClick={handleRunBatchFollowUps}
-                    >
-                      Batch 3-Day Follow-Ups
-                    </Button>
-                  </div>
-                </div>
-
-                {agingDocs.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-ink-500">
-                    No documents are currently aging or overdue. All requests are progressing normally.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-ink-100">
-                    {agingDocs.map((d) => {
-                      const type = typeOf(db, d)
-                      const req = userById(db, d.requesterId)
-                      const overdue = isDelayed(db, d)
-                      const days = daysWaiting(d)
-                      const currentOfficeName = d.currentOffice ? OFFICE_LABEL[d.currentOffice] : 'Reviewing Office'
-
-                      const docReminders = db.notifications.filter((n) => n.docId === d.id && n.kind === 'reminder')
-                      const lastReminder = docReminders.length > 0 ? docReminders[docReminders.length - 1] : undefined
-                      const daysSinceLast = lastReminder ? daysSince(lastReminder.at, currentTime) : 999
-                      const isLocked = daysSinceLast < db.settings.reminderEveryDays
-
-                      return (
-                        <div key={d.id} className="p-4 sm:px-6 flex flex-wrap items-center justify-between gap-3 hover:bg-brand-50/40 transition-colors">
-                          <div className="min-w-0 max-w-lg">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Link
-                                to={`/app/documents/${d.id}`}
-                                className="font-bold text-ink-950 text-sm hover:text-brand-700 truncate"
-                              >
-                                {d.title}
-                              </Link>
-                              <Badge tone={overdue ? 'danger' : 'warning'} dot={false}>
-                                {overdue ? 'Overdue' : 'Aging (3+ Days)'}
-                              </Badge>
-                              <span className="font-mono text-2xs text-ink-500">
-                                {controlNumber(d)}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-ink-600">
-                              <span>{type?.name}</span>
-                              <span>·</span>
-                              <span>With <strong className="text-ink-900">{currentOfficeName}</strong></span>
-                              <span>·</span>
-                              <span>{req?.name} ({d.origin})</span>
-                              <span>·</span>
-                              <span className="font-medium text-danger-700">Waiting {plural(days, 'day')}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            {lastReminder && isLocked ? (
-                              <Badge tone="neutral" dot={false} className="gap-1 font-mono text-2xs">
-                                <Lock className="size-3 text-ink-500" />
-                                Follow-Up Sent {timeAgo(lastReminder.at)}
-                              </Badge>
-                            ) : (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="secondary"
-                                icon={Send}
-                                loading={sendingDocId === d.id}
-                                onClick={() => handleSendDocReminder(d)}
-                              >
-                                Send 3-Day Follow-Up
-                              </Button>
-                            )}
-                            <ButtonLink to={`/app/documents/${d.id}`} variant="ghost" size="sm">
-                              Inspect
-                            </ButtonLink>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* TAB: Returned Submissions Awaiting Correction */}
             {activeQueueTab === 'returned' && (
               <div>
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Tooltip content="Documents requiring requester corrections before resuming office routing" placement="top">
-                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
-                          Submissions Returned to Requesters for Correction
-                        </h3>
-                      </Tooltip>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Submissions Returned to Requesters for Correction
+                      </h3>
                       <p className="text-xs text-ink-500">
                         Documents returned by the Secretary or Reviewing Offices for file or content revisions.
                       </p>
@@ -598,11 +304,9 @@ export function OverviewPage() {
                 <div className="border-b border-ink-100 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Tooltip content="Submissions officially rejected by reviewing authorities and closed" placement="top">
-                        <h3 className="inline-block cursor-help text-sm font-bold text-ink-900 transition-colors hover:text-brand-700">
-                          Officially Disapproved & Rejected Records
-                        </h3>
-                      </Tooltip>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        Officially Disapproved & Rejected Records
+                      </h3>
                       <p className="text-xs text-ink-500">
                         Documents officially disapproved and closed by Reviewing Authorities.
                       </p>
@@ -627,6 +331,82 @@ export function OverviewPage() {
                     </div>
                   }
                 />
+              </div>
+            )}
+
+            {/* TAB 3: IDS Hand-offs Unified Trail */}
+            {activeQueueTab === 'ids' && (
+              <div>
+                <div className="border-b border-ink-100 p-4">
+                  <div className="flex items-center gap-2">
+                    <Route className="size-4 text-brand-700" />
+                    <div>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        IDS Document Hand-Offs (Secretary ↔ Chairperson ↔ IDS Principal)
+                      </h3>
+                      <p className="text-xs text-ink-500">
+                        Unified tracking of Integrated Developmental School documents and reviewer endorsements.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {idsDocs.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-ink-500">
+                    No active IDS documents in routing.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-ink-100">
+                    {idsDocs.map((d) => {
+                      const type = typeOf(db, d)
+                      const req = userById(db, d.requesterId)
+                      const handoffs = d.history.filter((h) =>
+                        [
+                          'submitted',
+                          'checked_complete',
+                          'routed',
+                          'endorsed',
+                          'approved',
+                        ].includes(h.action),
+                      )
+                      return (
+                        <li key={d.id} className="p-4 hover:bg-brand-50/40">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <Link
+                                to={`/app/documents/${d.id}`}
+                                className="font-semibold text-ink-900 hover:text-brand-700 hover:underline"
+                              >
+                                {d.title}
+                              </Link>
+                              <p className="mt-0.5 text-xs text-ink-500">
+                                {type?.name} · <span className="font-mono">{controlNumber(d)}</span> · {req?.name}
+                              </p>
+                            </div>
+                            <Badge tone="ids">
+                              Now at: {locationLabelForStaff(d, db)} ({plural(daysWaiting(d), 'day')})
+                            </Badge>
+                          </div>
+
+                          {/* Hand-off chain pill trail */}
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
+                            {handoffs.map((h, idx) => (
+                              <span key={h.id} className="inline-flex items-center gap-1.5">
+                                {idx > 0 && <ArrowRight className="size-3 text-ink-400" aria-hidden />}
+                                <span
+                                  className="rounded-md bg-ink-50 px-2 py-0.5 text-2xs font-medium text-ink-700 ring-1 ring-inset ring-ink-200"
+                                  title={formatDateTime(h.at)}
+                                >
+                                  {h.office} ({h.action.replace('_', ' ')})
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </div>
             )}
           </Card>

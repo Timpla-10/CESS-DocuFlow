@@ -1,39 +1,28 @@
-import { downloadStoredFile, saveUploadedFile } from '../../lib/storedFiles'
 import {
   AlertCircle,
   ArrowLeft,
-  ArrowRight,
   CheckCircle2,
   Clock,
-  Copy,
   Download,
-  Edit3,
-  Eye,
   FileCheck2,
   FileText,
   Info,
   Paperclip,
-  Route,
   Send,
-  ShieldCheck,
   UploadCloud,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useUser } from '../../app/session'
-import { Dialog } from '../../components/Dialog'
-import { DocumentNumberField } from '../../components/DocumentNumberField'
-import { Checkbox, Field, Input, Select, Textarea } from '../../components/form'
+import { sessionFiles } from '../../components/documents'
+import { Field, Input, Select, Textarea } from '../../components/form'
 import { useToast } from '../../components/Toast'
 import { Badge, Button, ButtonLink, Card, CardHeader, PageHeader } from '../../components/ui'
-import { controlNumber, formatRoleTitle } from '../../content/language'
-import { formatDateTime } from '../../lib/time'
-import { CUSTOM_DOCUMENT_TYPE_LIMIT, customDocumentTypeError, isCustomDocumentType } from '../../data/customDocumentTypes'
-import { documentNumberError } from '../../data/documentNumbers'
+import { downloadGeneratedPdf } from '../../content/language'
 import { ACCEPTED_EXT, MAX_FILE_MB, type NewFile } from '../../data/engine'
 import { api, useDb } from '../../data/store'
-import type { DocRecord, DocumentType, Origin, Requirement } from '../../data/types'
+import type { DocumentType, Requirement } from '../../data/types'
 
 interface SelectedFileItem {
   requirementId?: string
@@ -43,200 +32,107 @@ interface SelectedFileItem {
 }
 
 export function NewRequestPage() {
-  const [searchParams] = useSearchParams()
-  const initialType = searchParams.get('type')
-  return <NewRequestForm key={initialType} initialType={initialType} />
-}
-
-function NewRequestForm({ initialType }: { initialType: string | null }) {
   const user = useUser()
   const db = useDb()
   const toast = useToast()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   // Allowed document types for this user's role (REQ-SUB-1)
   const userAudience = user.role === 'student' ? 'student' : 'faculty'
-  const types = useMemo(() => db.documentTypes.filter((t) => t.audience === userAudience), [db.documentTypes, userAudience])
+  const types = db.documentTypes.filter((t) => t.audience === userAudience)
 
-  // Origin is strictly derived from account and affiliation (REQ-SUB-6)
-  const derivedOrigin: Origin =
-    user.origin ??
-    (user.role === 'ids_principal' || user.department.includes('Integrated Developmental School') ? 'IDS' : 'CESS')
-
-  // Automatic timestamp preview per acceptance criteria
-  const [submissionTimePreview, setSubmissionTimePreview] = useState<string>(() => new Date().toISOString())
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSubmissionTimePreview(new Date().toISOString())
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const defaultTypeId = types.find((t) => t.id === initialType)?.id ?? types[0]?.id ?? ''
+  const initialTypeFromUrl = searchParams.get('type')
+  const defaultTypeId = types.find((t) => t.id === initialTypeFromUrl)?.id ?? types[0]?.id ?? ''
 
   const [selectedTypeId, setSelectedTypeId] = useState<string>(defaultTypeId)
   const selectedType: DocumentType | undefined = types.find((t) => t.id === selectedTypeId)
-  const isCustom = isCustomDocumentType(selectedTypeId)
+
+  useEffect(() => {
+    const typeFromUrl = searchParams.get('type')
+    if (typeFromUrl && types.some((t) => t.id === typeFromUrl)) {
+      setSelectedTypeId(typeFromUrl)
+    }
+  }, [searchParams, types])
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [customTypeName, setCustomTypeName] = useState('')
-  const [documentNumber, setDocumentNumber] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<SelectedFileItem[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [fileErrors, setFileErrors] = useState<Record<string, string>>({})
-  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submissionError, setSubmissionError] = useState('')
-  const [submittedDoc, setSubmittedDoc] = useState<DocRecord | null>(null)
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
-
-  const [submissionStep, setSubmissionStep] = useState<'fill' | 'review'>('fill')
-  const [isCertified, setIsCertified] = useState(false)
-  const [previewFile, setPreviewFile] = useState<{ name: string; url: string } | null>(null)
-  const stepHeading = useRef<HTMLDivElement>(null)
-  const submitAlert = useRef<HTMLParagraphElement>(null)
-
-  const editDetails = () => {
-    setSubmissionStep('fill')
-    setIsCertified(false)
-    setSubmissionError('')
-    requestAnimationFrame(() => stepHeading.current?.querySelector('h1')?.focus())
-  }
-
-  const clearError = (field: string) => {
-    setErrors((previous) => {
-      const next = { ...previous }
-      delete next[field]
-      return next
-    })
-  }
 
   // Handle switching document type
   const handleTypeChange = (newTypeId: string) => {
     setSelectedTypeId(newTypeId)
-    setDocumentNumber('')
     setAttachedFiles([])
     setErrors({})
-    setFileErrors({})
-    setHasAttemptedSubmit(false)
   }
 
   // REQ-REQT-9: Download blank official form template for the chosen document type
   const handleDownloadTemplate = (type: DocumentType) => {
-    downloadStoredFile(type.templateUrl, type.templateName).catch(() =>
-      toast.error('Download unavailable', 'No original template file is available for this request type.'),
-    )
+    const fileName = type.templateName || `${type.name.replace(/\s+/g, '_')}_Template.pdf`
+    downloadGeneratedPdf(fileName, `OFFICIAL FORM TEMPLATE: ${type.name}`, [
+      `Document Service: ${type.name}`,
+      `Eligible Audience: ${type.audience === 'student' ? 'Students' : 'CESS & IDS Faculty'}`,
+      `Standard Processing Time: ${type.processingDays[0]} to ${type.processingDays[1]} working days`,
+      '',
+      'REQUIRED CHECKLIST ITEMS:',
+      ...type.requirements.map(
+        (r, i) => `${i + 1}. [${r.required ? 'REQUIRED' : 'OPTIONAL'}] ${r.label}${r.source ? ` (${r.source})` : ''}`,
+      ),
+      '',
+      'INSTRUCTIONS FOR REQUESTER:',
+      '1. Fill in all required fields on this official college form accurately.',
+      '2. Obtain any preliminary departmental or instructor signatures if applicable.',
+      '3. Save or scan the completed form as PDF, JPG, or PNG (max 10 MB) and upload it in CESS DocuFlow.',
+    ])
+    toast.info('Template Downloaded', `Downloaded ${fileName}. Fill it in and attach it below.`)
   }
 
-  // REQ-SUB-3, REQ-SUB-4: File selection with multiple upload support, 20 MB size limit, inline error messages
+  // File selection for a specific requirement or general attachment
   const handleFileChosen = (e: ChangeEvent<HTMLInputElement>, req?: Requirement) => {
     const fileList = e.target.files
     if (!fileList || fileList.length === 0) return
 
-    if (req) {
-      // Specific requirement checklist upload
-      const file = fileList[0]
-      const sizeKb = Math.round(file.size / 1024)
-      const ext = `.${file.name.split('.').pop()?.toLowerCase()}`
+    const file = fileList[0]
+    const sizeKb = Math.round(file.size / 1024)
 
-      if (!ACCEPTED_EXT.includes(ext)) {
-        const msg = `“${file.name}” is not a supported file type. Accepted formats: PDF, JPG, PNG.`
-        setFileErrors((prev) => ({ ...prev, [req.id]: msg }))
-        toast.error('Unsupported File Format', msg)
-        e.target.value = ''
-        return
-      }
-
-      if (sizeKb > MAX_FILE_MB * 1024) {
-        const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
-        const msg = `“${file.name}” (${sizeMb} MB) exceeds the 20 MB limit. Please attach a compressed version.`
-        setFileErrors((prev) => ({ ...prev, [req.id]: msg }))
-        toast.error('File Exceeds Size Limit', msg)
-        e.target.value = ''
-        return
-      }
-
-      // Valid requirement file
-      setFileErrors((prev) => {
-        const next = { ...prev }
-        delete next[req.id]
-        return next
-      })
-
-      setAttachedFiles((prev) => {
-        const filtered = prev.filter((f) => f.requirementId !== req.id)
-        return [
-          ...filtered,
-          {
-            requirementId: req.id,
-            name: file.name,
-            sizeKb,
-            fileObj: file,
-          },
-        ]
-      })
-
-      setErrors((prev) => {
-        const next = { ...prev }
-        delete next.attachments
-        return next
-      })
-      toast.success('File Attached', `Attached “${file.name}” for ${req.label}.`)
-    } else {
-      // REQ-SUB-3: Multiple supporting documents upload
-      const chosenFiles = Array.from(fileList)
-      const invalidTypes: string[] = []
-      const oversized: string[] = []
-      const validFiles: SelectedFileItem[] = []
-
-      for (const file of chosenFiles) {
-        const sizeKb = Math.round(file.size / 1024)
-        const ext = `.${file.name.split('.').pop()?.toLowerCase()}`
-
-        if (!ACCEPTED_EXT.includes(ext)) {
-          invalidTypes.push(file.name)
-        } else if (sizeKb > MAX_FILE_MB * 1024) {
-          const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
-          oversized.push(`${file.name} (${sizeMb} MB)`)
-        } else {
-          validFiles.push({
-            name: file.name,
-            sizeKb,
-            fileObj: file,
-          })
-        }
-      }
-
-      if (invalidTypes.length > 0 || oversized.length > 0) {
-        const errorDetails: string[] = []
-        if (invalidTypes.length > 0) {
-          errorDetails.push(`Unsupported format (must be PDF, JPG, PNG): ${invalidTypes.join(', ')}`)
-        }
-        if (oversized.length > 0) {
-          errorDetails.push(`Exceeds 20 MB limit: ${oversized.join(', ')}`)
-        }
-        const combinedMsg = errorDetails.join('. ')
-        setFileErrors((prev) => ({ ...prev, general: combinedMsg }))
-        toast.error('File Upload Issue', combinedMsg)
-      } else {
-        setFileErrors((prev) => {
-          const next = { ...prev }
-          delete next.general
-          return next
-        })
-      }
-
-      if (validFiles.length > 0) {
-        setAttachedFiles((prev) => [...prev, ...validFiles])
-        toast.success(
-          validFiles.length === 1 ? 'Supporting File Attached' : 'Supporting Files Attached',
-          `Added ${validFiles.length} supporting document(s).`,
-        )
-      }
+    // Validation (REQ-SUB-3, REQ-SUB-4)
+    const ext = `.${file.name.split('.').pop()?.toLowerCase()}`
+    if (!ACCEPTED_EXT.includes(ext)) {
+      toast.error('Unsupported file format', `“${file.name}” isn't supported. Please attach a PDF, JPG, or PNG file.`)
+      e.target.value = ''
+      return
     }
 
+    if (sizeKb > MAX_FILE_MB * 1024) {
+      toast.error('File exceeds size limit', `“${file.name}” is larger than 10 MB. Please attach a compressed version.`)
+      e.target.value = ''
+      return
+    }
+
+    // Replace if requirement already has an attached file, or append
+    setAttachedFiles((prev) => {
+      const filtered = req ? prev.filter((f) => f.requirementId !== req.id) : prev
+      return [
+        ...filtered,
+        {
+          requirementId: req?.id,
+          name: file.name,
+          sizeKb,
+          fileObj: file,
+        },
+      ]
+    })
+
+    // Clear attachment error once user uploads files
+    setErrors((prev) => {
+      const next = { ...prev }
+      delete next.attachments
+      return next
+    })
+
+    // Reset input so user can choose same file if re-selected
     e.target.value = ''
   }
 
@@ -246,136 +142,75 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
 
   const requiredList = selectedType ? selectedType.requirements.filter((r) => r.required) : []
   const attachedRequiredCount = requiredList.filter((r) => attachedFiles.some((f) => f.requirementId === r.id)).length
-  const allRequiredAttached = attachedRequiredCount === requiredList.length
+  const allRequiredAttached = requiredList.length > 0 && attachedRequiredCount === requiredList.length
 
-  const mandatoryMissing = selectedType
-    ? selectedType.requirements.filter((r) => r.required && !attachedFiles.some((f) => f.requirementId === r.id))
-    : []
-
-  const isTitleValid = title.trim().length >= 3
-  const isDescriptionValid = description.trim().length > 0
-  const customTypeError = isCustom ? customDocumentTypeError(customTypeName) : undefined
-  const numberError = documentNumberError(documentNumber, selectedType?.documentNumberRequired)
-  const isFormComplete = !!selectedType && isTitleValid && isDescriptionValid && !customTypeError && !numberError && allRequiredAttached
-  const numberField = (
-    <DocumentNumberField
-      value={documentNumber}
-      required={selectedType?.documentNumberRequired}
-      disabled={isSubmitting}
-      error={errors.documentNumber}
-      onChange={(value) => {
-        setDocumentNumber(value)
-        if (errors.documentNumber) clearError('documentNumber')
-      }}
-    />
-  )
-
-  const missingItemsSummary: string[] = []
-  if (customTypeError) missingItemsSummary.push('Custom document type (required, up to 100 characters)')
-  if (numberError) missingItemsSummary.push('Document number')
-  if (!title.trim()) {
-    missingItemsSummary.push('Title or Subject (required, min 3 characters)')
-  } else if (title.trim().length < 3) {
-    missingItemsSummary.push('Title or Subject (must be at least 3 characters)')
-  }
-  if (!description.trim()) {
-    missingItemsSummary.push('Description or Purpose of Request (required)')
-  }
-  mandatoryMissing.forEach((m) => {
-    missingItemsSummary.push(`Required form: ${m.label}`)
-  })
-
-  const handleProceedToReview = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    setHasAttemptedSubmit(true)
+    if (!selectedType) return
+
     const newErrors: Record<string, string> = {}
-    if (!selectedType) newErrors.typeId = 'Please select a document type.'
-    if (customTypeError) newErrors.customTypeName = customTypeError
-    if (numberError) newErrors.documentNumber = numberError
 
     if (!title.trim()) {
-      newErrors.title = 'Please enter a title or subject for this request.'
-    } else if (title.trim().length < 3) {
-      newErrors.title = 'Title or subject must be at least 3 characters.'
-    }
-
-    if (!description.trim()) {
-      newErrors.description = 'Please enter a description or purpose for your document request.'
+      newErrors.title = 'Please enter a title or brief summary for this request.'
     }
 
     // Automatic completeness check before submission reaches the College Secretary (REQ-REQT-3)
+    const mandatoryMissing = selectedType.requirements.filter(
+      (r) => r.required && !attachedFiles.some((f) => f.requirementId === r.id),
+    )
+
     if (mandatoryMissing.length > 0) {
-      newErrors.attachments = `Automatic completeness check failed: ${mandatoryMissing.length} required form(s) missing (${mandatoryMissing.map((m) => m.label).join(', ')}). Incomplete requests cannot advance.`
+      newErrors.attachments = `Automatic completeness check: Please attach all required forms before submitting (${mandatoryMissing.map((m) => m.label).join(', ')}).`
     }
 
     setErrors(newErrors)
     if (Object.keys(newErrors).length > 0) {
-      const form = e.currentTarget
-      const field = newErrors.attachments && Object.keys(newErrors).length === 1
-        ? 'input[data-missing-required]'
-        : `[name="${Object.keys(newErrors)[0]}"]`
-      requestAnimationFrame(() => form.querySelector<HTMLElement>(field)?.focus())
+      toast.error(
+        'Submission Incomplete',
+        newErrors.title && newErrors.attachments
+          ? 'Please enter a title and attach all required forms.'
+          : newErrors.title || newErrors.attachments || 'Please resolve all required fields.',
+      )
       return
     }
 
-    setSubmissionStep('review')
-    requestAnimationFrame(() => stepHeading.current?.querySelector('h1')?.focus())
-    toast.info('Review Your Request', 'Please verify all request information and check the certification box before confirming submission.')
-  }
-
-  const handleConfirmedSubmit = async () => {
-    if (!selectedType || isSubmitting || submittedDoc) return
-    if (!isCertified) {
-      toast.error('Institutional Certification Required', 'Please check the certification box to confirm your request details before submitting.')
-      return
-    }
-    if (!isTitleValid || !isDescriptionValid || numberError) {
-      const reviewErrors = {
-        ...(numberError && { documentNumber: numberError }),
-        ...(!isTitleValid && { title: 'Enter a title or subject with at least 3 characters.' }),
-        ...(!isDescriptionValid && { description: 'Enter a description or purpose for your request.' }),
-      }
-      setErrors(reviewErrors)
-      requestAnimationFrame(() => document.querySelector<HTMLElement>(`[name="${Object.keys(reviewErrors)[0]}"]`)?.focus())
-      return
-    }
-
-    setSubmissionError('')
     setIsSubmitting(true)
     try {
-      const payloadFiles: NewFile[] = await Promise.all(attachedFiles.map(async (f) => ({
+      const payloadFiles: NewFile[] = attachedFiles.map((f) => ({
         requirementId: f.requirementId,
         name: f.name,
         sizeKb: f.sizeKb,
-        fileUrl: f.fileObj ? await saveUploadedFile(f.fileObj) : undefined,
-      })))
+      }))
 
       const doc = await api.submitRequest(user, {
         typeId: selectedType.id,
         title: title.trim(),
         description: description.trim(),
-        customTypeName: isCustom ? customTypeName : undefined,
-        documentNumber,
         files: payloadFiles,
       })
 
-      setSubmittedDoc(doc)
-      setIsConfirmModalOpen(true)
+      // Store local object URLs for preview in session
+      attachedFiles.forEach((f, idx) => {
+        if (f.fileObj && doc.attachments[idx]) {
+          sessionFiles.set(doc.attachments[idx].id, URL.createObjectURL(f.fileObj))
+        }
+      })
+
       toast.success(
         'Request Submitted Successfully',
-        `Assigned Control Number: ${controlNumber(doc)}. Your request is saved with status Submitted.`,
+        'Automatic completeness check passed! Your request is now with the College Secretary for content verification.',
       )
+      navigate(`/app/documents/${doc.id}`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'We could not submit your request. Please try again.'
-      setSubmissionError(msg)
-      requestAnimationFrame(() => submitAlert.current?.focus())
+      toast.error('Submission Unsuccessful', msg)
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <Link
         to={
           selectedTypeId
@@ -387,87 +222,26 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
         <ArrowLeft className="size-4" aria-hidden /> Back to Document Repository
       </Link>
 
-      <div ref={stepHeading} className="scroll-mt-20 [&_h1]:scroll-mt-20">
       <PageHeader
         eyebrow="New Submission"
-        title={submissionStep === 'fill' ? 'Submit Document Request' : 'Pre-Submission Review & Confirmation'}
-        description={
-          submissionStep === 'fill'
-            ? 'Choose your document type, attach your files, and prepare your request.'
-            : 'Carefully verify your document information, preview attachments, and confirm official submission.'
-        }
+        title="Submit Document Request"
+        description="Choose your document type, attach your files, and submit your request."
       />
-      </div>
 
-      {/* 2-Step Stepper */}
-      <div className="rounded-xl border border-ink-200 bg-white p-4 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
-          <button
-            type="button"
-            onClick={editDetails}
-            disabled={isSubmitting}
-            className={`flex items-center gap-2.5 text-left transition-colors ${
-              submissionStep === 'fill' ? 'text-brand-900 font-bold' : 'text-ink-600 hover:text-brand-700'
-            }`}
-          >
-            <span
-              className={`flex size-7 items-center justify-center rounded-full font-bold text-xs ${
-                submissionStep === 'fill'
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-emerald-600 text-white'
-              }`}
-            >
-              {submissionStep === 'review' ? <CheckCircle2 className="size-4" /> : '1'}
-            </span>
-            <div>
-              <span className="block font-bold">Step 1: Request Details & Form Attachments</span>
-              <span className="text-2xs text-ink-500">Document type, purpose, and required file uploads</span>
-            </div>
-          </button>
-          <div className="hidden sm:block h-px flex-1 bg-ink-200 mx-4" />
-          <div
-            className={`flex items-center gap-2.5 text-left ${
-              submissionStep === 'review' ? 'text-brand-900 font-bold' : 'text-ink-500'
-            }`}
-          >
-            <span
-              className={`flex size-7 items-center justify-center rounded-full font-bold text-xs ${
-                submissionStep === 'review'
-                  ? 'bg-brand-600 text-white ring-4 ring-brand-100'
-                  : 'bg-ink-100 text-ink-600'
-              }`}
-            >
-              2
-            </span>
-            <div>
-              <span className="block font-bold">Step 2: Pre-Submission Review & Confirmation</span>
-              <span className="text-2xs text-ink-500">Verify details, preview attachments, and certify</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {submissionStep === 'fill' ? (
-        <form onSubmit={handleProceedToReview} noValidate className="space-y-6">
-        <div className="grid items-start gap-6 lg:grid-cols-12">
-          {/* Main 8-Column Form Stream */}
-          <div className="min-w-0 space-y-6 lg:col-span-7 xl:col-span-8">
-            {/* Step 1: Document Type Choice & Template Download (REQ-SUB-1, REQ-REQT-9) */}
-            <Card className="p-5 sm:p-6">
-              <CardHeader
-                title="1. Select Document Type"
-                description="Choose the document you are requesting."
-              />
+      <form onSubmit={handleSubmit} noValidate className="space-y-6">
+        {/* Step 1: Document Type Choice & Template Download (REQ-SUB-1, REQ-REQT-9) */}
+        <Card className="p-5 sm:p-6">
+          <CardHeader
+            title="1. Select Document Type & Download Template"
+            description="Choose the document you are requesting."
+          />
           <div className="mt-4 space-y-4">
             <Field
               label="Document Type"
               required
-              error={errors.typeId}
               hint="Showing document types available for your role."
             >
               <Select
-                name="typeId"
-                required
                 value={selectedTypeId}
                 onChange={(e) => handleTypeChange(e.target.value)}
                 className="w-full"
@@ -480,28 +254,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
               </Select>
             </Field>
 
-            {isCustom && (
-              <>
-                <p className="text-sm text-ink-600">{selectedType?.summary}</p>
-                <Field label="Custom document type" required error={errors.customTypeName}>
-                  <Input
-                    name="customTypeName"
-                    required
-                    maxLength={CUSTOM_DOCUMENT_TYPE_LIMIT}
-                    value={customTypeName}
-                    onChange={(event) => {
-                      setCustomTypeName(event.target.value)
-                      if (errors.customTypeName) clearError('customTypeName')
-                    }}
-                    placeholder="e.g. Certification of project participation"
-                  />
-                </Field>
-              </>
-            )}
-
-            {selectedType && numberField}
-
-            {selectedType?.templateUrl && (
+            {selectedType && (
               <div className="rounded-xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-100">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
@@ -513,7 +266,7 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                         Standard processing time: {selectedType.processingDays[0]} to {selectedType.processingDays[1]} working days
                       </span>
                       <span className="text-ink-500">·</span>
-                      <span>Derived Origin: {derivedOrigin}</span>
+                      <span>Origin: {user.origin ?? 'CESS'}</span>
                     </div>
                   </div>
 
@@ -541,129 +294,82 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
         {/* Step 2: Request Details (REQ-SUB-2) */}
         <Card className="p-5 sm:p-6">
           <CardHeader
-            title="2. Requester Information & Request Details"
-            description="Verified requester credentials, derived routing origin, and automatic submission timestamp."
+            title="2. Request Details"
+            description="Give your request a clear, specific title so reviewing offices understand your purpose immediately."
           />
           <div className="mt-4 space-y-4">
-            {/* Requester Profile & Automatic Metadata (REQ-SUB-2, REQ-SUB-5, REQ-SUB-6) */}
-            <div className="rounded-xl border border-ink-200 bg-ink-50/70 p-4 text-xs lg:hidden">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink-200 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-ink-900 text-sm">Requester Information</span>
-                  <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
-                    {derivedOrigin === 'IDS' ? 'IDS Affiliation' : 'CESS Affiliation'}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-1.5 text-2xs text-ink-700 font-mono bg-white px-2.5 py-1 rounded-md border border-ink-200 shadow-2xs">
-                  <Clock className="size-3 text-brand-600" aria-hidden="true" />
-                  <span>Submission Timestamp: <strong>Automatic</strong></span>
-                </div>
+            <div className="grid gap-3 rounded-xl bg-ink-50/60 p-3.5 text-xs text-ink-600 ring-1 ring-inset ring-ink-100 sm:grid-cols-3">
+              <div>
+                <span className="font-semibold text-ink-500">Requester:</span>{' '}
+                <span className="font-bold text-ink-900">{user.name}</span>
               </div>
-
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <span className="block font-semibold text-ink-500">Requester Name</span>
-                  <span className="font-bold text-ink-900 text-sm">{user.name}</span>
-                </div>
-                <div>
-                  <span className="block font-semibold text-ink-500">Official University Email</span>
-                  <span className="font-medium text-ink-800 break-all">{user.email}</span>
-                </div>
-                <div>
-                  <span className="block font-semibold text-ink-500">Role & Position</span>
-                  <span className="font-medium text-ink-800">{user.position} ({formatRoleTitle(user)})</span>
-                </div>
-                <div>
-                  <span className="block font-semibold text-ink-500">Department / Academic Program</span>
-                  <span className="font-medium text-ink-800">{user.department}</span>
-                </div>
+              <div>
+                <span className="font-semibold text-ink-500">Department:</span>{' '}
+                <span className="font-medium text-ink-800">{user.department}</span>
               </div>
+              <div>
+                <span className="font-semibold text-ink-500">Origin Route:</span>{' '}
+                <span className="font-medium text-ink-800">{user.origin === 'IDS' ? 'IDS Route' : 'CESS Route'}</span>
+              </div>
+            </div>
 
-              <div className="mt-3.5 grid gap-3 rounded-lg bg-white p-3 border border-ink-100 sm:grid-cols-2">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-ink-900">Derived Origin:</span>
-                    <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
-                      {derivedOrigin}
+            {/* Explicit Faculty / Principal Affiliation & Routing Path Notice (REQ-PM-FEEDBACK-2) */}
+            {(user.role === 'faculty' || user.role === 'ids_principal') && (
+              <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-brand-950">
+                      {user.role === 'ids_principal'
+                        ? '🏫 IDS Principal (Faculty Submissions)'
+                        : user.origin === 'IDS'
+                          ? '🏫 IDS Faculty'
+                          : '🏛️ CESS Faculty'}
+                    </span>
+                    <Badge tone={user.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
+                      {user.origin === 'IDS' ? 'Integrated Developmental School' : 'College of Education and Social Sciences'}
                     </Badge>
                   </div>
-                  <p className="mt-0.5 text-2xs text-ink-600 leading-snug">
-                    Automatically derived from your institutional affiliation ({user.department}).
-                  </p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-ink-900">Automatic Timestamp:</span>
-                    <span className="font-semibold text-brand-800">{formatDateTime(submissionTimePreview)}</span>
-                  </div>
-                  <p className="mt-0.5 text-2xs text-ink-600 leading-snug">
-                    System records and seals this timestamp automatically upon submission.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-
-            {/* Explicit Affiliation & Routing Path Notice (REQ-PM-FEEDBACK-2) */}
-            <div className="rounded-xl border border-brand-200 bg-brand-50/70 p-4 text-xs lg:hidden">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-brand-950">
+                  <span className="font-mono text-2xs font-semibold text-brand-700">
+                    Routing:{' '}
                     {user.role === 'ids_principal'
-                      ? '🏫 IDS Principal'
-                      : derivedOrigin === 'IDS'
-                        ? user.role === 'faculty' ? '🏫 IDS Faculty' : '🏫 IDS Student'
-                        : user.role === 'faculty' ? '🏛️ CESS Faculty' : '🏛️ CESS Student'}
+                      ? 'Secretary → Chairperson → Dean → Release'
+                      : user.origin === 'IDS'
+                        ? 'Secretary → Chairperson → IDS Principal → Dean → Release'
+                        : 'Secretary → Chairperson → Dean → Release'}
                   </span>
-                  <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
-                    {derivedOrigin === 'IDS' ? 'Integrated Developmental School' : 'College of Education and Social Sciences'}
-                  </Badge>
                 </div>
-                <span className="font-mono text-2xs font-semibold text-brand-700">
-                  Routing:{' '}
-                  {user.role === 'ids_principal'
-                    ? 'Secretary → Chairperson → Dean → Release'
-                    : derivedOrigin === 'IDS'
-                      ? 'Secretary → Chairperson → IDS Principal → Dean → Release'
-                      : 'Secretary → Chairperson → Dean → Release'}
-                </span>
-              </div>
-              <div className="mt-2.5 rounded-lg bg-white p-2.5 ring-1 ring-brand-100 text-ink-700">
-                <span className="font-semibold text-ink-900">Official Routing Path: </span>
+                <div className="mt-2.5 rounded-lg bg-white p-2.5 ring-1 ring-brand-100 text-ink-700">
+                  <span className="font-semibold text-ink-900">Official Routing Path: </span>
+                  {user.role === 'ids_principal' ? (
+                    <span>
+                      Secretary Check → Chairperson → Dean Endorsement → Release{' '}
+                      <span className="text-brand-700 font-medium">(Self-endorsement omitted)</span>
+                    </span>
+                  ) : user.origin === 'IDS' ? (
+                    <span>
+                      Secretary Check → Chairperson →{' '}
+                      <strong className="text-warning-800 underline decoration-warning-400">IDS Principal (Review)</strong>{' '}
+                      → Dean Endorsement → Release
+                    </span>
+                  ) : (
+                    <span>Secretary Check → Chairperson → Dean Endorsement → Release</span>
+                  )}
+                </div>
                 {user.role === 'ids_principal' ? (
-                  <span>
-                    Secretary Check → Chairperson → Dean Endorsement → Release{' '}
-                    <span className="text-brand-700 font-medium">(Self-endorsement omitted)</span>
-                  </span>
-                ) : derivedOrigin === 'IDS' ? (
-                  <span>
-                    Secretary Check → Chairperson →{' '}
-                    <strong className="text-warning-800 underline decoration-warning-400">IDS Principal (Review)</strong>{' '}
-                    → Dean Endorsement → Release
-                  </span>
-                ) : (
-                  <span>Secretary Check → Chairperson → Dean Endorsement → Release</span>
-                )}
+                  <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-600">
+                    <Info className="size-3.5 shrink-0 text-brand-600 mt-0.5" />
+                    <span>
+                      <strong>Note:</strong> As the IDS Principal submitting an official document request, your request proceeds to the Chairperson and Dean for endorsement without duplicate self-review.
+                    </span>
+                  </p>
+                ) : user.origin === 'IDS' ? (
+                  <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-600">
+                    <Info className="size-3.5 shrink-0 text-brand-600 mt-0.5" />
+                    <span><strong>Note:</strong> As an IDS faculty member, your document will route through the IDS Principal before the Dean.</span>
+                  </p>
+                ) : null}
               </div>
-              {user.role === 'ids_principal' ? (
-                <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-600">
-                  <Info className="size-3.5 shrink-0 text-brand-600 mt-0.5" />
-                  <span>
-                    <strong>Note:</strong> As the IDS Principal submitting an official document request, your request proceeds to the Chairperson and Dean for endorsement without duplicate self-review.
-                  </span>
-                </p>
-              ) : derivedOrigin === 'IDS' ? (
-                <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-600">
-                  <Info className="size-3.5 shrink-0 text-brand-600 mt-0.5" />
-                  <span><strong>Note:</strong> As an IDS requester, your document will route through the IDS Principal before the Dean.</span>
-                </p>
-              ) : (
-                <p className="mt-2 flex items-start gap-1.5 text-2xs text-ink-600">
-                  <Info className="size-3.5 shrink-0 text-brand-600 mt-0.5" />
-                  <span><strong>Note:</strong> As a CESS requester, your document routes through your Department Chairperson and the College Dean.</span>
-                </p>
-              )}
-            </div>
+            )}
 
             <Field
               label="Title or Subject"
@@ -673,33 +379,22 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
             >
               <Input
                 type="text"
-                name="title"
-                required
                 value={title}
-                onChange={(e) => {
-                  setTitle(e.target.value)
-                  if (errors.title) clearError('title')
-                }}
+                onChange={(e) => setTitle(e.target.value)}
                 placeholder="Briefly state the document purpose"
               />
             </Field>
 
             <Field
-              label="Description / Purpose of Request"
-              required
-              error={errors.description}
-              hint="Explain the purpose, context, and key details of your document request."
+              label="Short Description / Additional Notes"
+              optional
+              hint="Any relevant details that could assist the College Secretary and reviewers."
             >
               <Textarea
                 rows={3}
-                name="description"
-                required
                 value={description}
-                onChange={(e) => {
-                  setDescription(e.target.value)
-                  if (errors.description) clearError('description')
-                }}
-                placeholder="Explain why you need this document and include any details useful to the College Secretary."
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Provide any additional context or remarks (optional)..."
               />
             </Field>
           </div>
@@ -709,86 +404,36 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
         {selectedType && (
           <Card className="p-5 sm:p-6">
             <CardHeader
-              title={requiredList.length === 0 ? '3. Supporting Files' : '3. Required Forms & Automatic Completeness Check'}
-              description={requiredList.length === 0 ? 'Add supporting files if you have them. PDF, JPG and PNG files up to 20 MB are accepted.' : 'The system automatically verifies that all required forms are uploaded before your request is sent to the College Secretary. Accepted formats: PDF, JPG, PNG (max 20 MB per file).'}
+              title="3. Required Forms & Automatic Completeness Check"
+              description="The system automatically verifies that all required forms are uploaded before your request is sent to the College Secretary. Accepted formats: PDF, JPG, PNG (max 10 MB per file)."
             />
 
             {/* Live Automatic Completeness Indicator (REQ-REQT-3) */}
-            {requiredList.length > 0 && <div
-              className={`mt-4 rounded-xl p-4 text-xs ring-1 ring-inset transition-all ${
+            <div
+              className={`mt-4 flex items-center justify-between gap-3 rounded-xl p-3.5 text-xs ring-1 ring-inset ${
                 allRequiredAttached
-                  ? 'bg-success-50 text-success-800 ring-success-200'
-                  : 'bg-amber-50/70 text-amber-900 ring-amber-200'
+                  ? 'bg-success-50 text-success-700 ring-success-100'
+                  : 'bg-brand-50/60 text-brand-800 ring-brand-100'
               }`}
             >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <FileCheck2 className={`size-4.5 shrink-0 ${allRequiredAttached ? 'text-success-600' : 'text-amber-600'}`} aria-hidden />
-                  <div>
-                    <p className="font-bold text-sm">
-                      {allRequiredAttached
-                        ? `Automatic Completeness Check: Passed (${attachedRequiredCount} of ${requiredList.length} Required Forms Attached)`
-                        : `Automatic Completeness Check: Incomplete (${attachedRequiredCount} of ${requiredList.length} Required Forms Attached)`}
-                    </p>
-                    <p className="mt-0.5 text-xs">
-                      {allRequiredAttached
-                        ? 'All required forms for this document type have been uploaded. Complete result is verified.'
-                        : `Missing required attachments detected. Incomplete requests cannot advance to the College Secretary.`}
-                    </p>
-                  </div>
-                </div>
-                <Badge tone={allRequiredAttached ? 'success' : 'warning'} dot={false}>
-                  {allRequiredAttached ? 'Complete Result: Ready' : 'Incomplete: Cannot Advance'}
-                </Badge>
+              <div className="flex items-center gap-2.5">
+                <FileCheck2 className="size-4 shrink-0" aria-hidden />
+                <span className="font-semibold">
+                  {allRequiredAttached
+                    ? `Automatic Completeness Check Passed — all ${requiredList.length} required form(s) are attached.`
+                    : `Automatic Completeness Check: ${attachedRequiredCount} of ${requiredList.length} required form(s) attached.`}
+                </span>
               </div>
+              <Badge tone={allRequiredAttached ? 'success' : 'brand'} dot={false}>
+                {allRequiredAttached ? 'Ready to Submit' : 'Attachments Needed'}
+              </Badge>
+            </div>
 
-              {/* Complete Result Summary Breakdown */}
-              {allRequiredAttached && (
-                <div className="mt-3 rounded-lg bg-white p-3 ring-1 ring-success-200 text-ink-800">
-                  <p className="font-semibold text-success-800 flex items-center gap-1.5 text-2xs uppercase tracking-wider">
-                    <CheckCircle2 className="size-3.5 text-success-600" />
-                    Verified Required Checklist Items:
-                  </p>
-                  <ul className="mt-1.5 space-y-1 text-xs">
-                    {requiredList.map((r) => {
-                      const attached = attachedFiles.find((f) => f.requirementId === r.id)
-                      return (
-                        <li key={r.id} className="flex items-center justify-between gap-2 text-ink-700">
-                          <span className="font-medium">• {r.label}</span>
-                          <span className="font-mono text-2xs text-success-700 bg-success-50 px-2 py-0.5 rounded border border-success-200">
-                            ✓ {attached?.name} ({attached ? (attached.sizeKb >= 1024 ? `${(attached.sizeKb / 1024).toFixed(1)} MB` : `${attached.sizeKb} KB`) : ''})
-                          </span>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              )}
-            </div>}
-
-            {/* Missing items listed explicitly when attempted or missing (Acceptance Criteria: missing items are listed) */}
-            {!isCustom && (hasAttemptedSubmit || mandatoryMissing.length > 0) && missingItemsSummary.length > 0 && (
-              <div className="mt-4 rounded-xl bg-danger-50 p-4 text-xs font-medium text-danger-900 ring-1 ring-inset ring-danger-200" role="alert">
-                <div className="flex items-start gap-2.5">
+            {errors.attachments && (
+              <div className="mt-4 rounded-xl bg-danger-50 p-4 text-sm font-medium text-danger-700 ring-1 ring-inset ring-danger-100">
+                <div className="flex items-start gap-2">
                   <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger-600" aria-hidden />
-                  <div className="flex-1 space-y-2">
-                    <div>
-                      <p className="font-bold text-sm text-danger-900">Missing Required Items Detected</p>
-                      <p className="text-danger-700 text-xs">
-                        The system checks required fields and files against <strong>{selectedType.name}</strong> before submission. The following items must be provided before your request can advance:
-                      </p>
-                    </div>
-                    <ul className="list-inside list-disc space-y-1 rounded-lg bg-white/80 p-2.5 text-xs text-danger-800 border border-danger-200">
-                      {missingItemsSummary.map((item, idx) => (
-                        <li key={idx} className="font-medium">
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="text-2xs text-danger-700 italic">
-                      Incomplete requests cannot advance to the College Secretary until all items are attached.
-                    </p>
-                  </div>
+                  <p>{errors.attachments}</p>
                 </div>
               </div>
             )}
@@ -796,15 +441,12 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
             <div className="mt-5 space-y-4">
               {selectedType.requirements.map((req) => {
                 const attached = attachedFiles.find((f) => f.requirementId === req.id)
-                const hasError = !!fileErrors[req.id] || (errors.attachments && req.required && !attached)
                 return (
                   <div
                     key={req.id}
                     className={`rounded-xl border p-4 transition-all ${
                       attached
                         ? 'border-success-200 bg-success-50/30'
-                        : hasError
-                        ? 'border-danger-300 bg-danger-50/20'
                         : req.required
                         ? 'border-brand-200 bg-white hover:border-brand-300'
                         : 'border-ink-200 bg-ink-50/40'
@@ -817,11 +459,6 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                           <Badge tone={req.required ? 'brand' : 'neutral'} dot={false}>
                             {req.required ? 'Required' : 'Optional'}
                           </Badge>
-                          {attached && (
-                            <Badge tone="success" dot={false}>
-                              Attached
-                            </Badge>
-                          )}
                         </div>
                         {req.why && <p className="mt-1 text-xs text-ink-600">{req.why}</p>}
                         {req.source && (
@@ -837,19 +474,12 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                         {attached ? (
                           <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 shadow-xs ring-1 ring-success-200">
                             <CheckCircle2 className="size-4 text-success-600" aria-hidden />
-                            <span className="max-w-[150px] truncate text-xs font-semibold text-ink-800" title={attached.name}>
-                              {attached.name} ({attached.sizeKb >= 1024 ? `${(attached.sizeKb / 1024).toFixed(1)} MB` : `${attached.sizeKb} KB`})
+                            <span className="max-w-[150px] truncate text-xs font-semibold text-ink-800">
+                              {attached.name}
                             </span>
                             <button
                               type="button"
-                              onClick={() => {
-                                setAttachedFiles((prev) => prev.filter((f) => f.requirementId !== req.id))
-                                setFileErrors((prev) => {
-                                  const next = { ...prev }
-                                  delete next[req.id]
-                                  return next
-                                })
-                              }}
+                              onClick={() => setAttachedFiles((prev) => prev.filter((f) => f.requirementId !== req.id))}
                               className="text-ink-400 hover:text-danger-600"
                               aria-label="Remove attached file"
                             >
@@ -857,14 +487,11 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                             </button>
                           </div>
                         ) : (
-                          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 transition-colors hover:bg-brand-100 focus-within:ring-2 focus-within:ring-brand-500">
+                          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 transition-colors hover:bg-brand-100">
                             <UploadCloud className="size-3.5" aria-hidden />
-                            Attach File (Max 20 MB)
+                            Attach File
                             <input
                               type="file"
-                              aria-label={`Attach ${req.label}`}
-                              aria-invalid={Boolean(hasError)}
-                              data-missing-required={req.required ? '' : undefined}
                               accept=".pdf,.jpg,.jpeg,.png"
                               className="sr-only"
                               onChange={(e) => handleFileChosen(e, req)}
@@ -873,57 +500,22 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                         )}
                       </div>
                     </div>
-
-                    {/* Inline file validation error next to the requirement (REQ-SUB-4) */}
-                    {fileErrors[req.id] && (
-                      <div className="mt-2.5 flex items-start gap-2 rounded-lg bg-danger-50 p-2.5 text-xs text-danger-700 ring-1 ring-inset ring-danger-200" role="alert">
-                        <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-danger-600" aria-hidden="true" />
-                        <p>{fileErrors[req.id]}</p>
-                      </div>
-                    )}
-
-                    {errors.attachments && req.required && !attached && !fileErrors[req.id] && (
-                      <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-danger-700">
-                        <AlertCircle className="size-3.5 shrink-0 text-danger-600" aria-hidden="true" />
-                        <span>This required form must be attached before submitting.</span>
-                      </div>
-                    )}
                   </div>
                 )
               })}
 
-              {/* REQ-SUB-3: Multiple supporting documents upload */}
+              {/* Additional optional attachments */}
               <div className="pt-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md text-sm font-semibold text-brand-700 hover:underline focus-within:ring-2 focus-within:ring-brand-500">
-                    <Paperclip className="size-4" aria-hidden />
-                    Attach supporting documents (multiple files allowed, max 20 MB each)
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="sr-only"
-                      onChange={(e) => handleFileChosen(e)}
-                    />
-                  </label>
-                  <span className="text-2xs text-ink-500">PDF, JPG, PNG accepted</span>
-                </div>
-
-                {fileErrors['general'] && (
-                  <div className="mt-2.5 flex items-start gap-2 rounded-lg bg-danger-50 p-2.5 text-xs text-danger-700 ring-1 ring-inset ring-danger-200" role="alert">
-                    <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-danger-600" aria-hidden="true" />
-                    <p>{fileErrors['general']}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Access Control & File Linking Summary */}
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-ink-50/70 p-3 text-2xs text-ink-600 ring-1 ring-inset ring-ink-100">
-                <div className="flex items-center gap-1.5 font-medium text-ink-800">
-                  <FileCheck2 className="size-3.5 text-brand-600" />
-                  <span>Files linked to request: <strong>{attachedFiles.length}</strong> total digital {attachedFiles.length === 1 ? 'copy' : 'copies'}</span>
-                </div>
-                <span>🔒 Access-controlled: Viewable only by requester and authorized reviewing offices</span>
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-brand-700 hover:underline">
+                  <Paperclip className="size-4" aria-hidden />
+                  Attach an extra supporting document (optional)
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="sr-only"
+                    onChange={(e) => handleFileChosen(e)}
+                  />
+                </label>
               </div>
 
               {/* Extra files list */}
@@ -936,8 +528,8 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
                       .filter(({ f }) => !f.requirementId)
                       .map(({ f, i }) => (
                         <li key={i} className="flex items-center justify-between bg-white px-3 py-2 text-xs">
-                          <span className="flex min-w-0 items-center gap-2 wrap-anywhere font-medium text-ink-800">
-                            <FileText className="size-3.5 shrink-0 text-brand-600" aria-hidden />
+                          <span className="flex items-center gap-2 font-medium text-ink-800">
+                            <FileText className="size-3.5 text-brand-600" aria-hidden />
                             {f.name} ({f.sizeKb} KB)
                           </span>
                           <button
@@ -961,736 +553,31 @@ function NewRequestForm({ initialType }: { initialType: string | null }) {
         <div className="rounded-2xl bg-brand-50/70 p-5 ring-1 ring-inset ring-brand-100">
           <p className="text-sm font-bold text-brand-900">What happens after you submit?</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-600">
-            The College Secretary will review {isCustom ? 'the custom document type, purpose, and any supporting files' : 'your details and required files'}. After verification, you can track the request along the <strong>{derivedOrigin}</strong> approval path.
+            Because the system automatically checks that all required files are present, the College Secretary focuses on verifying that the
+            content inside your attachments is accurate and complete. Once verified, your document is routed automatically along the{' '}
+            <strong>{user.origin ?? 'CESS'}</strong> approval path.
           </p>
         </div>
 
         {/* Form Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <div>
-            {!isFormComplete ? (
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
-                <AlertCircle className="size-3.5 shrink-0 text-amber-600" />
-                <span>Incomplete: {missingItemsSummary.length} required item(s) needed before submission can advance</span>
-              </p>
-            ) : (
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-success-700 bg-success-50 px-3 py-1.5 rounded-lg border border-success-200">
-                <CheckCircle2 className="size-3.5 shrink-0 text-success-600" />
-                <span>Completeness check passed: Ready to advance to College Secretary</span>
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <ButtonLink
-              to={user.role === 'ids_principal' ? '/app/for-review' : '/app/my-documents'}
-              variant="secondary"
-            >
-              Cancel
-            </ButtonLink>
-            <Button
-              type="submit"
-              size="lg"
-              iconRight={ArrowRight}
-              className="lg:hidden"
-            >
-              Proceed to Pre-Submission Review
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Sticky 4-Column Summary & Routing Rail */}
-          <div className="hidden min-w-0 space-y-6 lg:sticky lg:top-20 lg:col-span-5 xl:col-span-4 lg:block">
-            {/* Requester Profile & Affiliation Card */}
-            <Card className="p-5">
-              <div className="flex items-center justify-between gap-2 border-b border-ink-100 pb-3">
-                <span className="font-bold text-ink-950 text-sm">Requester Information</span>
-                <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
-                  {derivedOrigin === 'IDS' ? 'IDS Affiliation' : 'CESS Affiliation'}
-                </Badge>
-              </div>
-              <div className="mt-3 space-y-2.5 text-xs">
-                <div>
-                  <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Requester</span>
-                  <span className="font-bold text-ink-900 text-sm">{user.name}</span>
-                </div>
-                <div>
-                  <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Official University Email</span>
-                  <span className="font-medium text-ink-800 break-all">{user.email}</span>
-                </div>
-                <div>
-                  <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Role & Position</span>
-                  <span className="font-medium text-ink-800">{user.position} ({formatRoleTitle(user)})</span>
-                </div>
-                <div>
-                  <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Department / Academic Program</span>
-                  <span className="font-medium text-ink-800">{user.department}</span>
-                </div>
-                <div className="pt-2 border-t border-ink-100 flex items-center justify-between text-2xs text-ink-500">
-                  <span className="flex items-center gap-1">
-                    <Clock className="size-3 text-brand-600" aria-hidden="true" />
-                    <span>Submission Timestamp</span>
-                  </span>
-                  <span className="font-semibold text-brand-800 font-mono">Automatic</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Official Routing Pipeline Card */}
-            <Card className="p-5">
-              <div className="flex items-center justify-between gap-2 border-b border-ink-100 pb-3">
-                <div className="flex items-center gap-1.5">
-                  <Route className="size-4 text-brand-600" aria-hidden="true" />
-                  <span className="font-bold text-ink-950 text-sm">Official Routing Path</span>
-                </div>
-                {selectedType && (
-                  <span className="text-2xs font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
-                    {selectedType.processingDays[0]}–{selectedType.processingDays[1]} days
-                  </span>
-                )}
-              </div>
-              <div className="mt-3 text-xs">
-                <ol className="relative ml-2.5 space-y-3 border-l-2 border-brand-200 pl-4 text-xs">
-                  <li className="relative">
-                    <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-600 ring-4 ring-white" />
-                    <span className="font-bold text-ink-900">1. College Secretary</span>
-                    <p className="text-2xs text-ink-500">Completeness & content verification</p>
-                  </li>
-                  <li className="relative">
-                    <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-400 ring-4 ring-white" />
-                    <span className="font-bold text-ink-900">2. Department Chairperson</span>
-                    <p className="text-2xs text-ink-500">Academic & curricular recommendation</p>
-                  </li>
-                  {derivedOrigin === 'IDS' && user.role !== 'ids_principal' && (
-                    <li className="relative">
-                      <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-warning-500 ring-4 ring-white" />
-                      <span className="font-bold text-warning-900">3. IDS Principal Review</span>
-                      <p className="text-2xs text-warning-700">Developmental school review & sign-off</p>
-                    </li>
-                  )}
-                  <li className="relative">
-                    <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-300 ring-4 ring-white" />
-                    <span className="font-bold text-ink-900">
-                      {derivedOrigin === 'IDS' && user.role !== 'ids_principal' ? '4. College Dean' : '3. College Dean'}
-                    </span>
-                    <p className="text-2xs text-ink-500">Final collegiate endorsement & seal</p>
-                  </li>
-                  <li className="relative">
-                    <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-success-500 ring-4 ring-white" />
-                    <span className="font-bold text-ink-900">
-                      {derivedOrigin === 'IDS' && user.role !== 'ids_principal' ? '5. Document Release' : '4. Document Release'}
-                    </span>
-                    <p className="text-2xs text-ink-500">Signed document collection & record</p>
-                  </li>
-                </ol>
-              </div>
-            </Card>
-
-            {/* Live Progress & Quick Actions Card */}
-            <Card className="p-5 ring-1 ring-brand-200">
-              <div className="flex items-center justify-between gap-2 border-b border-ink-100 pb-3">
-                <div className="flex items-center gap-1.5">
-                  <FileCheck2 className="size-4 text-brand-600" aria-hidden="true" />
-                  <span className="font-bold text-ink-950 text-sm">Submission Readiness</span>
-                </div>
-                <Badge tone={isFormComplete ? 'success' : 'warning'} dot={false}>
-                  {isFormComplete ? 'Ready' : 'Incomplete'}
-                </Badge>
-              </div>
-
-              <div className="mt-3 space-y-3">
-                {selectedType && requiredList.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between text-2xs uppercase tracking-wider font-bold text-ink-500 mb-1.5">
-                      <span>Required Forms</span>
-                      <span>{attachedRequiredCount} of {requiredList.length}</span>
-                    </div>
-                    <ul className="space-y-1 text-xs">
-                      {requiredList.map((r) => {
-                        const attached = attachedFiles.find((f) => f.requirementId === r.id)
-                        return (
-                          <li key={r.id} className="flex items-center justify-between gap-2 rounded bg-ink-50/70 px-2 py-1">
-                            <span className="truncate text-ink-800 text-2xs font-medium">• {r.label}</span>
-                            {attached ? (
-                              <span className="shrink-0 text-success-700 font-bold text-2xs">✓ Ready</span>
-                            ) : (
-                              <span className="shrink-0 text-amber-600 font-medium text-2xs">Missing</span>
-                            )}
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="pt-2 space-y-2">
-                  <Button
-                    type="submit"
-                    size="lg"
-                    iconRight={ArrowRight}
-                    className="w-full justify-center shadow-md"
-                  >
-                    Proceed to Review
-                  </Button>
-                  <ButtonLink
-                    to={user.role === 'ids_principal' ? '/app/for-review' : '/app/my-documents'}
-                    variant="secondary"
-                    className="w-full justify-center"
-                  >
-                    Cancel
-                  </ButtonLink>
-                </div>
-              </div>
-            </Card>
-
-            {/* Informative Submission Summary */}
-            <div className="rounded-2xl bg-brand-50/70 p-4 ring-1 ring-inset ring-brand-100 text-xs">
-              <p className="font-bold text-brand-900">What happens next?</p>
-              <p className="mt-1 leading-relaxed text-ink-600 text-2xs">
-                {isCustom ? 'The College Secretary reviews your purpose and any supporting files before routing your request.' : 'The College Secretary verifies your required files before routing your request.'}
-              </p>
-            </div>
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+          <ButtonLink
+            to={user.role === 'ids_principal' ? '/app/for-review' : '/app/my-documents'}
+            variant="secondary"
+          >
+            Cancel
+          </ButtonLink>
+          <Button
+            type="submit"
+            size="lg"
+            loading={isSubmitting}
+            loadingText="Submitting Request…"
+            iconRight={Send}
+          >
+            Submit Document Request
+          </Button>
         </div>
       </form>
-      ) : (
-        /* PB-16: Step 2 Pre-Submission Review Screen with Editing and Confirmation */
-        selectedType && (
-          <div className="space-y-6">
-            {/* Review Notice Banner */}
-            <div className="rounded-2xl border-2 border-brand-200 bg-brand-50/70 p-5 shadow-2xs">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex items-start gap-3.5">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-xs">
-                    <ShieldCheck className="size-6" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-base font-extrabold text-brand-950">
-                      Pre-Submission Review & Verification
-                    </h3>
-                    <p className="text-xs text-ink-700 leading-relaxed">
-                      Please review all details, route parameters, and attached files before confirming official submission.
-                      You can edit fields directly or return to Step 1 to modify attachments.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  icon={ArrowLeft}
-                  onClick={editDetails}
-                  disabled={isSubmitting}
-                >
-                  Back to Edit Details
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid items-start gap-6 lg:grid-cols-12">
-              {/* Main Review Column */}
-              <div className="min-w-0 space-y-6 lg:col-span-7 xl:col-span-8">
-                {/* Request Overview & In-Place Editing */}
-                <Card className="p-5 sm:p-6">
-                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <FileText className="size-4.5 text-brand-600" />
-                      <h4 className="font-bold text-ink-950">Document Details Review & In-Place Edit</h4>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      icon={Edit3}
-                      onClick={editDetails}
-                      disabled={isSubmitting}
-                    >
-                      Return to Form
-                    </Button>
-                  </div>
-
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-xl bg-ink-50/70 p-3.5 border border-ink-100">
-                        <span className="block text-2xs font-bold uppercase tracking-wider text-ink-500">Document Type</span>
-                        <span className="mt-0.5 block wrap-anywhere text-sm font-bold text-brand-950">{isCustom ? customTypeName.trim() : selectedType.name}</span>
-                        <span className="text-2xs text-ink-600">{isCustom ? 'Others' : selectedType.summary}</span>
-                      </div>
-                      <div className="rounded-xl bg-ink-50/70 p-3.5 border border-ink-100">
-                        <span className="block text-2xs font-bold uppercase tracking-wider text-ink-500">Routing Origin & SLA</span>
-                        <div className="mt-0.5 flex items-center gap-2">
-                          <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
-                            {derivedOrigin} Affiliation
-                          </Badge>
-                          <span className="text-2xs text-ink-600">({user.department})</span>
-                        </div>
-                        <span className="mt-1 block text-2xs text-brand-700 font-medium">
-                          Standard Processing: {selectedType.processingDays[0]}–{selectedType.processingDays[1]} working days
-                        </span>
-                      </div>
-                    </div>
-
-                    {numberField}
-                    <Field label="Request Title / Subject" required error={errors.title}>
-                      <Input
-                        type="text"
-                        name="title"
-                        required
-                        disabled={isSubmitting}
-                        value={title}
-                        onChange={(e) => {
-                          setTitle(e.target.value)
-                          if (errors.title) clearError('title')
-                        }}
-                        placeholder="Document title or subject"
-                      />
-                    </Field>
-
-                    <Field label="Purpose / Description of Request" required error={errors.description}>
-                      <Textarea
-                        rows={3}
-                        name="description"
-                        required
-                        disabled={isSubmitting}
-                        value={description}
-                        onChange={(e) => {
-                          setDescription(e.target.value)
-                          if (errors.description) clearError('description')
-                        }}
-                        placeholder="Purpose and context of request"
-                      />
-                    </Field>
-                  </div>
-                </Card>
-
-                {/* Attached Files Review Checklist */}
-                <Card className="p-5 sm:p-6">
-                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <FileCheck2 className="size-4.5 text-emerald-600" />
-                      <h4 className="font-bold text-ink-950">
-                        Verified Attached Files ({attachedFiles.length} {attachedFiles.length === 1 ? 'file' : 'files'})
-                      </h4>
-                    </div>
-                    {requiredList.length > 0 && <Badge tone="success" dot={false}>Completeness Passed</Badge>}
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {attachedFiles.length === 0 && <p className="text-sm text-ink-600">No supporting files attached.</p>}
-                    {attachedFiles.map((f, i) => {
-                      const reqObj = selectedType.requirements.find((r) => r.id === f.requirementId)
-                      return (
-                        <div
-                          key={i}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white p-3.5 shadow-2xs hover:border-brand-300"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-                              <FileText className="size-4.5" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate text-xs font-bold text-ink-950" title={f.name}>
-                                  {f.name}
-                                </span>
-                                <Badge tone="brand" dot={false} className="text-2xs">
-                                  {f.sizeKb >= 1024 ? `${(f.sizeKb / 1024).toFixed(1)} MB` : `${f.sizeKb} KB`}
-                                </Badge>
-                              </div>
-                              <p className="text-2xs text-ink-500 mt-0.5">
-                                {reqObj ? `Attached for: ${reqObj.label}` : 'Supporting document'}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            {f.fileObj && (
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                icon={Eye}
-                                onClick={() => {
-                                  const url = URL.createObjectURL(f.fileObj!)
-                                  setPreviewFile({ name: f.name, url })
-                                }}
-                              >
-                                Inspect File
-                              </Button>
-                            )}
-                            <span className="text-2xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                              ✓ Ready
-                            </span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </Card>
-
-                {/* Institutional Certification & Submission Card */}
-                <Card className="p-5 sm:p-6 ring-2 ring-brand-300 bg-brand-50/20">
-                  <div className="flex items-center gap-2 border-b border-brand-100 pb-3">
-                    <ShieldCheck className="size-5 text-brand-700" />
-                    <h4 className="font-bold text-brand-950">Official Confirmation & Institutional Certification</h4>
-                  </div>
-
-                  <div className="mt-4 space-y-4">
-                    <div className="rounded-xl bg-white p-4 text-xs text-ink-700 ring-1 ring-brand-100 leading-relaxed">
-                      <p className="font-semibold text-ink-900 mb-1.5">Official Submission Declarations:</p>
-                      <ul className="list-disc list-inside space-y-1 text-ink-600">
-                        <li>I confirm that all statements made in this request are authentic and complete.</li>
-                        {attachedFiles.length > 0 && <li>I verify that the uploaded forms contain valid signatures and meet CESS institutional policies.</li>}
-                        <li>I understand that once submitted, this request cannot be edited unless returned for revisions by a reviewing authority.</li>
-                      </ul>
-                    </div>
-
-                    <div className="rounded-xl border border-brand-200 bg-white p-4 shadow-2xs">
-                      <Checkbox
-                        checked={isCertified}
-                        disabled={isSubmitting}
-                        onChange={(e) => setIsCertified(e.target.checked)}
-                        label={
-                          <span className="font-bold text-ink-950 text-sm">
-                            I certify that all details and attachments are authentic, complete, and ready for official administrative routing.
-                          </span>
-                        }
-                        hint="Check this box to confirm and enable the submission button."
-                      />
-                    </div>
-
-                    {submissionError && (
-                      <p ref={submitAlert} role="alert" tabIndex={-1} className="scroll-mt-20 rounded-lg bg-danger-50 p-3 text-sm font-medium text-danger-800">
-                        {submissionError}
-                      </p>
-                    )}
-
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="lg"
-                        icon={ArrowLeft}
-                        onClick={editDetails}
-                        disabled={isSubmitting}
-                      >
-                        Back to Edit Details
-                      </Button>
-                      <Button
-                        type="button"
-                        size="lg"
-                        iconRight={Send}
-                        disabled={!isCertified || !!submittedDoc}
-                        loading={isSubmitting}
-                        loadingText="Submitting Request…"
-                        onClick={handleConfirmedSubmit}
-                        className="shadow-md"
-                      >
-                        Confirm & Officially Submit Request
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Right Sticky Sidebar for Review Screen */}
-              <div className="hidden min-w-0 space-y-6 lg:sticky lg:top-20 lg:col-span-5 xl:col-span-4 lg:block">
-                <Card className="p-5">
-                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
-                    <span className="font-bold text-ink-950 text-sm">Requester Credentials</span>
-                    <Badge tone={derivedOrigin === 'IDS' ? 'warning' : 'brand'} dot={false}>
-                      {derivedOrigin}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 space-y-2.5 text-xs">
-                    <div>
-                      <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Requester</span>
-                      <span className="font-bold text-ink-900 text-sm">{user.name}</span>
-                    </div>
-                    <div>
-                      <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Email</span>
-                      <span className="font-medium text-ink-800 break-all">{user.email}</span>
-                    </div>
-                    <div>
-                      <span className="block text-2xs font-semibold uppercase tracking-wider text-ink-500">Department</span>
-                      <span className="font-medium text-ink-800">{user.department}</span>
-                    </div>
-                    <div className="pt-2 border-t border-ink-100 flex items-center justify-between text-2xs text-ink-500">
-                      <span>Sealed Timestamp Preview</span>
-                      <span className="font-semibold text-brand-800 font-mono">{formatDateTime(submissionTimePreview)}</span>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Routing Flow Preview */}
-                <Card className="p-5">
-                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
-                    <div className="flex items-center gap-1.5">
-                      <Route className="size-4 text-brand-600" aria-hidden="true" />
-                      <span className="font-bold text-ink-950 text-sm">Official Routing</span>
-                    </div>
-                    <span className="text-2xs font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
-                      {selectedType.processingDays[0]}–{selectedType.processingDays[1]} days
-                    </span>
-                  </div>
-                  <div className="mt-3 text-xs">
-                    <ol className="relative ml-2.5 space-y-3 border-l-2 border-brand-200 pl-4 text-xs">
-                      <li className="relative">
-                        <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-600 ring-4 ring-white" />
-                        <span className="font-bold text-ink-900">1. College Secretary</span>
-                        <p className="text-2xs text-ink-500">Completeness & content verification</p>
-                      </li>
-                      <li className="relative">
-                        <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-400 ring-4 ring-white" />
-                        <span className="font-bold text-ink-900">2. Department Chairperson</span>
-                        <p className="text-2xs text-ink-500">Academic & curricular recommendation</p>
-                      </li>
-                      {derivedOrigin === 'IDS' && user.role !== 'ids_principal' && (
-                        <li className="relative">
-                          <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-warning-500 ring-4 ring-white" />
-                          <span className="font-bold text-warning-900">3. IDS Principal Review</span>
-                          <p className="text-2xs text-warning-700">Developmental school review & sign-off</p>
-                        </li>
-                      )}
-                      <li className="relative">
-                        <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-brand-300 ring-4 ring-white" />
-                        <span className="font-bold text-ink-900">
-                          {derivedOrigin === 'IDS' && user.role !== 'ids_principal' ? '4. College Dean' : '3. College Dean'}
-                        </span>
-                        <p className="text-2xs text-ink-500">Final collegiate endorsement & seal</p>
-                      </li>
-                      <li className="relative">
-                        <span className="absolute -left-[23px] top-0.5 size-3 rounded-full bg-success-500 ring-4 ring-white" />
-                        <span className="font-bold text-ink-900">
-                          {derivedOrigin === 'IDS' && user.role !== 'ids_principal' ? '5. Document Release' : '4. Document Release'}
-                        </span>
-                        <p className="text-2xs text-ink-500">Signed document collection & record</p>
-                      </li>
-                    </ol>
-                  </div>
-                </Card>
-
-                <Card className="p-5 ring-1 ring-brand-200">
-                  <div className="flex items-center justify-between border-b border-ink-100 pb-3">
-                    <span className="font-bold text-ink-950 text-sm">Submission Status</span>
-                    <Badge tone={isCertified ? 'success' : 'warning'} dot={false}>
-                      {isCertified ? 'Certified' : 'Awaiting Check'}
-                    </Badge>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    <Button
-                      type="button"
-                      size="lg"
-                      iconRight={Send}
-                      disabled={!isCertified || !!submittedDoc}
-                      loading={isSubmitting}
-                      loadingText="Submitting Request…"
-                      onClick={handleConfirmedSubmit}
-                      className="w-full justify-center shadow-md"
-                    >
-                      Confirm & Officially Submit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={editDetails}
-                      disabled={isSubmitting}
-                      className="w-full justify-center"
-                    >
-                      Back to Edit Details
-                    </Button>
-                  </div>
-                </Card>
-              </div>
-            </div>
-          </div>
-        )
-      )}
-
-      {/* File Quick Preview Dialog for Requester Review */}
-      {previewFile && (
-        <Dialog
-          open={!!previewFile}
-          onClose={() => setPreviewFile(null)}
-          size="lg"
-          title={`Attached Document Preview: ${previewFile.name}`}
-          footer={
-            <div className="flex justify-end w-full">
-              <Button variant="secondary" onClick={() => setPreviewFile(null)}>Close Preview</Button>
-            </div>
-          }
-        >
-          <div className="p-4 flex flex-col items-center">
-            {previewFile.name.toLowerCase().endsWith('.pdf') ? (
-              <iframe src={previewFile.url} className="w-full h-[500px] rounded-lg border border-ink-200" title={previewFile.name} />
-            ) : (
-              <img src={previewFile.url} alt={previewFile.name} className="max-h-[500px] w-auto rounded-lg object-contain shadow-xs" />
-            )}
-          </div>
-        </Dialog>
-      )}
-      {/* Submission Confirmation Modal (REQ-SUB-5, REQ-SUB-6, REQ-REC-1, REQ-REC-2) */}
-      {submittedDoc && (
-        <Dialog
-          open={isConfirmModalOpen}
-          onClose={() => {
-            setIsConfirmModalOpen(false)
-            navigate(`/app/documents/${submittedDoc.id}?submitted=true`)
-          }}
-          size="lg"
-          title={
-            <div className="flex items-center gap-2.5 text-success-800">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-success-100 text-success-700">
-                <CheckCircle2 className="size-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-ink-950">Document Request Submitted</h3>
-                <p className="text-xs font-normal text-ink-500">Official submission confirmation & assigned tracking credentials</p>
-              </div>
-            </div>
-          }
-          footer={
-            <div className="flex flex-wrap items-center justify-between gap-3 w-full">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setIsConfirmModalOpen(false)
-                  navigate(`/app/my-documents?folder=${selectedTypeId}`)
-                }}
-              >
-                Go to Document Repository
-              </Button>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setIsConfirmModalOpen(false)
-                    setTitle('')
-                    setDescription('')
-                    setCustomTypeName('')
-                    setDocumentNumber('')
-                    setAttachedFiles([])
-                    setErrors({})
-                    setFileErrors({})
-                    setHasAttemptedSubmit(false)
-                    setSubmittedDoc(null)
-                    editDetails()
-                  }}
-                >
-                  Submit Another Request
-                </Button>
-                <Button
-                  onClick={() => {
-                    setIsConfirmModalOpen(false)
-                    navigate(`/app/documents/${submittedDoc.id}?submitted=true`)
-                  }}
-                  iconRight={ArrowRight}
-                >
-                  Track Document & View Details
-                </Button>
-              </div>
-            </div>
-          }
-        >
-          <div className="space-y-5">
-            {/* Control Number Hero Card */}
-            <div className="rounded-2xl border-2 border-brand-200 bg-gradient-to-br from-brand-50/70 via-white to-brand-50/30 p-5 text-center">
-              <span className="text-2xs font-extrabold uppercase tracking-wider text-brand-700">
-                Assigned Official Control Number
-              </span>
-              <div className="mt-1.5 flex flex-wrap items-center justify-center gap-2.5">
-                <span className="font-mono text-2xl sm:text-3xl font-black tracking-tight text-brand-950 selection:bg-brand-200">
-                  {controlNumber(submittedDoc)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(controlNumber(submittedDoc))
-                    toast.success('Control Number Copied', `Copied ${controlNumber(submittedDoc)} to clipboard.`)
-                  }}
-                  className="inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs ring-1 ring-brand-200 hover:bg-brand-50 transition-colors"
-                  title="Copy Control Number"
-                >
-                  <Copy className="size-3.5" />
-                  <span>Copy</span>
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-ink-600">
-                This unique Control Number has been registered in the CESS repository. Use it to follow up with the College Secretary or track progress.
-              </p>
-            </div>
-
-            {/* Official Confirmation Summary Grid (REQ-SUB-5, REQ-SUB-6, REQ-REC-1) */}
-            <div className="rounded-xl border border-ink-200 bg-ink-50/50 p-4">
-              <h4 className="text-2xs font-bold uppercase tracking-wider text-ink-500 mb-3">
-                Official Submission Record Summary
-              </h4>
-              <div className="grid gap-3 sm:grid-cols-2 text-xs">
-                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100">
-                  <span className="text-ink-500 font-medium block">Initial Status</span>
-                  <div className="mt-1 flex items-center gap-1.5">
-                    <Badge tone="brand" dot={false}>Submitted</Badge>
-                    <span className="text-2xs text-ink-500">Awaiting Secretary verification</span>
-                  </div>
-                </div>
-
-                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100">
-                  <span className="text-ink-500 font-medium block">Derived Institutional Origin</span>
-                  <div className="mt-1 flex items-center gap-1.5 font-bold text-ink-900">
-                    <Badge tone={submittedDoc.origin === 'IDS' ? 'warning' : 'brand'} dot={false}>
-                      {submittedDoc.origin}
-                    </Badge>
-                    <span className="text-2xs font-normal text-ink-500">
-                      Derived from {user.department}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100">
-                  <span className="text-ink-500 font-medium block">Automatic Timestamp</span>
-                  <span className="mt-1 font-semibold text-ink-900 block font-mono text-2xs">
-                    {formatDateTime(submittedDoc.submittedAt)}
-                  </span>
-                </div>
-
-                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100">
-                  <span className="text-ink-500 font-medium block">Revision Number</span>
-                  <span className="mt-1 font-mono font-semibold text-ink-900 block">
-                    Revision {String(submittedDoc.revision).padStart(2, '0')} (Initial Submission)
-                  </span>
-                </div>
-
-                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100 sm:col-span-2">
-                  <span className="text-ink-500 font-medium block">Document Type & Title</span>
-                  <p className="mt-0.5 font-bold text-ink-900">
-                    {selectedType?.name}: <span className="font-semibold text-ink-700">“{submittedDoc.title}”</span>
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-white p-2.5 ring-1 ring-ink-100 sm:col-span-2">
-                  <span className="text-ink-500 font-medium block">Attached Digital Copies</span>
-                  <p className="mt-0.5 text-ink-700">
-                    <strong>{submittedDoc.attachments.length}</strong> digital file(s) linked and access-controlled in repository.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Informative Guidance */}
-            <div className="rounded-xl bg-brand-50/70 p-3.5 text-xs text-brand-900 ring-1 ring-inset ring-brand-100 flex items-start gap-2.5">
-              <Info className="size-4 shrink-0 text-brand-600 mt-0.5" />
-              <div>
-                <p className="font-semibold">Next Step: Content Verification</p>
-                <p className="mt-0.5 text-ink-600 text-2xs leading-relaxed">
-                  The College Secretary will verify the information inside your attachments. Once verified, your request will automatically proceed along the{' '}
-                  <strong>{submittedDoc.origin}</strong> routing path. You can find this request anytime in your Document Repository under <strong>{selectedType?.name}</strong>.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Dialog>
-      )}
     </div>
   )
 }
